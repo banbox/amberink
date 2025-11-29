@@ -50,8 +50,6 @@ contract BlogHub is
     // 定义常量：最大评论长度（字节）
     // 140单词英文大约 700-1000 字节，中文约 400 汉字 = 1200 字节
     uint256 public constant MAX_COMMENT_LENGTH = 1024;
-    // 设置最低评论/评价金额（防 Spam），例如 0.0001 ETH (以 wei 为单位)
-    uint256 public constant MIN_ACTION_VALUE = 0;
     // 评价分数常量：0:中立, 1:喜欢, 2:不喜欢
     uint8 public constant SCORE_NEUTRAL = 0;
     uint8 public constant SCORE_LIKE = 1;
@@ -85,6 +83,10 @@ contract BlogHub is
     // --- Session Key 管理 ---
     /// @notice Session Key 管理器合约地址
     ISessionKeyManager public sessionKeyManager;
+
+    // 最低评论/评价金额（防 Spam），可由管理员调整
+    // 默认 0.0001 ETH = 100000000000000 wei
+    uint256 public minActionValue;
 
     // --- 事件定义 ---
     event ArticlePublished(
@@ -140,6 +142,7 @@ contract BlogHub is
         address indexed sessionKey,
         bytes4 selector
     );
+    event MinActionValueUpdated(uint256 newValue);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -172,6 +175,7 @@ contract BlogHub is
         platformFeeBps = 250; // 默认 2.5% 平台抽成
         _setDefaultRoyalty(_initialOwner, 500); // 默认 5% 版税
         nextArticleId = 1; // 从 1 开始 ID（避免 id=0 的歧义）
+        minActionValue = 0.00002 ether; // 默认约 0.01 USD (价格500USD) 防 Spam
     }
 
     // =============================================================
@@ -207,7 +211,7 @@ contract BlogHub is
             revert ContentRequiredForScore();
         }
 
-        if (contentLength > 0 && amount < MIN_ACTION_VALUE)
+        if (contentLength > 0 && amount < minActionValue)
             revert SpamProtection();
 
         Article memory article = articles[_articleId];
@@ -506,6 +510,17 @@ contract BlogHub is
         emit SessionKeyManagerUpdated(_sessionKeyManager);
     }
 
+    /**
+     * @notice 设置最低操作金额（防 Spam）
+     * @param _minActionValue 新的最低金额（wei）
+     */
+    function setMinActionValue(
+        uint256 _minActionValue
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        minActionValue = _minActionValue;
+        emit MinActionValueUpdated(_minActionValue);
+    }
+
     // =============================================================
     //                      Session Key 操作
     // =============================================================
@@ -696,8 +711,8 @@ contract BlogHub is
     /**
      * @dev 这个 gap 是为了将来升级合约添加新状态变量时，不破坏存储布局。
      * 这是一个最佳实践。
-     * 状态变量: nextArticleId(1) + platformFeeBps+platformTreasury(1) + articles(1) + sessionKeyManager(1) = 4 slots
-     * 总计保留 5 slots 的位置，gap = 50 - 5 = 45
+     * 状态变量: nextArticleId(1) + platformFeeBps+platformTreasury(1) + articles(1) + sessionKeyManager(1) + minActionValue(1) = 5 slots
+     * 总计保留 6 slots 的位置，gap = 50 - 6 = 44
      */
-    uint256[45] private __gap;
+    uint256[44] private __gap;
 }

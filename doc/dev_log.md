@@ -1,3 +1,7 @@
+#### 2025-11-29 21:00 MIN_ACTION_VALUE改为可配置
+@README.md  当前MIN_ACTION_VALUE设置为0实际并未启用，帮我修改一下，改为一个合适的值，花费不高，但也有成本，改为变量，允许管理员修改
+Claude: 改为0.00002 eth，按价格500，大概0.01USD
+
 #### 2025-11-29 20:25 修复单元测试报错
 Claude: BlogTokenPaymaster中2个失败是因为合约中我把代付5% 费率改为3%；BlogHubSessionKey中几个失败是因为合约内重复转账；已fix
 

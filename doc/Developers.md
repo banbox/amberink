@@ -26,7 +26,7 @@
 SessionKeyManager: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 BlogPaymaster:     0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
 BlogHub Impl:      0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-BlogHub Proxy:     0xa513E6E4b8f2a923D98304ec87F64353C4D5C853
+BlogHub Proxy:     0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
 EntryPoint:        0x0000000071727De22E5E9d8BAf0edAc6f37da032
 ```
 
@@ -63,13 +63,13 @@ anvil
 cd contracts
 
 # 检查 BlogHub Proxy 是否正确初始化
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 "platformTreasury()(address)" --rpc-url http://localhost:8545
+cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "platformTreasury()(address)" --rpc-url http://localhost:8545
 
 # 检查 platformFeeBps (默认 250 = 2.5%)
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 "platformFeeBps()(uint96)" --rpc-url http://localhost:8545
+cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "platformFeeBps()(uint96)" --rpc-url http://localhost:8545
 
 # 检查 SessionKeyManager 是否已设置
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 "sessionKeyManager()(address)" --rpc-url http://localhost:8545
+cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "sessionKeyManager()(address)" --rpc-url http://localhost:8545
 
 # 检查 Paymaster 的 SessionKeyManager
 cast call 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "sessionKeyManager()(address)" --rpc-url http://localhost:8545
@@ -85,7 +85,7 @@ cast call 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "sessionKeyManager()(addres
 # 使用 User1 发布文章（自己是作者）
 # publish(string arweaveId, uint64 categoryId, uint96 royaltyBps, string originalAuthor)
 # originalAuthor 为空字符串表示发布者即作者
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
+cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
   "publish(string,uint64,uint96,string)(uint256)" \
   "QmTestArweaveHash123456789" \
   1 \
@@ -95,7 +95,7 @@ cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
   --rpc-url http://localhost:8545
 
 # 代发文章（记录真实作者）
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
+cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
   "publish(string,uint64,uint96,string)(uint256)" \
   "QmTestArweaveHash987654321" \
   1 \
@@ -105,11 +105,11 @@ cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
   --rpc-url http://localhost:8545
 
 # 验证文章创建
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 "nextArticleId()(uint256)" --rpc-url http://localhost:8545
+cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "nextArticleId()(uint256)" --rpc-url http://localhost:8545
 # 应返回 2（下一个文章ID）
 
 # 查看文章详情（包含 originalAuthor 字段）
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
+cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
   "articles(uint256)(string,address,string,uint64,uint64)" \
   1 \
   --rpc-url http://localhost:8545
@@ -121,7 +121,7 @@ cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
 # 使用 User2 评价文章（喜欢 + 打赏 0.01 ETH）
 # evaluate(uint256 articleId, uint8 score, string content, address referrer, uint256 parentCommentId)
 # score: 0=中立, 1=喜欢, 2=不喜欢
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
+cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
   "evaluate(uint256,uint8,string,address,uint256)" \
   1 \
   1 \
@@ -132,18 +132,14 @@ cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
   --private-key 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a \
   --rpc-url http://localhost:8545
 
-# 检查作者（User1）的待提取余额
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
-  "pendingWithdrawals(address)(uint256)" \
-  0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
-  --rpc-url http://localhost:8545
+# 注意：打赏金额会直接转账给作者，无需提取
 ```
 
 ### 3.3 纯评论（无打赏）
 
 ```bash
 # 纯评论需要 score=0 且有内容
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
+cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
   "evaluate(uint256,uint8,string,address,uint256)" \
   1 \
   0 \
@@ -158,51 +154,10 @@ cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
 
 ```bash
 # User2 关注 User1
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
+cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
   "follow(address,bool)" \
   0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
   true \
-  --private-key 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a \
-  --rpc-url http://localhost:8545
-```
-
-### 3.5 提取收益
-
-```bash
-# 作者提取打赏收益
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
-  "withdraw()" \
-  --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
-  --rpc-url http://localhost:8545
-```
-
-### 3.6 使用账户余额支付
-
-```bash
-# 1. 先存入余额到 BlogHub
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
-  "depositBalance()" \
-  --value 0.1ether \
-  --private-key 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a \
-  --rpc-url http://localhost:8545
-
-# 2. 查看余额
-cast call 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
-  "accountBalance(address)(uint256)" \
-  0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC \
-  --rpc-url http://localhost:8545
-
-# 3. 使用余额评价（sponsor 为自己）
-# evaluateWithBalance(address sponsor, uint256 articleId, uint8 score, string content, address referrer, uint256 parentCommentId, uint256 amount)
-cast send 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
-  "evaluateWithBalance(address,uint256,uint8,string,address,uint256,uint256)" \
-  0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC \
-  1 \
-  1 \
-  "Paid with balance!" \
-  0x0000000000000000000000000000000000000000 \
-  0 \
-  10000000000000000 \
   --private-key 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a \
   --rpc-url http://localhost:8545
 ```
@@ -244,17 +199,17 @@ CURRENT_TIME=$(cast block latest --rpc-url http://localhost:8545 | grep timestam
 VALID_UNTIL=$((CURRENT_TIME + 86400))  # 24小时后过期
 
 # 函数选择器:
-# evaluate: 0x8c3c4b34
-# likeComment: 0x7b0472f0
-# follow: 0x4dbf0f39
+# evaluate: 0xff1f090a
+# likeComment: 0xdffd40f2
+# follow: 0x63c3cc16
 
 cast send 0x5FbDB2315678afecb367f032d93F642f64180aa3 \
   "registerSessionKey(address,uint48,uint48,address,bytes4[],uint256)" \
   0x1234567890123456789012345678901234567890 \
   $CURRENT_TIME \
   $VALID_UNTIL \
-  0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 \
-  "[0x8c3c4b34,0x7b0472f0,0x4dbf0f39]" \
+  0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
+  "[0xff1f090a,0xdffd40f2,0x63c3cc16]" \
   1000000000000000000 \
   --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
   --rpc-url http://localhost:8545
@@ -482,7 +437,7 @@ import BlogPaymasterABI from '../abi/BlogPaymaster.json';
 // 合约地址配置
 export const CONTRACTS = {
   local: {
-    blogHub: '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853',
+    blogHub: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9',
     sessionKeyManager: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
     paymaster: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
   },
@@ -578,9 +533,9 @@ export async function registerSessionKey(
   
   // 允许的函数选择器
   const allowedSelectors = [
-    '0x8c3c4b34', // evaluate
-    '0x7b0472f0', // likeComment
-    '0x4dbf0f39', // follow
+    '0xff1f090a', // evaluate
+    '0xdffd40f2', // likeComment
+    '0x63c3cc16', // follow
   ];
   
   const hash = await walletClient.writeContract({
@@ -806,9 +761,6 @@ cast call <BLOG_HUB_PROXY> "paused()(bool)" --rpc-url <RPC_URL>
 
 # 检查文章是否存在
 cast call <BLOG_HUB_PROXY> "nextArticleId()(uint256)" --rpc-url <RPC_URL>
-
-# 检查用户余额
-cast call <BLOG_HUB_PROXY> "accountBalance(address)(uint256)" <USER_ADDRESS> --rpc-url <RPC_URL>
 ```
 
 ### 9.2 Session Key 问题
@@ -875,11 +827,9 @@ forge script script/Deploy.s.sol \
 | 函数 | 选择器 |
 |------|--------|
 | `publish(string,uint64,uint96,string)` | `0x...` |
-| `evaluate(uint256,uint8,string,address,uint256)` | `0x8c3c4b34` |
-| `likeComment(uint256,uint256,address,address)` | `0x7b0472f0` |
-| `follow(address,bool)` | `0x4dbf0f39` |
-| `withdraw()` | `0x3ccfd60b` |
-| `depositBalance()` | `0x...` |
+| `evaluate(uint256,uint8,string,address,uint256)` | `0xff1f090a` |
+| `likeComment(uint256,uint256,address,address)` | `0xdffd40f2` |
+| `follow(address,bool)` | `0x63c3cc16` |
 
 ```bash
 # 获取函数选择器
@@ -920,8 +870,9 @@ cast estimate <CONTRACT> <FUNCTION_SIG> <ARGS> --rpc-url <RPC_URL>
 
 ---
 
-*文档版本: 1.1.0*
-*最后更新: 2024*
+*文档版本: 1.2.0*
+*最后更新: 2024-11*
 
 **更新日志:**
+- v1.2.0: 更新合约地址（BlogHub Proxy: 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9）；更新函数选择器；移除 withdraw/accountBalance 相关功能（打赏现为直接转账）
 - v1.1.0: `publish` 函数新增 `originalAuthor` 参数，支持代发文章记录真实作者
