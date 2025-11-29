@@ -1,0 +1,522 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+import {BaseTest} from "./BaseTest.sol";
+import {BlogHub} from "../src/BlogHub.sol";
+import {ISessionKeyManager} from "../src/interfaces/ISessionKeyManager.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+/**
+ * @title BlogHubSessionKeyTest
+ * @dev BlogHub 合约 Session Key 功能的单元测试
+ */
+contract BlogHubSessionKeyTest is BaseTest {
+    // ============ 事件定义 ============
+    event SessionKeyManagerUpdated(address indexed newManager);
+    event SessionKeyOperationExecuted(
+        address indexed owner,
+        address indexed sessionKey,
+        bytes4 selector
+    );
+    event ArticleEvaluated(
+        uint256 indexed articleId,
+        address indexed user,
+        uint8 score,
+        uint256 amountPaid,
+        uint256 timestamp
+    );
+    event CommentLiked(
+        uint256 indexed articleId,
+        uint256 indexed commentId,
+        address indexed liker,
+        address commenter,
+        uint256 amountPaid,
+        uint256 timestamp
+    );
+    event FollowStatusChanged(
+        address indexed follower,
+        address indexed target,
+        bool isFollowing
+    );
+
+    // ============ 设置 ============
+
+    function setUp() public override {
+        super.setUp();
+        // 为 user1 注册 Session Key
+        _registerStandardSessionKey(user1, sessionKey, address(blogHub));
+    }
+
+    // ============ Session Key 管理测试 ============
+
+    function test_SetSessionKeyManager_Success() public {
+        address newManager = makeAddr("newManager");
+
+        vm.expectEmit(true, false, false, false);
+        emit SessionKeyManagerUpdated(newManager);
+
+        vm.prank(owner);
+        blogHub.setSessionKeyManager(newManager);
+
+        assertEq(address(blogHub.sessionKeyManager()), newManager);
+    }
+
+    function test_SetSessionKeyManager_RevertZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert(BlogHub.InvalidAddress.selector);
+        blogHub.setSessionKeyManager(address(0));
+    }
+
+    function test_SetSessionKeyManager_RevertNotAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        blogHub.setSessionKeyManager(makeAddr("newManager"));
+    }
+
+    // ============ evaluateWithSessionKey 测试 ============
+
+    function test_EvaluateWithSessionKey_Success() public {
+        uint256 articleId = _publishTestArticle(user2);
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.evaluate.selector,
+            articleId,
+            uint8(1),
+            "",
+            address(0),
+            uint256(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        uint256 nonce = data.nonce;
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.evaluate.selector,
+            callData,
+            amount,
+            nonce,
+            deadline
+        );
+
+        vm.expectEmit(true, true, false, true);
+        emit ArticleEvaluated(articleId, user1, 1, amount, block.timestamp);
+
+        vm.expectEmit(true, true, false, true);
+        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.evaluate.selector);
+
+        // 由 relayer (owner) 代付 msg.value
+        vm.prank(owner);
+        blogHub.evaluateWithSessionKey{value: amount}(
+            user1,
+            sessionKey,
+            articleId,
+            1,
+            "",
+            address(0),
+            0,
+            deadline,
+            signature
+        );
+
+        // 验证 NFT 铸造
+        assertEq(blogHub.balanceOf(user1, articleId), 1);
+    }
+
+    function test_EvaluateWithSessionKey_WithComment() public {
+        uint256 articleId = _publishTestArticle(user2);
+        uint256 amount = 0.5 ether;
+        string memory comment = "Great article via session key!";
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.evaluate.selector,
+            articleId,
+            uint8(1),
+            comment,
+            address(0),
+            uint256(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.evaluate.selector,
+            callData,
+            amount,
+            data.nonce,
+            deadline
+        );
+
+        vm.prank(owner);
+        blogHub.evaluateWithSessionKey{value: amount}(
+            user1,
+            sessionKey,
+            articleId,
+            1,
+            comment,
+            address(0),
+            0,
+            deadline,
+            signature
+        );
+
+        // 验证 NFT 铸造
+        assertEq(blogHub.balanceOf(user1, articleId), 1);
+    }
+
+    function test_EvaluateWithSessionKey_ZeroAmount() public {
+        uint256 articleId = _publishTestArticle(user2);
+        string memory comment = "Free comment via session key";
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.evaluate.selector,
+            articleId,
+            uint8(1),
+            comment,
+            address(0),
+            uint256(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.evaluate.selector,
+            callData,
+            0,
+            data.nonce,
+            deadline
+        );
+
+        uint256 user1BalanceBefore = user1.balance;
+
+        vm.prank(owner);
+        blogHub.evaluateWithSessionKey(
+            user1,
+            sessionKey,
+            articleId,
+            1,
+            comment,
+            address(0),
+            0,
+            deadline,
+            signature
+        );
+
+        // 余额不变（没有代付）
+        assertEq(user1.balance, user1BalanceBefore);
+    }
+
+    function test_EvaluateWithSessionKey_RevertSessionKeyManagerNotSet() public {
+        // 创建一个没有设置 SessionKeyManager 的 BlogHub
+        BlogHub newBlogHub = new BlogHub();
+        bytes memory initData = abi.encodeWithSelector(
+            BlogHub.initialize.selector,
+            owner,
+            treasury
+        );
+        address proxy = address(new ERC1967Proxy(address(newBlogHub), initData));
+        BlogHub blogHubNoManager = BlogHub(payable(proxy));
+
+        vm.prank(user1);
+        vm.expectRevert(BlogHub.SessionKeyManagerNotSet.selector);
+        blogHubNoManager.evaluateWithSessionKey{value: 1 ether}(
+            user1,
+            sessionKey,
+            1,
+            1,
+            "",
+            address(0),
+            0,
+            block.timestamp + 1 hours,
+            ""
+        );
+    }
+
+    // ============ likeCommentWithSessionKey 测试 ============
+
+    function test_LikeCommentWithSessionKey_Success() public {
+        uint256 articleId = _publishTestArticle(user2);
+        address commenter = makeAddr("commenter");
+        uint256 commentId = 1;
+        uint256 amount = 0.5 ether;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.likeComment.selector,
+            articleId,
+            commentId,
+            commenter,
+            address(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.likeComment.selector,
+            callData,
+            amount,
+            data.nonce,
+            deadline
+        );
+
+        vm.expectEmit(true, true, true, true);
+        emit CommentLiked(articleId, commentId, user1, commenter, amount, block.timestamp);
+
+        vm.expectEmit(true, true, false, true);
+        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.likeComment.selector);
+
+        vm.prank(owner);
+        blogHub.likeCommentWithSessionKey{value: amount}(
+            user1,
+            sessionKey,
+            articleId,
+            commentId,
+            commenter,
+            address(0),
+            deadline,
+            signature
+        );
+
+        // 验证 NFT 铸造
+        assertEq(blogHub.balanceOf(user1, articleId), 1);
+    }
+
+    function test_LikeCommentWithSessionKey_RevertZeroAmount() public {
+        uint256 articleId = _publishTestArticle(user2);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.likeComment.selector,
+            articleId,
+            uint256(1),
+            makeAddr("commenter"),
+            address(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.likeComment.selector,
+            callData,
+            0,
+            data.nonce,
+            deadline
+        );
+
+        vm.prank(owner);
+        vm.expectRevert(BlogHub.ZeroAmount.selector);
+        blogHub.likeCommentWithSessionKey(
+            user1,
+            sessionKey,
+            articleId,
+            1,
+            makeAddr("commenter"),
+            address(0),
+            deadline,
+            signature
+        );
+    }
+
+    // ============ followWithSessionKey 测试 ============
+
+    function test_FollowWithSessionKey_Success() public {
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.follow.selector,
+            user2,
+            true
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.follow.selector,
+            callData,
+            0,
+            data.nonce,
+            deadline
+        );
+
+        vm.expectEmit(true, true, false, true);
+        emit FollowStatusChanged(user1, user2, true);
+
+        vm.expectEmit(true, true, false, true);
+        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.follow.selector);
+
+        blogHub.followWithSessionKey(
+            user1,
+            sessionKey,
+            user2,
+            true,
+            deadline,
+            signature
+        );
+    }
+
+    function test_UnfollowWithSessionKey_Success() public {
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.follow.selector,
+            user2,
+            false
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.follow.selector,
+            callData,
+            0,
+            data.nonce,
+            deadline
+        );
+
+        vm.expectEmit(true, true, false, true);
+        emit FollowStatusChanged(user1, user2, false);
+
+        blogHub.followWithSessionKey(
+            user1,
+            sessionKey,
+            user2,
+            false,
+            deadline,
+            signature
+        );
+    }
+
+    function test_FollowWithSessionKey_RevertSessionKeyManagerNotSet() public {
+        BlogHub newBlogHub = new BlogHub();
+        bytes memory initData = abi.encodeWithSelector(
+            BlogHub.initialize.selector,
+            owner,
+            treasury
+        );
+        address proxy = address(new ERC1967Proxy(address(newBlogHub), initData));
+        BlogHub blogHubNoManager = BlogHub(payable(proxy));
+
+        vm.prank(user1);
+        vm.expectRevert(BlogHub.SessionKeyManagerNotSet.selector);
+        blogHubNoManager.followWithSessionKey(
+            user1,
+            sessionKey,
+            user2,
+            true,
+            block.timestamp + 1 hours,
+            ""
+        );
+    }
+
+    // ============ 多次操作测试 ============
+
+    function test_MultipleSessionKeyOperations() public {
+        uint256 articleId = _publishTestArticle(user2);
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 amount = 1 ether;
+
+        // 第一次操作：评价
+        bytes memory callData1 = abi.encodeWithSelector(
+            BlogHub.evaluate.selector,
+            articleId,
+            uint8(1),
+            "First comment",
+            address(0),
+            uint256(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature1 = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.evaluate.selector,
+            callData1,
+            amount,
+            data1.nonce,
+            deadline
+        );
+
+        vm.prank(owner);
+        blogHub.evaluateWithSessionKey{value: amount}(
+            user1,
+            sessionKey,
+            articleId,
+            1,
+            "First comment",
+            address(0),
+            0,
+            deadline,
+            signature1
+        );
+
+        // 第二次操作：关注
+        bytes memory callData2 = abi.encodeWithSelector(
+            BlogHub.follow.selector,
+            user2,
+            true
+        );
+
+        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        assertEq(data2.nonce, data1.nonce + 1);
+
+        bytes memory signature2 = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.follow.selector,
+            callData2,
+            0,
+            data2.nonce,
+            deadline
+        );
+
+        vm.prank(owner);
+        blogHub.followWithSessionKey(
+            user1,
+            sessionKey,
+            user2,
+            true,
+            deadline,
+            signature2
+        );
+
+        // 验证最终状态
+        assertEq(blogHub.balanceOf(user1, articleId), 1);
+    }
+
+}
