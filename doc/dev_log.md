@@ -1,3 +1,19 @@
+#### 2025-11-30 16:54 更新文档关于irys部分
+@README.md @Developers.md 你在Developers文档中关于irys部分似乎与官方文档中有些区别，下面是官方文档链接，请阅读相关内容，也搜索站点下其他相关内容，对Developers文档中相关部分进行更新：https://docs.irys.xyz/build/d/quickstart  
+Claude: 更新了，不过很多地方使用ethers，当前项目使用viem + @wagmi/core  
+我看你修改后很多地方使用ethers，当前项目使用viem + @wagmi/core，请评估下是否能切换，如果能以这些为准，修改文档  
+Claude: 改为了viem
+
+#### 2025-11-30 16:35 创建前端项目的注意
+`npx sv create frontend`询问插件十多种。是否应该选adapter？还是static？  
+我打算用sveltekit写一个前端的dapp项目，部署的时候部署到去中心化存储，比如irys或者Swarm，请问用sveltekit的adapter模式还是static模式合适？后者是静态网页，前者需要node.js运行。  
+Gemini: 选择：Static Adapter（静态模式）；如果用adapter需要 Node.js 运行时，增加中心化依赖  
+询问：创建时还询问我需要哪些组件，请帮我分析考虑，哪些建议开启？注意我做的是完全去中心化的博客，包含Arweave永久存储，SubSquid索引；  
+Gemini：建议选择：prettier，eslint，tailwindcss，vitest，playwright，mdsvex  
+决策：增加paraglide，下一步选择@tailwindcss/typography  
+多语言：zh-CN, en-US  
+包管理器：npm
+
 #### 2025-11-30 16:18 执行graphql报错
 Variable \"$offset\" of required type \"Int!\" was not provided.  
 Claude: 在 GraphQL Playground 的 Variables 面板（通常在查询编辑器下方）中添加变量值：
@@ -62,7 +78,8 @@ Claude：在indexer\squid\src\main.ts中依然是旧的Burn示例，已改为新
 Claude：文档有误，在`npx squid-typeorm-migration generate`前需执行`npx tsc`
 
 #### 2025-11-29 22:10 完善开发文档指南
-@Developers.md @README.md 当前智能合约部分已基本完成。接下来还有SubSquid、Irys+Arweave、和前端尚未开始；请你根据当前项目技术栈，和现在进度现状。帮我更新 @Developers.md 给出后续如何一步步落实完善整个项目的各个环节。要给出具体细节
+@Developers.md @README.md 当前智能合约部分已基本完成。接下来还有SubSquid、Irys+Arweave、和前端尚未开始；请你根据当前项目技术栈，和现在进度现状。帮我更新 @Developers.md 给出后续如何一步步落实完善整个项目的各个环节。要给出具体细节  
+Claude：见[github](https://github.com/banbox/dblog/blob/f2f8b0af8424cb9b7d651da0cb98e4b7ce6be979/doc/Developers.md)
 
 #### 2025-11-29 21:00 MIN_ACTION_VALUE改为可配置
 @README.md  当前MIN_ACTION_VALUE设置为0实际并未启用，帮我修改一下，改为一个合适的值，花费不高，但也有成本，改为变量，允许管理员修改

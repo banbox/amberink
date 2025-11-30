@@ -592,6 +592,11 @@ sqd deploy .
 ```
 
 ### 9.3 前端集成
+```shell
+npx sv create frontend
+cd frontend
+npm run dev
+```
 
 ```typescript
 // frontend/src/lib/graphql.ts
@@ -609,30 +614,73 @@ export const graphqlClient = new Client({
 
 ## 10. Irys SDK 集成
 
-Irys 是 Arweave 的上传层，提供快速、可靠的永久存储服务。
+Irys 是 Arweave 的上传层，提供快速、可靠的永久存储服务。Irys 提供两套 SDK：
+- **服务端 SDK**：`@irys/upload` - 用于 Node.js 环境
+- **浏览器端 SDK**：`@irys/web-upload` - 用于浏览器环境
 
 ### 10.1 安装依赖
 
+**浏览器端（使用 Viem v2）：**
+
 ```bash
 cd frontend
-npm install @irys/sdk @irys/web-upload @irys/web-upload-ethereum
+npm install @irys/web-upload @irys/web-upload-ethereum @irys/web-upload-ethereum-viem-v2 viem
 ```
 
 ### 10.2 初始化 Irys 客户端
 
+**浏览器端（Viem v2 + @wagmi/core）：**
+
 ```typescript
 // frontend/src/lib/irys.ts
 import { WebUploader } from '@irys/web-upload'
-import { EthereumEthersV6 } from '@irys/web-upload-ethereum'
+import { WebEthereum } from '@irys/web-upload-ethereum'
+import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2'
+import { createWalletClient, createPublicClient, custom } from 'viem'
+import { optimismSepolia } from 'viem/chains'
 
-// 连接到 Irys（使用以太坊钱包）
+// 连接到 Irys Mainnet
 export async function getIrysUploader() {
-  const provider = await EthereumEthersV6.getProvider()
+  const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' })
   
-  const irysUploader = await WebUploader(EthereumEthersV6).withProvider(provider)
+  const walletClient = createWalletClient({
+    account,
+    chain: optimismSepolia,
+    transport: custom(window.ethereum)
+  })
   
-  // 使用 Irys Devnet 进行测试（免费）
-  // 生产环境使用 mainnet
+  const publicClient = createPublicClient({
+    chain: optimismSepolia,
+    transport: custom(window.ethereum)
+  })
+  
+  const irysUploader = await WebUploader(WebEthereum).withAdapter(
+    ViemV2Adapter(walletClient, { publicClient })
+  )
+  return irysUploader
+}
+
+// 连接到 Irys Devnet（测试用，免费但数据约60天后删除）
+export async function getIrysUploaderDevnet() {
+  const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' })
+  
+  const walletClient = createWalletClient({
+    account,
+    chain: optimismSepolia,
+    transport: custom(window.ethereum)
+  })
+  
+  const publicClient = createPublicClient({
+    chain: optimismSepolia,
+    transport: custom(window.ethereum)
+  })
+  
+  // RPC URL 可从 https://chainlist.org/ 获取最新地址
+  const rpcURL = 'https://sepolia.optimism.io'
+  const irysUploader = await WebUploader(WebEthereum)
+    .withAdapter(ViemV2Adapter(walletClient, { publicClient }))
+    .withRpc(rpcURL)
+    .devnet()
   return irysUploader
 }
 
@@ -642,30 +690,27 @@ export async function getIrysBalance(uploader: any): Promise<string> {
   return uploader.utils.fromAtomic(balance).toString()
 }
 
-// 充值（生产环境需要）
+// 充值（Mainnet 需要）
 export async function fundIrys(uploader: any, amount: string) {
   const fundTx = await uploader.fund(uploader.utils.toAtomic(amount))
+  console.log(`Successfully funded ${uploader.utils.fromAtomic(fundTx.quantity)} ${uploader.token}`)
   return fundTx.id
 }
 ```
 
-### 10.3 配置网络
 
-```typescript
-// 测试网配置（Devnet - 免费但数据不永久）
-const IRYS_DEVNET = {
-  url: 'https://devnet.irys.xyz',
-  token: 'ethereum',
-  providerUrl: 'https://sepolia.optimism.io'
-}
+### 10.3 网络说明
 
-// 主网配置（需要付费，数据永久存储）
-const IRYS_MAINNET = {
-  url: 'https://uploader.irys.xyz',
-  token: 'ethereum',
-  providerUrl: 'https://mainnet.optimism.io'
-}
-```
+Irys 有两个 Bundler 网络：
+
+| 网络 | 说明 | 数据保留 |
+|------|------|----------|
+| **Mainnet** | 使用真实代币付费 | 永久存储 |
+| **Devnet** | 使用免费水龙头代币 | 约 60 天后删除 |
+
+- **网关地址**：`https://gateway.irys.xyz/{transactionId}`
+- **Devnet 配置**：需要调用 `.withRpc(rpcURL).devnet()` 方法
+- **支持的代币**：ETH、MATIC、BNB、AVAX、SOL 等，详见 [Supported Tokens](https://docs.irys.xyz/build/d/features/supported-tokens)
 
 ---
 
@@ -695,7 +740,8 @@ export interface ArticleBundle {
 
 ```typescript
 // frontend/src/lib/article.ts
-import { getIrysUploader, type ArticleMetadata } from './irys'
+import { getIrysUploader } from './irys'
+import type { ArticleMetadata } from './types'
 
 export async function uploadArticle(metadata: ArticleMetadata): Promise<string> {
   const uploader = await getIrysUploader()
@@ -717,24 +763,35 @@ export async function uploadArticle(metadata: ArticleMetadata): Promise<string> 
     ...metadata.tags.map(tag => ({ name: 'Tag', value: tag }))
   ]
   
-  // 上传
-  const receipt = await uploader.upload(data, { tags })
-  
-  console.log('Article uploaded:', receipt.id)
-  return receipt.id  // 返回 Arweave Transaction ID
+  try {
+    // 上传数据
+    const receipt = await uploader.upload(data, { tags })
+    console.log(`Article uploaded ==> https://gateway.irys.xyz/${receipt.id}`)
+    return receipt.id  // 返回 Transaction ID
+  } catch (e) {
+    console.error('Error when uploading article:', e)
+    throw e
+  }
 }
 
-// 上传图片
+// 上传图片文件
 export async function uploadImage(file: File): Promise<string> {
   const uploader = await getIrysUploader()
   
   const tags = [
     { name: 'Content-Type', value: file.type },
-    { name: 'App-Name', value: 'DBlog' }
+    { name: 'App-Name', value: 'DBlog' },
+    { name: 'Type', value: 'image' }
   ]
   
-  const receipt = await uploader.uploadFile(file, { tags })
-  return receipt.id
+  try {
+    const receipt = await uploader.uploadFile(file, { tags })
+    console.log(`Image uploaded ==> https://gateway.irys.xyz/${receipt.id}`)
+    return receipt.id
+  } catch (e) {
+    console.error('Error when uploading image:', e)
+    throw e
+  }
 }
 ```
 
@@ -792,11 +849,13 @@ export async function publishArticle(
 
 ```typescript
 // frontend/src/lib/arweave.ts
+import type { ArticleMetadata } from './types'
 
 // Arweave 网关列表（用于负载均衡和容错）
+// Irys 官方网关优先
 const ARWEAVE_GATEWAYS = [
-  'https://arweave.net',
   'https://gateway.irys.xyz',
+  'https://arweave.net',
   'https://arweave.dev'
 ]
 
@@ -819,9 +878,9 @@ export async function fetchArticleContent(arweaveId: string): Promise<ArticleMet
   throw new Error('Failed to fetch article from all gateways')
 }
 
-// 获取图片 URL
+// 获取图片 URL（优先使用 Irys 网关）
 export function getImageUrl(arweaveId: string): string {
-  return `https://arweave.net/${arweaveId}`
+  return `https://gateway.irys.xyz/${arweaveId}`
 }
 ```
 
@@ -941,8 +1000,8 @@ npm install viem @wagmi/core svelte-wagmi @reown/appkit
 # GraphQL
 npm install @urql/svelte graphql
 
-# Arweave/Irys
-npm install @irys/web-upload @irys/web-upload-ethereum
+# Arweave/Irys（浏览器端，使用 Viem v2）
+npm install @irys/web-upload @irys/web-upload-ethereum @irys/web-upload-ethereum-viem-v2
 
 # UI 组件
 npm install lucide-svelte bits-ui tailwind-variants clsx tailwind-merge
