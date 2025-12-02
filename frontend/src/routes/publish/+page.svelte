@@ -129,7 +129,7 @@
 
 			<div>
 				<label class="block text-sm font-medium text-gray-700 mb-3">Cover Image</label>
-				{coverImagePreview ? (
+				{#if coverImagePreview}
 					<div class="space-y-3">
 						<div class="relative overflow-hidden rounded-lg bg-gray-100">
 							<img src={coverImagePreview} alt="Cover preview" class="h-64 w-full object-cover" />
@@ -143,7 +143,7 @@
 							Remove image
 						</button>
 					</div>
-				) : (
+				{:else}
 					<label class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 px-6 py-10 transition-colors hover:border-gray-300">
 						<svg class="mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -158,7 +158,7 @@
 							disabled={isSubmitting}
 						/>
 					</label>
-				)}
+				{/if}
 			</div>
 
 			<div>
@@ -187,7 +187,7 @@
 				/>
 			</div>
 
-			{submitStatus !== 'idle' && (
+			{#if submitStatus !== 'idle'}
 				<div
 					class={`rounded-lg px-4 py-3 text-sm ${
 						submitStatus === 'success'
@@ -197,7 +197,7 @@
 				>
 					{statusMessage}
 				</div>
-			)}
+			{/if}
 
 			<div class="flex gap-3">
 				<button
