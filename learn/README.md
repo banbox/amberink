@@ -352,5 +352,5 @@ Claude: 改为了viem
 
 #### 2025-12-02 10:00 前端集成irys+Arweave
 @README.md 帮我在前端项目中，集成Irys+Arweave，对应当前 @Developers.md  文档的630~945行；将这些逻辑包装为ts库方便导入使用，暂时忽略其中的业务逻辑  
-Claude: 在`frontend/src/lib/arweave/`下生成了相关组件
+Claude: 在`frontend/src/lib/arweave/`下生成了相关组件[d3d65328](d3d65328bc222635f4f353a01c7d34d6efb8345c)
 
