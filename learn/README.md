@@ -1,3 +1,5 @@
+此项目初期大部分问题都对比了Gemini、Chatgpt、grok；多数情况下Gemini 3 think回答质量最高；后续项目复杂了就通过windsurf的Claude Opus 4.5辅助开发。
+
 #### 2025-11-20 前期知识储备
 强烈推荐Cyfrin Updraft上的相关课程，成体系，是最新版本；视频和文字版本都有；  
 [区块链基础](https://updraft.cyfrin.io/courses/blockchain-basics)全看  
@@ -48,7 +50,7 @@ Gemini：1. Relayer（可能中心化）发起交易+EIP2771模式；2. EIP-2612
 我在学习dapp开发，我想复刻一个去中心化的Mirror.xyz这样的博客应用；支持查看文章列表和详情。支持多用户；我知道需要用到去中心化存储来存储文章内容。是否需要用到区块链和去中心化数据库呢？请你作为高级项目专家，向我提问，澄清你认为需要明确的关键问题；细节问题你自定确定最佳方案即可。全部澄清后，你作为高级提示词专家，帮我输出一份提示词，要求输入给任意AI，都可生成一份高质量的架构设计方案。  
 Gemini：  
 1. 文章的“资产属性”是什么？（文章铸造NFT？还是只证明我写了它？）
-2. 文章列表的“索引策略”选哪个？（The Graph完全去中心化索引？链上数组存储（gas贵）？）
+2. 文章列表的“索引策略”选哪个？（The Graph完全去中心化索引？链上数组存储（gas贵）？）  
 决策：问题1，每个文章对应一个NFT；问题2：使用The Graph；区块链网络使用Optimism，前端使用sveltekit  
 Gemini：[arch_prompt](../learn/01_arch_prompt_init.md)
 
@@ -347,4 +349,8 @@ Gemini：建议选择：prettier，eslint，tailwindcss，vitest，playwright，
 Claude: 更新了，不过很多地方使用ethers，当前项目使用viem + @wagmi/core  
 我看你修改后很多地方使用ethers，当前项目使用viem + @wagmi/core，请评估下是否能切换，如果能以这些为准，修改文档  
 Claude: 改为了viem
+
+#### 2025-12-02 10:00 前端集成irys+Arweave
+@README.md 帮我在前端项目中，集成Irys+Arweave，对应当前 @Developers.md  文档的630~945行；将这些逻辑包装为ts库方便导入使用，暂时忽略其中的业务逻辑  
+Claude: 在`frontend/src/lib/arweave/`下生成了相关组件
 
