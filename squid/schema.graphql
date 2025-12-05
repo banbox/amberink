@@ -17,6 +17,8 @@ type Article @entity {
   arweaveId: String!               # Arweave 存储 Hash
   author: User!                    # 作者地址
   originalAuthor: String           # 原始作者（代发时记录）
+  title: String!                   # 文章标题（用于列表展示）
+  coverImage: String               # 封面图片 Arweave Hash（可为空）
   categoryId: BigInt!
   royaltyBps: Int!
   likes: Int!

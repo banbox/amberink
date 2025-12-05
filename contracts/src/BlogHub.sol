@@ -46,6 +46,8 @@ contract BlogHub is
     error SessionKeyValidationFailed();
     error SessionKeyManagerNotSet();
     error OriginalAuthorTooLong();
+    error TitleTooLong();
+    error CoverImageTooLong();
 
     // 定义常量：最大评论长度（字节）
     // 140单词英文大约 700-1000 字节，中文约 400 汉字 = 1200 字节
@@ -63,12 +65,18 @@ contract BlogHub is
         string arweaveHash;
         address author;
         string originalAuthor; // 真实作者（用于代发场景，最大64字节）
+        string title;          // 文章标题（最大128字节，用于列表展示）
+        string coverImage;     // 封面图片 Arweave Hash（最大64字节）
         uint64 categoryId;
         uint64 timestamp;
     }
 
     // 最大原作者名称长度（64字节，足够存储大多数用户名/ENS域名）
     uint256 public constant MAX_ORIGINAL_AUTHOR_LENGTH = 64;
+    // 最大标题长度（128字节，约40个中文字符或128个英文字符）
+    uint256 public constant MAX_TITLE_LENGTH = 128;
+    // 最大封面图片 Hash 长度（64字节，足够存储 Arweave TX ID）
+    uint256 public constant MAX_COVER_IMAGE_LENGTH = 64;
 
     // --- 状态变量 ---
     uint256 public nextArticleId;
@@ -95,6 +103,8 @@ contract BlogHub is
         uint256 indexed categoryId,
         string arweaveId,
         string originalAuthor,
+        string title,
+        string coverImage,
         uint256 timestamp
     );
 
@@ -365,15 +375,21 @@ contract BlogHub is
      * @param _categoryId 分类ID
      * @param _royaltyBps 版税比例 (basis points)
      * @param _originalAuthor 真实作者名称（用于代发场景，为空则表示发布者即作者）
+     * @param _title 文章标题（用于列表展示，最大128字节）
+     * @param _coverImage 封面图片 Arweave Hash（可为空，最大64字节）
      */
     function publish(
         string calldata _arweaveId,
         uint64 _categoryId,
         uint96 _royaltyBps,
-        string calldata _originalAuthor
+        string calldata _originalAuthor,
+        string calldata _title,
+        string calldata _coverImage
     ) external whenNotPaused returns (uint256) {
         if (_royaltyBps > 10000) revert RoyaltyTooHigh();
         if (bytes(_originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
+        if (bytes(_title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
+        if (bytes(_coverImage).length > MAX_COVER_IMAGE_LENGTH) revert CoverImageTooLong();
         
         address author = _msgSender();
         uint256 newId = nextArticleId++;
@@ -383,6 +399,8 @@ contract BlogHub is
             arweaveHash: _arweaveId,
             author: author,
             originalAuthor: _originalAuthor,
+            title: _title,
+            coverImage: _coverImage,
             categoryId: _categoryId,
             timestamp: uint64(block.timestamp)
         });
@@ -399,6 +417,8 @@ contract BlogHub is
             _categoryId,
             _arweaveId,
             _originalAuthor,
+            _title,
+            _coverImage,
             block.timestamp
         );
         return newId;

@@ -407,4 +407,10 @@ Claude: 修改如预期
 开发者：frontend\app\composables\data.ts 第一个分类改为未选择，第二个是其他，剩余的依次后移  
 Claude：修改完成
 
+#### 2025-12-05 16:30  智能合约修改
+README.md contracts/README.md @BlogHub.sol 当前项目文章内容存储到Arweave，记录等放在链上，然后通过SubSquid索引；我需要在文章列表中在不逐个从Arweave读取的情况下显示基本概要信息，如标题，作者，封面图片，分类，时间，评论数，赞助金额等；最后的评论数和赞助金额或许可通过SubSquid得到？目前标题和封面图片未存储到链上，这是否会导致无法显示？请帮我分析并自动修复；如果你有其他建议的字段修改和添加，请说明原因并操作  
+Claude: 修改 contracts\src\BlogHub.sol 新增了title和coverImage字段；执行`forge build`有错误发给AI解决了。
 
+#### 2025-12-05 16:55  更新前端等
+doc\Developers.md frontend\app\composables  frontend\app\pages\publish.vue 我对 contracts\src\BlogHub.sol 合约进行了修改，给Article新增了title和coverImage字段，请在上面的几个位置中，查找受影响需要更新的地方进行更新，确保整体协调正确运行  
+Claude：修改了composables和Developers.md

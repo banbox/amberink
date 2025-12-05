@@ -230,7 +230,7 @@ abstract contract BaseTest is Test {
      */
     function _publishTestArticle(address author) internal returns (uint256) {
         vm.prank(author);
-        return blogHub.publish("test-arweave-hash", 1, 500, "");
+        return blogHub.publish("test-arweave-hash", 1, 500, "", "Test Title", "");
     }
 
     /**
@@ -238,7 +238,7 @@ abstract contract BaseTest is Test {
      */
     function _publishTestArticleWithOriginalAuthor(address publisher, string memory originalAuthor) internal returns (uint256) {
         vm.prank(publisher);
-        return blogHub.publish("test-arweave-hash", 1, 500, originalAuthor);
+        return blogHub.publish("test-arweave-hash", 1, 500, originalAuthor, "Test Title", "");
     }
 
     /**

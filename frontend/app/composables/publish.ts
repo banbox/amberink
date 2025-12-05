@@ -86,7 +86,14 @@ export async function publishArticle(params: PublishArticleParams): Promise<Publ
 
 		// Step 3: Publish to blockchain
 		console.log('Step 3: Publishing to blockchain...')
-		const txHash = await publishToContract(arweaveId, categoryId, royaltyBps, originalAuthor)
+		const txHash = await publishToContract(
+			arweaveId,
+			categoryId,
+			royaltyBps,
+			originalAuthor,
+			title.trim(),
+			coverImageHash || ''
+		)
 		console.log(`Article published to blockchain: ${txHash}`)
 
 		return {

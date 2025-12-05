@@ -15,7 +15,9 @@ const BLOGHUB_ABI = [
 			{ name: '_arweaveId', type: 'string' },
 			{ name: '_categoryId', type: 'uint64' },
 			{ name: '_royaltyBps', type: 'uint96' },
-			{ name: '_originalAuthor', type: 'string' }
+			{ name: '_originalAuthor', type: 'string' },
+			{ name: '_title', type: 'string' },
+			{ name: '_coverImage', type: 'string' }
 		],
 		outputs: [{ type: 'uint256' }],
 		stateMutability: 'nonpayable'
@@ -46,13 +48,17 @@ async function getWalletClient() {
  * @param categoryId - Category ID (0-based)
  * @param royaltyBps - Royalty basis points (0-10000, where 100 = 1%)
  * @param originalAuthor - Original author name (optional, for repost scenarios)
+ * @param title - Article title (max 128 bytes)
+ * @param coverImage - Cover image Arweave hash (optional, max 64 bytes)
  * @returns Transaction hash
  */
 export async function publishToContract(
 	arweaveId: string,
 	categoryId: bigint,
 	royaltyBps: bigint,
-	originalAuthor: string = ''
+	originalAuthor: string = '',
+	title: string = '',
+	coverImage: string = ''
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required')
@@ -70,6 +76,14 @@ export async function publishToContract(
 		throw new Error('Original author name is too long (max 64 characters)')
 	}
 
+	if (title && new TextEncoder().encode(title).length > 128) {
+		throw new Error('Title is too long (max 128 bytes)')
+	}
+
+	if (coverImage && coverImage.length > 64) {
+		throw new Error('Cover image hash is too long (max 64 characters)')
+	}
+
 	try {
 		const walletClient = await getWalletClient()
 
@@ -78,7 +92,7 @@ export async function publishToContract(
 			address: BLOGHUB_CONTRACT_ADDRESS,
 			abi: BLOGHUB_ABI,
 			functionName: 'publish',
-			args: [arweaveId, categoryId, royaltyBps, originalAuthor]
+			args: [arweaveId, categoryId, royaltyBps, originalAuthor, title, coverImage]
 		})
 
 		console.log(`Article published to contract. Tx: ${txHash}`)

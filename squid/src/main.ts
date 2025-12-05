@@ -47,6 +47,8 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     arweaveId: event.arweaveId,
                     author: user,
                     originalAuthor: event.originalAuthor || null,
+                    title: event.title,
+                    coverImage: event.coverImage || null,
                     categoryId: event.categoryId,
                     royaltyBps: 0, // 事件中不包含此字段，可通过合约查询或前端处理
                     likes: 0,

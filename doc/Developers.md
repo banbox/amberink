@@ -98,6 +98,10 @@ cd contracts
 export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 forge script script/Deploy.s.sol --fork-url http://localhost:8545 --broadcast --tc DeployScript
 
+# 升级智能合约
+export BLOG_HUB_PROXY=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+forge script script/Deploy.s.sol --fork-url http://localhost:8545 --broadcast --tc UpgradeBlogHub
+
 # 检查 BlogHub Proxy 是否正确初始化
 cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "platformTreasury()(address)" --rpc-url http://localhost:8545
 
@@ -119,24 +123,30 @@ cast call 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "sessionKeyManager()(addres
 
 ```bash
 # 使用 User1 发布文章（自己是作者）
-# publish(string arweaveId, uint64 categoryId, uint96 royaltyBps, string originalAuthor)
+# publish(string arweaveId, uint64 categoryId, uint96 royaltyBps, string originalAuthor, string title, string coverImage)
 # originalAuthor 为空字符串表示发布者即作者
+# title 为文章标题（最大128字节）
+# coverImage 为封面图片 Arweave Hash（可为空，最大64字节）
 cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
-  "publish(string,uint64,uint96,string)(uint256)" \
+  "publish(string,uint64,uint96,string,string,string)(uint256)" \
   "QmTestArweaveHash123456789" \
   1 \
   500 \
   "" \
+  "My First Article" \
+  "" \
   --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
   --rpc-url http://localhost:8545
 
-# 代发文章（记录真实作者）
+# 代发文章（记录真实作者，带封面图片）
 cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
-  "publish(string,uint64,uint96,string)(uint256)" \
+  "publish(string,uint64,uint96,string,string,string)(uint256)" \
   "QmTestArweaveHash987654321" \
   1 \
   500 \
   "RealAuthor.eth" \
+  "Web3 Development Guide" \
+  "QmCoverImageHash123" \
   --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
   --rpc-url http://localhost:8545
 
@@ -144,9 +154,9 @@ cast send 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
 cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "nextArticleId()(uint256)" --rpc-url http://localhost:8545
 # 应返回 2（下一个文章ID）
 
-# 查看文章详情（包含 originalAuthor 字段）
+# 查看文章详情（包含 originalAuthor, title, coverImage 字段）
 cast call 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
-  "articles(uint256)(string,address,string,uint64,uint64)" \
+  "articles(uint256)(string,address,string,string,string,uint64,uint64)" \
   1 \
   --rpc-url http://localhost:8545
 ```
@@ -974,13 +984,15 @@ export async function publishToContract(
   arweaveId: string,
   categoryId: bigint,
   royaltyBps: bigint,
-  originalAuthor: string = ''
+  originalAuthor: string = '',
+  title: string = '',
+  coverImage: string = ''
 ) {
   const hash = await writeContract(config, {
     address: BLOG_HUB_ADDRESS,
     abi: BlogHubABI,
     functionName: 'publish',
-    args: [arweaveId, categoryId, royaltyBps, originalAuthor]
+    args: [arweaveId, categoryId, royaltyBps, originalAuthor, title, coverImage]
   })
   return hash
 }
