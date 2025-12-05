@@ -684,142 +684,15 @@ Irys 有两个 Bundler 网络：
 
 ### 12.1 从 Arweave 获取内容
 
-```typescript
-// frontend/src/lib/arweave.ts
-import type { ArticleMetadata } from './types'
-
-// Arweave 网关列表（用于负载均衡和容错）
-// Irys 官方网关优先
-const ARWEAVE_GATEWAYS = [
-  'https://gateway.irys.xyz',
-  'https://arweave.net',
-  'https://arweave.dev'
-]
-
-export async function fetchArticleContent(arweaveId: string): Promise<ArticleMetadata> {
-  // 尝试多个网关
-  for (const gateway of ARWEAVE_GATEWAYS) {
-    try {
-      const response = await fetch(`${gateway}/${arweaveId}`, {
-        headers: { 'Accept': 'application/json' }
-      })
-      
-      if (response.ok) {
-        return await response.json()
-      }
-    } catch (error) {
-      console.warn(`Gateway ${gateway} failed:`, error)
-    }
-  }
-  
-  throw new Error('Failed to fetch article from all gateways')
-}
-
-// 获取图片 URL（优先使用 Irys 网关）
-export function getImageUrl(arweaveId: string): string {
-  return `https://gateway.irys.xyz/${arweaveId}`
-}
-```
+[frontend/app/composables/arweave/fetch.ts](../frontend/app/composables/arweave/fetch.ts)
 
 ### 12.2 客户端缓存策略
 
-```typescript
-// frontend/app/composables/useCache.ts
-const CACHE_PREFIX = 'dblog_article_'
-const CACHE_TTL = 24 * 60 * 60 * 1000  // 24 小时
+[frontend/app/composables/arweave/cache.ts](../frontend/app/composables/arweave/cache.ts)
 
-interface CachedArticle {
-  data: ArticleMetadata
-  timestamp: number
-}
+### 12.3 模块导出索引
 
-export function getCachedArticle(arweaveId: string): ArticleMetadata | null {
-  if (!import.meta.client) return null
-  
-  const cached = localStorage.getItem(CACHE_PREFIX + arweaveId)
-  if (!cached) return null
-  
-  const { data, timestamp }: CachedArticle = JSON.parse(cached)
-  
-  // 检查是否过期
-  if (Date.now() - timestamp > CACHE_TTL) {
-    localStorage.removeItem(CACHE_PREFIX + arweaveId)
-    return null
-  }
-  
-  return data
-}
-
-export function setCachedArticle(arweaveId: string, data: ArticleMetadata) {
-  if (!import.meta.client) return
-  
-  const cached: CachedArticle = {
-    data,
-    timestamp: Date.now()
-  }
-  
-  localStorage.setItem(CACHE_PREFIX + arweaveId, JSON.stringify(cached))
-}
-
-// 带缓存的获取函数
-export async function getArticleWithCache(arweaveId: string): Promise<ArticleMetadata> {
-  // 先检查缓存
-  const cached = getCachedArticle(arweaveId)
-  if (cached) return cached
-  
-  // 从 Arweave 获取
-  const data = await fetchArticleContent(arweaveId)
-  
-  // 存入缓存
-  setCachedArticle(arweaveId, data)
-  
-  return data
-}
-```
-
-### 12.3 Nuxt.js 服务端渲染
-
-```typescript
-// frontend/app/pages/article/[id].vue
-<script setup lang="ts">
-import { fetchArticleContent } from '~/composables/useArweave'
-import { useQuery } from '@urql/vue'
-import { gql } from 'graphql-tag'
-
-const route = useRoute()
-const articleId = route.params.id as string
-
-const ArticleDetailQuery = gql`
-  query ArticleDetail($articleId: String!) {
-    articleById(id: $articleId) {
-      id
-      arweaveId
-      author { id }
-      originalAuthor
-      likes
-      dislikes
-      totalTips
-      createdAt
-    }
-  }
-`
-
-const { data, fetching, error } = useQuery({
-  query: ArticleDetailQuery,
-  variables: { articleId }
-})
-
-// 使用 useAsyncData 进行服务端渲染
-const { data: content } = await useAsyncData(
-  `article-content-${articleId}`,
-  async () => {
-    if (!data.value?.articleById?.arweaveId) return null
-    return await fetchArticleContent(data.value.articleById.arweaveId)
-  },
-  { watch: [data] }
-)
-</script>
-```
+[frontend/app/composables/arweave/index.ts](../frontend/app/composables/arweave/index.ts)
 
 ---
 
@@ -943,127 +816,26 @@ export const config = createConfig({
 
 ### 14.2 钱包连接组件
 
-```vue
-<!-- frontend/app/components/WalletButton.vue -->
-<script setup lang="ts">
-import { connect, disconnect, getAccount } from '@wagmi/core'
-import { injected } from '@wagmi/connectors'
-import { config } from '~/composables/useWagmi'
+> 📁 **实现文件**: `frontend/app/components/WalletButton.vue`
 
-const address = ref<string | undefined>()
-const isConnected = ref(false)
-
-onMounted(() => {
-  const account = getAccount(config)
-  address.value = account.address
-  isConnected.value = account.isConnected
-})
-
-async function handleConnect() {
-  try {
-    await connect(config, { connector: injected() })
-    const account = getAccount(config)
-    address.value = account.address
-    isConnected.value = true
-  } catch (error) {
-    console.error('Failed to connect:', error)
-  }
-}
-
-async function handleDisconnect() {
-  await disconnect(config)
-  address.value = undefined
-  isConnected.value = false
-}
-</script>
-
-<template>
-  <button 
-    v-if="isConnected"
-    class="px-4 py-2 bg-gray-800 text-white rounded-lg"
-    @click="handleDisconnect"
-  >
-    {{ address?.slice(0, 6) }}...{{ address?.slice(-4) }}
-  </button>
-  <button 
-    v-else
-    class="px-4 py-2 bg-blue-600 text-white rounded-lg"
-    @click="handleConnect"
-  >
-    连接钱包
-  </button>
-</template>
-```
+功能：
+- 连接/断开钱包
+- 显示连接状态和地址缩写
+- 自动切换到 Optimism Sepolia 网络
+- 监听账户和链变化事件
+- 支持 i18n 多语言
 
 ### 14.3 合约交互封装
 
-```typescript
-// frontend/app/composables/useContracts.ts
-import { readContract, writeContract, getAccount } from '@wagmi/core'
-import { config } from './useWagmi'
-import BlogHubABI from '~/assets/abi/BlogHub.json'
+> 📁 **实现文件**: `frontend/app/composables/contracts.ts`
 
-const runtimeConfig = useRuntimeConfig()
-const BLOG_HUB_ADDRESS = runtimeConfig.public.blogHubAddress as `0x${string}`
-
-// 发布文章
-export async function publishToContract(
-  arweaveId: string,
-  categoryId: bigint,
-  royaltyBps: bigint,
-  originalAuthor: string = '',
-  title: string = '',
-  coverImage: string = ''
-) {
-  const hash = await writeContract(config, {
-    address: BLOG_HUB_ADDRESS,
-    abi: BlogHubABI,
-    functionName: 'publish',
-    args: [arweaveId, categoryId, royaltyBps, originalAuthor, title, coverImage]
-  })
-  return hash
-}
-
-// 评价文章（点赞/踩/打赏）
-export async function evaluateArticle(
-  articleId: bigint,
-  score: number,  // 0=中立, 1=喜欢, 2=不喜欢
-  comment: string,
-  referrer: string = '0x0000000000000000000000000000000000000000',
-  parentCommentId: bigint = 0n,
-  tipAmount: bigint = 0n
-) {
-  const hash = await writeContract(config, {
-    address: BLOG_HUB_ADDRESS,
-    abi: BlogHubABI,
-    functionName: 'evaluate',
-    args: [articleId, score, comment, referrer, parentCommentId],
-    value: tipAmount
-  })
-  return hash
-}
-
-// 关注/取消关注
-export async function followUser(targetAddress: string, isFollow: boolean) {
-  const hash = await writeContract(config, {
-    address: BLOG_HUB_ADDRESS,
-    abi: BlogHubABI,
-    functionName: 'follow',
-    args: [targetAddress, isFollow]
-  })
-  return hash
-}
-
-// 读取文章信息
-export async function getArticle(articleId: bigint) {
-  return await readContract(config, {
-    address: BLOG_HUB_ADDRESS,
-    abi: BlogHubABI,
-    functionName: 'articles',
-    args: [articleId]
-  })
-}
-```
+包含以下功能：
+- `publishToContract()` - 发布文章到合约
+- `evaluateArticle()` - 评价文章（点赞/踩/打赏）
+- `followUser()` - 关注/取消关注用户
+- `getArticle()` - 读取文章信息
+- `EvaluationScore` - 评分枚举（Neutral=0, Like=1, Dislike=2）
+- `ArticleData` - 文章数据接口
 
 ---
 
@@ -1071,212 +843,25 @@ export async function getArticle(articleId: bigint) {
 
 ### 15.1 Session Key 管理
 
-```typescript
-// frontend/app/composables/useSessionKey.ts
-import { Wallet } from 'ethers'
-import { writeContract, getAccount } from '@wagmi/core'
-import { config } from './useWagmi'
-import SessionKeyManagerABI from '~/assets/abi/SessionKeyManager.json'
+> 📁 **实现文件**: `frontend/app/composables/useSessionKey.ts`
 
-const SESSION_KEY_STORAGE = 'dblog_session_key'
-const runtimeConfig = useRuntimeConfig()
-const SESSION_KEY_MANAGER = runtimeConfig.public.sessionKeyManagerAddress as `0x${string}`
-const BLOG_HUB_ADDRESS = runtimeConfig.public.blogHubAddress as `0x${string}`
-
-interface StoredSessionKey {
-  address: string
-  privateKey: string
-  owner: string
-  validUntil: number
-}
-
-// 检查是否有有效的 Session Key
-export function getStoredSessionKey(): StoredSessionKey | null {
-  if (typeof window === 'undefined') return null
-  
-  const stored = localStorage.getItem(SESSION_KEY_STORAGE)
-  if (!stored) return null
-  
-  const data: StoredSessionKey = JSON.parse(stored)
-  
-  // 检查是否过期
-  if (Date.now() / 1000 > data.validUntil) {
-    localStorage.removeItem(SESSION_KEY_STORAGE)
-    return null
-  }
-  
-  // 检查 owner 是否匹配当前连接的钱包
-  const account = getAccount(config)
-  if (account.address?.toLowerCase() !== data.owner.toLowerCase()) {
-    return null
-  }
-  
-  return data
-}
-
-// 生成并注册新的 Session Key
-export async function createSessionKey(): Promise<StoredSessionKey> {
-  const account = getAccount(config)
-  if (!account.address) throw new Error('Wallet not connected')
-  
-  // 1. 生成临时密钥对
-  const sessionKeyWallet = Wallet.createRandom()
-  
-  // 2. 设置有效期（7天）
-  const validAfter = Math.floor(Date.now() / 1000)
-  const validUntil = validAfter + 7 * 24 * 60 * 60
-  
-  // 3. 允许的函数选择器
-  const allowedSelectors = [
-    '0xff1f090a', // evaluate
-    '0xdffd40f2', // likeComment
-    '0x63c3cc16', // follow
-  ]
-  
-  // 4. 消费限额（10 ETH）
-  const spendingLimit = BigInt('10000000000000000000')
-  
-  // 5. 调用合约注册（需要用户签名）
-  await writeContract(config, {
-    address: SESSION_KEY_MANAGER,
-    abi: SessionKeyManagerABI,
-    functionName: 'registerSessionKey',
-    args: [
-      sessionKeyWallet.address,
-      validAfter,
-      validUntil,
-      BLOG_HUB_ADDRESS,
-      allowedSelectors,
-      spendingLimit
-    ]
-  })
-  
-  // 6. 保存到 localStorage
-  const sessionKeyData: StoredSessionKey = {
-    address: sessionKeyWallet.address,
-    privateKey: sessionKeyWallet.privateKey,
-    owner: account.address,
-    validUntil
-  }
-  
-  localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(sessionKeyData))
-  
-  return sessionKeyData
-}
-
-// 使用 Session Key 签名操作
-export async function signWithSessionKey(
-  target: string,
-  selector: string,
-  callData: string,
-  value: bigint = 0n
-) {
-  const sessionKey = getStoredSessionKey()
-  if (!sessionKey) throw new Error('No valid session key')
-  
-  const wallet = new Wallet(sessionKey.privateKey)
-  
-  // 获取 nonce
-  // ... 实现 EIP-712 签名逻辑
-  
-  return signature
-}
-
-// 撤销 Session Key
-export async function revokeSessionKey() {
-  const sessionKey = getStoredSessionKey()
-  if (!sessionKey) return
-  
-  await writeContract(config, {
-    address: SESSION_KEY_MANAGER,
-    abi: SessionKeyManagerABI,
-    functionName: 'revokeSessionKey',
-    args: [sessionKey.address]
-  })
-  
-  localStorage.removeItem(SESSION_KEY_STORAGE)
-}
-```
+包含以下功能：
+- `StoredSessionKey` - Session Key 数据结构接口
+- `getStoredSessionKey()` - 获取存储的 Session Key
+- `isSessionKeyValidForCurrentWallet()` - 检查 Session Key 是否对当前钱包有效
+- `createSessionKey()` - 生成并注册新的 Session Key（7天有效期）
+- `revokeSessionKey()` - 撤销 Session Key
+- `clearLocalSessionKey()` - 清除本地存储的 Session Key
+- `getSessionKeyWallet()` - 获取 Session Key 钱包实例用于签名
 
 ### 15.2 Session Key 状态组件
 
-```vue
-<!-- frontend/app/components/SessionKeyStatus.vue -->
-<script setup lang="ts">
-import { getStoredSessionKey, createSessionKey, revokeSessionKey } from '~/composables/useSessionKey'
+> 📁 **实现文件**: `frontend/app/components/SessionKeyStatus.vue`
 
-const hasSessionKey = ref(false)
-const validUntil = ref<Date | null>(null)
-const isLoading = ref(false)
-
-onMounted(() => {
-  checkSessionKey()
-})
-
-function checkSessionKey() {
-  const sk = getStoredSessionKey()
-  hasSessionKey.value = !!sk
-  validUntil.value = sk ? new Date(sk.validUntil * 1000) : null
-}
-
-async function handleCreate() {
-  isLoading.value = true
-  try {
-    await createSessionKey()
-    checkSessionKey()
-  } catch (error) {
-    console.error('Failed to create session key:', error)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-async function handleRevoke() {
-  isLoading.value = true
-  try {
-    await revokeSessionKey()
-    checkSessionKey()
-  } catch (error) {
-    console.error('Failed to revoke session key:', error)
-  } finally {
-    isLoading.value = false
-  }
-}
-</script>
-
-<template>
-  <div class="p-4 border rounded-lg">
-    <h3 class="font-semibold mb-2">无感交互模式</h3>
-    
-    <template v-if="hasSessionKey">
-      <p class="text-green-600 mb-2">✓ 已启用</p>
-      <p class="text-sm text-gray-500 mb-4">
-        有效期至: {{ validUntil?.toLocaleDateString() }}
-      </p>
-      <button 
-        class="px-3 py-1 bg-red-100 text-red-600 rounded"
-        :disabled="isLoading"
-        @click="handleRevoke"
-      >
-        撤销授权
-      </button>
-    </template>
-    <template v-else>
-      <p class="text-gray-500 mb-2">未启用</p>
-      <p class="text-sm text-gray-400 mb-4">
-        启用后，点赞、评论、关注等操作无需每次签名
-      </p>
-      <button 
-        class="px-3 py-1 bg-blue-600 text-white rounded"
-        :disabled="isLoading"
-        @click="handleCreate"
-      >
-        {{ isLoading ? '授权中...' : '启用无感交互' }}
-      </button>
-    </template>
-  </div>
-</template>
-```
+功能：
+- 显示 Session Key 启用状态和有效期
+- 启用/撤销无感交互模式
+- 支持 i18n 多语言
 
 ---
 

@@ -458,3 +458,22 @@ Claude: 改为nuxt的import.meta.client
 
 #### 2025-12-05 21:25  文档从sveltekit改为nuxt.js
 README.md doc\Developers.md 此项目前端之前使用sveltekit，当前已迁移到nuxt.js；请帮我把这两个文件中所有关于sveltekit的描述改为nuxt.js，并将相关的命令和代码等进行对应的修改兼容  
+Claude: 修改完成
+
+#### 2025-12-05 22:00  Session Key和钱包连接
+帮我在前端frontend中对应实现792到1152行部分，放在合适位置，适当修改确保符合已有代码规范，包括多语言等。分为多次实现，每次完成一部分，然后从Developers.md中删除已实现的详细代码，替代为文件路径引用。 @README.md  
+Claude: 更新了SessionKeyStatus.vue, WalletButton.vue, useSessionKey.ts, contracts.ts文件
+
+#### 2025-12-05 22:20  母版页Header和Footer
+在 frontend\app\components 新增了WalletButton和SessionKeyStatus组件，目前前端只实现了一个页面。请帮我丰富一下母版页layout，增加通用的header和Footer；然后在header的右上角，增加多语言切换和钱包连接按钮。并实现对应逻辑。多语言切换参考：
+```vue
+<template>
+  <NuxtLink :to="$switchLocalePath('en')">English</NuxtLink>
+  <NuxtLink :to="$switchLocalePath('nl')">Nederlands</NuxtLink>
+</template>
+```
+Claude: 创建了layouts/default.vue
+
+#### 2025-12-05 22:28  多语言key优化
+@AGENTS.md @frontend/i18n/locales 新增加的一些多语言key并未遵循有关要求，请阅读要求，审查所有多语言key，进行优化，然后更新所有引用的地方。  
+Claude: 优化了多语言key

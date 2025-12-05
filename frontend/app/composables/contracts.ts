@@ -3,7 +3,7 @@
  * Handles publishing articles to BlogHub contract
  */
 
-import { createWalletClient, custom } from 'viem'
+import { createWalletClient, createPublicClient, custom, http } from 'viem'
 import { optimismSepolia } from 'viem/chains'
 
 /**
@@ -169,7 +169,7 @@ function parseContractError(error: unknown): ContractError {
 	)
 }
 
-// BlogHub contract ABI (minimal for publish function)
+// BlogHub contract ABI
 const BLOGHUB_ABI = [
 	{
 		name: 'publish',
@@ -184,6 +184,48 @@ const BLOGHUB_ABI = [
 		],
 		outputs: [{ type: 'uint256' }],
 		stateMutability: 'nonpayable'
+	},
+	{
+		name: 'evaluate',
+		type: 'function',
+		inputs: [
+			{ name: '_articleId', type: 'uint256' },
+			{ name: '_score', type: 'uint8' },
+			{ name: '_comment', type: 'string' },
+			{ name: '_referrer', type: 'address' },
+			{ name: '_parentCommentId', type: 'uint256' }
+		],
+		outputs: [],
+		stateMutability: 'payable'
+	},
+	{
+		name: 'follow',
+		type: 'function',
+		inputs: [
+			{ name: '_target', type: 'address' },
+			{ name: '_isFollow', type: 'bool' }
+		],
+		outputs: [],
+		stateMutability: 'nonpayable'
+	},
+	{
+		name: 'articles',
+		type: 'function',
+		inputs: [{ name: '_articleId', type: 'uint256' }],
+		outputs: [
+			{ name: 'arweaveId', type: 'string' },
+			{ name: 'author', type: 'address' },
+			{ name: 'categoryId', type: 'uint64' },
+			{ name: 'royaltyBps', type: 'uint96' },
+			{ name: 'originalAuthor', type: 'string' },
+			{ name: 'title', type: 'string' },
+			{ name: 'coverImage', type: 'string' },
+			{ name: 'createdAt', type: 'uint256' },
+			{ name: 'likes', type: 'uint256' },
+			{ name: 'dislikes', type: 'uint256' },
+			{ name: 'totalTips', type: 'uint256' }
+		],
+		stateMutability: 'view'
 	}
 ] as const
 
@@ -191,6 +233,16 @@ const BLOGHUB_ABI = [
 function getBlogHubContractAddress(): `0x${string}` {
 	const config = useRuntimeConfig()
 	return config.public.blogHubContractAddress as `0x${string}`
+}
+
+/**
+ * Get public client for read-only contract calls
+ */
+function getPublicClient() {
+	return createPublicClient({
+		chain: optimismSepolia,
+		transport: http()
+	})
 }
 
 /**
@@ -339,6 +391,149 @@ export async function publishToContract(
 		return txHash
 	} catch (error) {
 		console.error('Error publishing to contract:', error)
+		throw parseContractError(error)
+	}
+}
+
+/**
+ * Score enum for article evaluation
+ */
+export enum EvaluationScore {
+	Neutral = 0,
+	Like = 1,
+	Dislike = 2
+}
+
+/**
+ * Evaluate article (like/dislike/tip)
+ * @param articleId - Article ID to evaluate
+ * @param score - 0=neutral, 1=like, 2=dislike
+ * @param comment - Comment text
+ * @param referrer - Referrer address (optional)
+ * @param parentCommentId - Parent comment ID for replies (optional)
+ * @param tipAmount - Tip amount in wei (optional)
+ * @returns Transaction hash
+ */
+export async function evaluateArticle(
+	articleId: bigint,
+	score: EvaluationScore,
+	comment: string,
+	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	parentCommentId: bigint = 0n,
+	tipAmount: bigint = 0n
+): Promise<string> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative')
+	}
+
+	if (score < 0 || score > 2) {
+		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)')
+	}
+
+	try {
+		const walletClient = await getWalletClient()
+
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'evaluate',
+			args: [articleId, score, comment, referrer, parentCommentId],
+			value: tipAmount
+		})
+
+		console.log(`Article evaluated. Tx: ${txHash}`)
+		return txHash
+	} catch (error) {
+		console.error('Error evaluating article:', error)
+		throw parseContractError(error)
+	}
+}
+
+/**
+ * Follow or unfollow a user
+ * @param targetAddress - Address to follow/unfollow
+ * @param isFollow - true to follow, false to unfollow
+ * @returns Transaction hash
+ */
+export async function followUser(targetAddress: `0x${string}`, isFollow: boolean): Promise<string> {
+	if (!targetAddress || targetAddress === '0x0000000000000000000000000000000000000000') {
+		throw new Error('Invalid target address')
+	}
+
+	try {
+		const walletClient = await getWalletClient()
+
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'follow',
+			args: [targetAddress, isFollow]
+		})
+
+		console.log(`Follow status updated. Tx: ${txHash}`)
+		return txHash
+	} catch (error) {
+		console.error('Error updating follow status:', error)
+		throw parseContractError(error)
+	}
+}
+
+/**
+ * Article data structure returned from contract
+ */
+export interface ArticleData {
+	arweaveId: string
+	author: `0x${string}`
+	categoryId: bigint
+	royaltyBps: bigint
+	originalAuthor: string
+	title: string
+	coverImage: string
+	createdAt: bigint
+	likes: bigint
+	dislikes: bigint
+	totalTips: bigint
+}
+
+/**
+ * Read article information from contract
+ * @param articleId - Article ID to query
+ * @returns Article data
+ */
+export async function getArticle(articleId: bigint): Promise<ArticleData> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative')
+	}
+
+	try {
+		const publicClient = getPublicClient()
+
+		const result = await publicClient.readContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'articles',
+			args: [articleId]
+		})
+
+		// Result is a tuple, map to named object
+		const [arweaveId, author, categoryId, royaltyBps, originalAuthor, title, coverImage, createdAt, likes, dislikes, totalTips] =
+			result as [string, `0x${string}`, bigint, bigint, string, string, string, bigint, bigint, bigint, bigint]
+
+		return {
+			arweaveId,
+			author,
+			categoryId,
+			royaltyBps,
+			originalAuthor,
+			title,
+			coverImage,
+			createdAt,
+			likes,
+			dislikes,
+			totalTips
+		}
+	} catch (error) {
+		console.error('Error reading article:', error)
 		throw parseContractError(error)
 	}
 }

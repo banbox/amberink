@@ -98,7 +98,7 @@ async function handleSubmit() {
       throw new Error(t('field_required', { field: t('title') }))
     }
     if (!content.value.trim()) {
-      throw new Error(t('field_required', { field: t('content_markdown') }))
+      throw new Error(t('field_required', { field: t('content') }))
     }
     if (categoryId.value < 0n) {
       throw new Error(t('invalid_category'))
@@ -154,7 +154,7 @@ async function handleSubmit() {
 
 // Button text based on submit status
 const submitButtonText = computed(() => {
-  if (!isSubmitting.value) return t('publish_article')
+  if (!isSubmitting.value) return `${t('publish_article')}`
   switch (submitStatus.value) {
     case 'uploadingCover':
       return t('uploading_cover')
@@ -163,7 +163,7 @@ const submitButtonText = computed(() => {
     case 'publishingContract':
       return t('publishing_to_blockchain')
     default:
-      return t('publish_article')
+      return `${t('publish_article')}`
   }
 })
 
@@ -184,7 +184,7 @@ const statusClass = computed(() => {
   <div class="min-h-screen bg-white">
     <div class="mx-auto max-w-3xl px-6 py-12">
       <header class="mb-12">
-        <h1 class="mb-2 text-4xl font-light tracking-tight">{{ $t('publish_article') }}</h1>
+        <h1 class="mb-2 text-4xl font-light tracking-tight">{{ $t('publish') }} {{ $t('article') }}</h1>
         <p class="text-gray-500">{{ $t('share_thoughts') }}</p>
       </header>
 
@@ -198,7 +198,7 @@ const statusClass = computed(() => {
             id="title"
             v-model="title"
             type="text"
-            :placeholder="$t('enter_title')"
+            :placeholder="$t('input_article_title')"
             class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
             :disabled="isSubmitting"
           />
@@ -213,7 +213,7 @@ const statusClass = computed(() => {
             <SearchSelect
               v-model="selectedCategory"
               :options="categoryOptions"
-              :placeholder="$t('search_category')"
+              :placeholder="$t('search')"
               :disabled="isSubmitting"
               :no-results-text="$t('no_results')"
             />
@@ -226,7 +226,7 @@ const statusClass = computed(() => {
               id="author"
               v-model="author"
               type="text"
-              :placeholder="$t('author_placeholder')"
+              :placeholder="$t('name_or_penname')"
               class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
               :disabled="isSubmitting"
             />
@@ -236,7 +236,7 @@ const statusClass = computed(() => {
         <!-- Cover Image -->
         <div>
           <label for="cover-image" class="mb-3 block text-sm font-medium text-gray-700">
-            {{ $t('cover_image') }}
+            {{ $t('cover') }}
           </label>
           <template v-if="coverImagePreview">
             <div class="space-y-3">
@@ -249,7 +249,7 @@ const statusClass = computed(() => {
                 :disabled="isSubmitting"
                 @click="removeCoverImage"
               >
-                {{ $t('remove_image') }}
+                {{ $t('remove') }}
               </button>
             </div>
           </template>
@@ -261,7 +261,7 @@ const statusClass = computed(() => {
               <svg class="mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              <p class="text-sm font-medium text-gray-700">{{ $t('upload_cover') }}</p>
+              <p class="text-sm font-medium text-gray-700">{{ $t('upload') }}</p>
               <p class="text-xs text-gray-500">{{ $t('image_format_help') }}</p>
               <input
                 id="cover-image"
@@ -278,12 +278,12 @@ const statusClass = computed(() => {
         <!-- Content -->
         <div>
           <label for="content" class="mb-2 block text-sm font-medium text-gray-700">
-            {{ $t('content_markdown') }} *
+            {{ $t('content') }} ({{ $t('markdown_supported') }}) *
           </label>
           <textarea
             id="content"
             v-model="content"
-            :placeholder="$t('write_content')"
+            :placeholder="$t('write_article_here')"
             :rows="12"
             class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-mono text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
             :disabled="isSubmitting"
@@ -298,7 +298,7 @@ const statusClass = computed(() => {
           <textarea
             id="postscript"
             v-model="postscript"
-            :placeholder="$t('postscript_placeholder')"
+            :placeholder="$t('optional_postscript')"
             :rows="4"
             class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
             :disabled="isSubmitting"
@@ -332,7 +332,7 @@ const statusClass = computed(() => {
           </button>
         </div>
 
-        <p class="text-xs text-gray-500">{{ $t('required_fields') }}</p>
+        <p class="text-xs text-gray-500">* {{ $t('required') }}</p>
       </form>
     </div>
   </div>
