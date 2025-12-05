@@ -7,37 +7,73 @@ export interface SelectOption {
 
 const props = withDefaults(
   defineProps<{
-    modelValue: any
+    modelValue: any | any[]
     options: SelectOption[]
     placeholder?: string
     disabled?: boolean
     noResultsText?: string
+    maxSelection?: number
   }>(),
   {
     placeholder: '',
     disabled: false,
-    noResultsText: 'No results'
+    noResultsText: 'No results',
+    maxSelection: 1
   }
 )
 
+// maxSelection > 1 means multiple selection mode
+const isMultiple = computed(() => props.maxSelection > 1)
+
 const emit = defineEmits<{
-  'update:modelValue': [value: any]
+  'update:modelValue': [value: any | any[]]
 }>()
 
 const searchQuery = ref('')
 const showDropdown = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
+const containerRef = ref<HTMLElement | null>(null)
+
+// For multiple selection mode
+const selectedValues = computed<any[]>(() => {
+  if (isMultiple.value) {
+    return Array.isArray(props.modelValue) ? props.modelValue : []
+  }
+  return props.modelValue !== null && props.modelValue !== undefined ? [props.modelValue] : []
+})
+
+const selectedOptions = computed<SelectOption[]>(() => {
+  return selectedValues.value
+    .map((val) => props.options.find((opt) => opt.value === val))
+    .filter((opt): opt is SelectOption => opt !== undefined)
+})
+
+const isMaxReached = computed(() => {
+  return selectedValues.value.length >= props.maxSelection
+})
+
+const canInput = computed(() => {
+  return !props.disabled && !isMaxReached.value
+})
 
 const filteredOptions = computed(() => {
   const search = searchQuery.value.toLowerCase()
-  if (!search) return props.options
-  return props.options.filter(
+  let filtered = props.options
+
+  // Filter out already selected options in multiple mode
+  if (isMultiple.value) {
+    filtered = filtered.filter((opt) => !selectedValues.value.includes(opt.value))
+  }
+
+  if (!search) return filtered
+  return filtered.filter(
     (item) =>
       item.label.toLowerCase().includes(search) ||
       String(item.key).toLowerCase().includes(search)
   )
 })
 
+// Single select compatibility
 const selectedOption = computed(() => {
   return props.options.find((opt) => opt.value === props.modelValue)
 })
@@ -47,9 +83,29 @@ const selectedLabel = computed(() => {
 })
 
 function selectOption(option: SelectOption) {
-  emit('update:modelValue', option.value)
+  if (isMultiple.value) {
+    const newValues = [...selectedValues.value, option.value]
+    emit('update:modelValue', newValues)
+  } else {
+    emit('update:modelValue', option.value)
+  }
   searchQuery.value = ''
-  showDropdown.value = false
+  if (!isMultiple.value) {
+    showDropdown.value = false
+  }
+  // Keep focus on input for continuous selection in multiple mode
+  if (isMultiple.value && inputRef.value) {
+    inputRef.value.focus()
+  }
+}
+
+function removeOption(value: any) {
+  if (isMultiple.value) {
+    const newValues = selectedValues.value.filter((v) => v !== value)
+    emit('update:modelValue', newValues)
+  } else {
+    emit('update:modelValue', null)
+  }
 }
 
 function handleInputFocus() {
@@ -63,31 +119,80 @@ function handleInputBlur() {
 }
 
 function clearSelection() {
-  emit('update:modelValue', null)
+  if (isMultiple.value) {
+    emit('update:modelValue', [])
+  } else {
+    emit('update:modelValue', null)
+  }
   searchQuery.value = ''
 }
 
+function handleContainerClick() {
+  if (canInput.value && inputRef.value) {
+    inputRef.value.focus()
+  }
+}
+
 const hasSelection = computed(() => {
+  if (isMultiple.value) {
+    return selectedValues.value.length > 0
+  }
   return props.modelValue !== null && props.modelValue !== undefined && selectedOption.value !== undefined
+})
+
+const inputPlaceholder = computed(() => {
+  if (hasSelection.value) return ''
+  return props.placeholder
 })
 </script>
 
 <template>
   <div class="relative">
-    <div class="relative">
+    <!-- Container with tags and input -->
+    <div
+      ref="containerRef"
+      class="flex min-h-[48px] w-full cursor-text flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors focus-within:border-gray-400 focus-within:ring-1 focus-within:ring-gray-300"
+      :class="{ 'cursor-not-allowed bg-gray-50': disabled }"
+      @click="handleContainerClick"
+    >
+      <!-- Selected tags (capsules) -->
+      <span
+        v-for="opt in selectedOptions"
+        :key="opt.key"
+        class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-sm text-gray-800"
+      >
+        {{ opt.label }}
+        <button
+          type="button"
+          class="flex h-4 w-4 items-center justify-center rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+          :disabled="disabled"
+          @mousedown.prevent.stop="removeOption(opt.value)"
+        >
+          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </span>
+      <!-- Search input -->
       <input
+        v-if="canInput"
         ref="inputRef"
         v-model="searchQuery"
         type="text"
-        :placeholder="selectedLabel || placeholder"
-        class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 pr-10 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+        :placeholder="inputPlaceholder"
+        class="min-w-[60px] flex-1 border-none bg-transparent text-base text-gray-900 placeholder-gray-400 outline-none"
         :disabled="disabled"
         @focus="handleInputFocus"
         @blur="handleInputBlur"
       />
-      <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+      <!-- Max reached indicator -->
+      <span v-else-if="isMaxReached && !disabled" class="flex-1 text-sm text-gray-400">
+        {{ $t('max_selection_reached') || 'Max reached' }}
+      </span>
+      <!-- Right side icons -->
+      <div class="ml-auto flex items-center gap-1 pl-2">
         <button
-          v-if="hasSelection"
+          v-if="hasSelection && !disabled"
           type="button"
           class="text-gray-400 hover:text-gray-600"
           @mousedown.prevent="clearSelection"
@@ -96,29 +201,14 @@ const hasSelection = computed(() => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <svg v-else class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </div>
     </div>
-    <!-- Selected display -->
-    <div v-if="selectedLabel && !showDropdown" class="mt-2 flex items-center gap-2">
-      <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-800">
-        {{ selectedLabel }}
-        <button
-          type="button"
-          class="ml-1 text-gray-500 hover:text-gray-700"
-          @click="clearSelection"
-        >
-          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </span>
-    </div>
     <!-- Dropdown -->
     <div
-      v-if="showDropdown"
+      v-if="showDropdown && canInput"
       class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
     >
       <!-- Clear option when has selection -->
@@ -138,7 +228,7 @@ const hasSelection = computed(() => {
         v-for="item in filteredOptions"
         :key="item.key"
         class="cursor-pointer px-4 py-2 text-sm hover:bg-gray-100"
-        :class="{ 'bg-gray-50 font-medium': modelValue === item.value }"
+        :class="{ 'bg-gray-50 font-medium': !isMultiple && modelValue === item.value }"
         @mousedown.prevent="selectOption(item)"
       >
         {{ item.label }}

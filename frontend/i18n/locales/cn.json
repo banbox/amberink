@@ -45,6 +45,7 @@
   "agriculture": "农业",
   "no_results": "未找到结果",
   "clear_selection": "清除选择",
+  "max_selection_reached": "已达最大选择数量",
   "share_thoughts": "与世界分享你的想法",
   "title": "标题",
   "enter_title": "请输入文章标题",
