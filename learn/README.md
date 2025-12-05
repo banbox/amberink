@@ -401,3 +401,10 @@ Claude: 支持了多选，选择项放在了里面。
 开发者：multiple 和 maxSelection有冗余，只保留maxSelection即可，当maxSelection>1时表示多选  
 Claude：删除了冗余的multiple
 
+#### 2025-12-05 16:08  publish页面优化
+版税默认按500个基点，无需用户设置；将分类和作者两个组件放在一行  
+Claude: 修改如预期  
+开发者：frontend\app\composables\data.ts 第一个分类改为未选择，第二个是其他，剩余的依次后移  
+Claude：修改完成
+
+

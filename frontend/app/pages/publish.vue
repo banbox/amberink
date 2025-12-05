@@ -78,20 +78,10 @@ function resetForm() {
   content.value = ''
   postscript.value = ''
   removeCoverImage()
-  royaltyBps.value = 500n
   isSubmitting.value = false
   submitStatus.value = 'idle'
   statusMessage.value = ''
 }
-
-// Handle royalty input
-function handleRoyaltyChange(e: Event) {
-  const target = e.target as HTMLInputElement
-  royaltyBps.value = BigInt(Math.min(10000, Math.max(0, Number(target.value) || 0)))
-}
-
-// Computed royalty percentage display
-const royaltyPercentage = computed(() => (Number(royaltyBps.value) / 100).toFixed(2))
 
 // Handle form submission
 async function handleSubmit() {
@@ -115,10 +105,6 @@ async function handleSubmit() {
     if (categoryId.value < 0n) {
       throw new Error(t('invalid_category'))
     }
-    if (royaltyBps.value < 0n || royaltyBps.value > 10000n) {
-      throw new Error(t('invalid_royalty'))
-    }
-
     // Use selected category as tag
     const selectedKey = CATEGORY_KEYS[Number(categoryId.value)]
     const tags = selectedKey ? [t(selectedKey)] : []
@@ -214,56 +200,33 @@ const statusClass = computed(() => {
           />
         </div>
 
-        <!-- Category -->
-        <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700">
-            {{ $t('category') }} *
-          </label>
-          <SearchSelect
-            v-model="selectedCategory"
-            :options="categoryOptions"
-            :placeholder="$t('search_category')"
-            :disabled="isSubmitting"
-            :no-results-text="$t('no_results')"
-          />
-        </div>
-
-        <!-- Author -->
-        <div>
-          <label for="author" class="mb-2 block text-sm font-medium text-gray-700">
-            {{ $t('author') }}
-          </label>
-          <input
-            id="author"
-            v-model="author"
-            type="text"
-            :placeholder="$t('author_placeholder')"
-            class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-            :disabled="isSubmitting"
-          />
-          <p class="mt-1 text-xs text-gray-500">{{ $t('author_help') }}</p>
-        </div>
-
-        <!-- Royalty -->
-        <div>
-          <label for="royalty" class="mb-2 block text-sm font-medium text-gray-700">
-            {{ $t('royalty_percentage') }} *
-          </label>
-          <div class="flex items-center gap-3">
+        <!-- Category & Author -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="mb-2 block text-sm font-medium text-gray-700">
+              {{ $t('category') }} *
+            </label>
+            <SearchSelect
+              v-model="selectedCategory"
+              :options="categoryOptions"
+              :placeholder="$t('search_category')"
+              :disabled="isSubmitting"
+              :no-results-text="$t('no_results')"
+            />
+          </div>
+          <div>
+            <label for="author" class="mb-2 block text-sm font-medium text-gray-700">
+              {{ $t('author') }}
+            </label>
             <input
-              id="royalty"
-              type="number"
-              :value="Number(royaltyBps)"
-              placeholder="500"
-              min="0"
-              max="10000"
+              id="author"
+              v-model="author"
+              type="text"
+              :placeholder="$t('author_placeholder')"
               class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
               :disabled="isSubmitting"
-              @change="handleRoyaltyChange"
             />
-            <span class="whitespace-nowrap text-sm text-gray-600">({{ royaltyPercentage }}%)</span>
           </div>
-          <p class="mt-1 text-xs text-gray-500">{{ $t('royalty_help') }}</p>
         </div>
 
         <!-- Cover Image -->

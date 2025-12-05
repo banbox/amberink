@@ -1,48 +1,49 @@
 /**
  * 文章分类 keys
- * 索引即为 categoryId，第一个为"其他"
+ * 索引即为 categoryId，0为未选择，1为其他，其余依次后移
  */
 export const CATEGORY_KEYS = [
-  'other',           // 0 - 其他
-  'technology',      // 1 - 科技
-  'finance',         // 2 - 财经
-  'entertainment',   // 3 - 娱乐
-  'sports',          // 4 - 体育
-  'health',          // 5 - 健康
-  'education',       // 6 - 教育
-  'travel',          // 7 - 旅游
-  'food',            // 8 - 美食
-  'fashion',         // 9 - 时尚
-  'automotive',      // 10 - 汽车
-  'real_estate',     // 11 - 房产
-  'culture',         // 12 - 文化
-  'art',             // 13 - 艺术
-  'music',           // 14 - 音乐
-  'film',            // 15 - 影视
-  'gaming',          // 16 - 游戏
-  'science',         // 17 - 科学
-  'history',         // 18 - 历史
-  'politics',        // 19 - 政治
-  'military',        // 20 - 军事
-  'law',             // 21 - 法律
-  'society',         // 22 - 社会
-  'environment',     // 23 - 环境
-  'parenting',       // 24 - 育儿
-  'pets',            // 25 - 宠物
-  'photography',     // 26 - 摄影
-  'design',          // 27 - 设计
-  'programming',     // 28 - 编程
-  'blockchain',      // 29 - 区块链
-  'ai',              // 30 - 人工智能
-  'startup',         // 31 - 创业
-  'career',          // 32 - 职场
-  'psychology',      // 33 - 心理
-  'philosophy',      // 34 - 哲学
-  'literature',      // 35 - 文学
-  'comics',          // 36 - 动漫
-  'digital_life',    // 37 - 数码
-  'home',            // 38 - 家居
-  'agriculture',     // 39 - 农业
+  'unselected',      // 0 - 未选择
+  'other',           // 1 - 其他
+  'technology',      // 2 - 科技
+  'finance',         // 3 - 财经
+  'entertainment',   // 4 - 娱乐
+  'sports',          // 5 - 体育
+  'health',          // 6 - 健康
+  'education',       // 7 - 教育
+  'travel',          // 8 - 旅游
+  'food',            // 9 - 美食
+  'fashion',         // 10 - 时尚
+  'automotive',      // 11 - 汽车
+  'real_estate',     // 12 - 房产
+  'culture',         // 13 - 文化
+  'art',             // 14 - 艺术
+  'music',           // 15 - 音乐
+  'film',            // 16 - 影视
+  'gaming',          // 17 - 游戏
+  'science',         // 18 - 科学
+  'history',         // 19 - 历史
+  'politics',        // 20 - 政治
+  'military',        // 21 - 军事
+  'law',             // 22 - 法律
+  'society',         // 23 - 社会
+  'environment',     // 24 - 环境
+  'parenting',       // 25 - 育儿
+  'pets',            // 26 - 宠物
+  'photography',     // 27 - 摄影
+  'design',          // 28 - 设计
+  'programming',     // 29 - 编程
+  'blockchain',      // 30 - 区块链
+  'ai',              // 31 - 人工智能
+  'startup',         // 32 - 创业
+  'career',          // 33 - 职场
+  'psychology',      // 34 - 心理
+  'philosophy',      // 35 - 哲学
+  'literature',      // 36 - 文学
+  'comics',          // 37 - 动漫
+  'digital_life',    // 38 - 数码
+  'home',            // 39 - 家居
+  'agriculture',     // 40 - 农业
 ] as const
 
 export type CategoryKey = (typeof CATEGORY_KEYS)[number]
