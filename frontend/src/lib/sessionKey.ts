@@ -5,8 +5,8 @@
 
 import { createWalletClient, custom } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { optimismSepolia } from 'viem/chains';
 import { getBlogHubContractAddress, getSessionKeyManagerAddress } from '$lib/config';
+import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
 
 const SESSION_KEY_STORAGE = 'dblog_session_key';
@@ -83,10 +83,11 @@ async function getWalletClient() {
 	}
 
 	const account = await getEthereumAccount();
+	const chain = getChainConfig();
 
 	return createWalletClient({
 		account,
-		chain: optimismSepolia,
+		chain,
 		transport: custom(window.ethereum)
 	});
 }

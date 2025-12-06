@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { optimismSepolia } from 'viem/chains';
+	import { getChainConfig } from '$lib/chain';
 	import * as m from '$lib/paraglide/messages';
 
 	let address = $state<string | undefined>();
@@ -70,7 +70,8 @@
 	async function ensureCorrectChain() {
 		if (typeof window === 'undefined' || !window.ethereum) return;
 
-		const targetChainId = optimismSepolia.id;
+		const chain = getChainConfig();
+		const targetChainId = chain.id;
 		const targetChainIdHex = `0x${targetChainId.toString(16)}`;
 
 		try {
@@ -93,10 +94,10 @@
 							params: [
 								{
 									chainId: targetChainIdHex,
-									chainName: optimismSepolia.name,
-									nativeCurrency: optimismSepolia.nativeCurrency,
-									rpcUrls: [optimismSepolia.rpcUrls.default.http[0]],
-									blockExplorerUrls: [optimismSepolia.blockExplorers?.default.url]
+									chainName: chain.name,
+									nativeCurrency: chain.nativeCurrency,
+									rpcUrls: [chain.rpcUrls.default.http[0]],
+									blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined
 								}
 							]
 						});

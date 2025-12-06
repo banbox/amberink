@@ -18,9 +18,9 @@ import { WebUploader } from '@irys/web-upload';
 import { WebEthereum } from '@irys/web-upload-ethereum';
 import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2';
 import { createWalletClient, createPublicClient, custom } from 'viem';
-import { optimismSepolia } from 'viem/chains';
 import type { IrysConfig, IrysNetwork } from './types';
 import { getRpcUrl, getIrysNetwork } from '$lib/config';
+import { getChainConfig } from '$lib/chain';
 
 // Irys Uploader 类型
 export type IrysUploader = Awaited<ReturnType<typeof createIrysUploader>>;
@@ -41,15 +41,16 @@ async function getEthereumAccount(): Promise<`0x${string}`> {
  */
 async function createViemClients() {
 	const account = await getEthereumAccount();
+	const chain = getChainConfig();
 
 	const walletClient = createWalletClient({
 		account,
-		chain: optimismSepolia,
+		chain,
 		transport: custom(window.ethereum!)
 	});
 
 	const publicClient = createPublicClient({
-		chain: optimismSepolia,
+		chain,
 		transport: custom(window.ethereum!)
 	});
 

@@ -4,8 +4,8 @@
  */
 
 import { createWalletClient, createPublicClient, custom, http } from 'viem';
-import { optimismSepolia } from 'viem/chains';
-import { getBlogHubContractAddress } from '$lib/config';
+import { getBlogHubContractAddress, getRpcUrl } from '$lib/config';
+import { getChainConfig } from '$lib/chain';
 
 /**
  * Contract error codes for i18n
@@ -234,9 +234,10 @@ const BLOGHUB_ABI = [
  * Get public client for read-only contract calls
  */
 function getPublicClient() {
+	const chain = getChainConfig();
 	return createPublicClient({
-		chain: optimismSepolia,
-		transport: http()
+		chain,
+		transport: http(getRpcUrl())
 	});
 }
 
@@ -263,49 +264,66 @@ async function ensureCorrectChain(): Promise<void> {
 		throw new Error('Ethereum provider not found. Please install MetaMask or another wallet.');
 	}
 
-	const targetChainId = optimismSepolia.id;
+	const chain = getChainConfig();
+	const targetChainId = chain.id;
 	const targetChainIdHex = `0x${targetChainId.toString(16)}`;
 
+	// Get current chain ID
+	const currentChainIdHex = (await window.ethereum.request({ method: 'eth_chainId' })) as string;
+	const currentChainId = parseInt(currentChainIdHex, 16);
+
+	if (currentChainId === targetChainId) {
+		return; // Already on correct chain
+	}
+
+	console.log(`Switching from chain ${currentChainId} to ${targetChainId} (${chain.name})`);
+
+	// Try to switch to the target chain
 	try {
-		// Get current chain ID
-		const currentChainIdHex = (await window.ethereum.request({ method: 'eth_chainId' })) as string;
-		const currentChainId = parseInt(currentChainIdHex, 16);
+		await window.ethereum.request({
+			method: 'wallet_switchEthereumChain',
+			params: [{ chainId: targetChainIdHex }]
+		});
+	} catch (switchError: unknown) {
+		const errorCode = (switchError as { code?: number })?.code;
 
-		if (currentChainId === targetChainId) {
-			return; // Already on correct chain
-		}
-
-		console.log(`Switching from chain ${currentChainId} to ${targetChainId} (${optimismSepolia.name})`);
-
-		// Try to switch to the target chain
-		try {
-			await window.ethereum.request({
-				method: 'wallet_switchEthereumChain',
-				params: [{ chainId: targetChainIdHex }]
-			});
-		} catch (switchError: unknown) {
-			// Chain not added to wallet, try to add it
-			if ((switchError as { code?: number })?.code === 4902) {
+		// Chain not added to wallet (4902), try to add it
+		if (errorCode === 4902) {
+			try {
 				await window.ethereum.request({
 					method: 'wallet_addEthereumChain',
 					params: [
 						{
 							chainId: targetChainIdHex,
-							chainName: optimismSepolia.name,
-							nativeCurrency: optimismSepolia.nativeCurrency,
-							rpcUrls: [optimismSepolia.rpcUrls.default.http[0]],
-							blockExplorerUrls: [optimismSepolia.blockExplorers?.default.url]
+							chainName: chain.name,
+							nativeCurrency: chain.nativeCurrency,
+							rpcUrls: [chain.rpcUrls.default.http[0]],
+							blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined
 						}
 					]
 				});
-			} else {
-				throw switchError;
+			} catch (addError: unknown) {
+				// If adding fails (e.g., RPC URL conflict), provide helpful message
+				const addErrorCode = (addError as { code?: number })?.code;
+				if (addErrorCode === -32603) {
+					// Internal error - likely RPC URL conflict with existing network
+					throw new Error(
+						`Cannot add ${chain.name} (chainId: ${targetChainId}). ` +
+						`Please manually add or switch to the network in MetaMask:\n` +
+						`- Network Name: ${chain.name}\n` +
+						`- RPC URL: ${chain.rpcUrls.default.http[0]}\n` +
+						`- Chain ID: ${targetChainId}\n` +
+						`- Currency: ${chain.nativeCurrency.symbol}`
+					);
+				}
+				throw addError;
 			}
+		} else if (errorCode === 4001) {
+			// User rejected the request
+			throw new Error('User rejected the network switch request.');
+		} else {
+			throw switchError;
 		}
-	} catch (error) {
-		throw new Error(
-			`Failed to switch to ${optimismSepolia.name}: ${error instanceof Error ? error.message : 'User rejected or unknown error'}`
-		);
 	}
 }
 
@@ -321,10 +339,11 @@ async function getWalletClient() {
 	await ensureCorrectChain();
 
 	const account = await getEthereumAccount();
+	const chain = getChainConfig();
 
 	return createWalletClient({
 		account,
-		chain: optimismSepolia,
+		chain,
 		transport: custom(window.ethereum)
 	});
 }

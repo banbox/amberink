@@ -532,3 +532,17 @@ Claude：sveltekit中最佳实践是使用 $env/static/public 或 $env/dynamic/p
 #### 2025-12-06 16:35  配置分为3个环节维护
 frontend\.env.example frontend\src\lib\config.ts  doc\Developers.md 当前是开发阶段，我希望使用的是本地anvil链，本地的SubSquid服务，以及测试网的Arweave+irys；请帮我分为三个环节：dev，test，prod；创建3个不同版本的配置文件，方便我随时切换。并针对每个配置，使用正确的配置结果，不确定的暂时使用占位符  
 claude: 已完成
+
+#### 2025-12-06 17:55  为什么固定发布到sepolia网络
+doc\Developers.md frontend\src\lib\config.ts 目前前端项目已可以正常发文章，Metamask签名两次对应分别上传文章图片和内容到irys，然后签署一次交易，上链到sepolia网络；
+但是我项目目前配置的是.env.dev，使用开发网络，似乎并未发布到开发网络上面。请你阅读所有必要文件，帮我检查问题出在哪里，然后进行修复  
+Claude: 前端代码在多个文件中硬编码使用了 optimismSepolia 链（chainId: 11155420），新增 src/lib/chain.ts 共享链配置模块，根据 PUBLIC_CHAIN_ID 动态返回对应链配置
+
+#### 2025-12-06 18:15  发布文章报错
+MetaMask - RPC Error: Unrecognized chain ID "0x7a69". Try adding the chain using wallet_addEthereumChain first. {code: 4902, message: 'Unrecognized chain ID "0x7a69". Try adding the chain using wallet_addEthereumChain first.', stack: '{\n  "code": 4902,\n  "message": "Unrecognized chain…  
+现在发布文章，出现上面错误，请帮我分析原因并解决  
+Claude: MetaMask 中已有 Localhost 8545 网络（chainId: 1337 = 0x539）;
+Anvil 默认使用 chainId 31337（0x7a69）;
+两者 RPC URL 相同（http://localhost:8545），但 chainId 不同;
+MetaMask 拒绝添加指向相同 RPC 的不同 chainId 网络;
+手动从Metamask删除网络，重新添加即可
