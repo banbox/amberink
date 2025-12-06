@@ -15,6 +15,11 @@ import {
 	PUBLIC_SUBSQUID_ENDPOINT
 } from '$env/static/public';
 
+// Import optional env vars with fallback (these may not be defined in all environments)
+import * as publicEnv from '$env/static/public';
+const PUBLIC_MIN_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_MIN_GAS_FEE_MULTIPLIER'] || '';
+const PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER'] || '';
+
 // Default values (used when env vars are not set)
 const defaults = {
 	blogHubContractAddress: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9',
@@ -25,7 +30,10 @@ const defaults = {
 	appName: 'DBlog',
 	appVersion: '1.0.0',
 	arweaveGateways: ['https://gateway.irys.xyz', 'https://arweave.net', 'https://arweave.dev'],
-	subsquidEndpoint: 'http://localhost:4350/graphql'
+	subsquidEndpoint: 'http://localhost:4350/graphql',
+	// Gas fee multipliers for funding
+	minGasFeeMultiplier: 10,      // Minimum: 10x gas fee
+	defaultGasFeeMultiplier: 30   // Default: 30x gas fee
 };
 
 /**
@@ -42,7 +50,13 @@ export const config = {
 	arweaveGateways: PUBLIC_ARWEAVE_GATEWAYS
 		? PUBLIC_ARWEAVE_GATEWAYS.split(',').map((g: string) => g.trim())
 		: defaults.arweaveGateways,
-	subsquidEndpoint: PUBLIC_SUBSQUID_ENDPOINT || defaults.subsquidEndpoint
+	subsquidEndpoint: PUBLIC_SUBSQUID_ENDPOINT || defaults.subsquidEndpoint,
+	minGasFeeMultiplier: PUBLIC_MIN_GAS_FEE_MULTIPLIER 
+		? parseInt(PUBLIC_MIN_GAS_FEE_MULTIPLIER, 10) 
+		: defaults.minGasFeeMultiplier,
+	defaultGasFeeMultiplier: PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER 
+		? parseInt(PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER, 10) 
+		: defaults.defaultGasFeeMultiplier
 } as const;
 
 // Helper functions for backward compatibility
@@ -80,6 +94,14 @@ export function getArweaveGateways(): string[] {
 
 export function getSubsquidEndpoint(): string {
 	return config.subsquidEndpoint;
+}
+
+export function getMinGasFeeMultiplier(): number {
+	return config.minGasFeeMultiplier;
+}
+
+export function getDefaultGasFeeMultiplier(): number {
+	return config.defaultGasFeeMultiplier;
 }
 
 export { defaults as defaultConfig };

@@ -19,7 +19,7 @@ import { WebEthereum } from '@irys/web-upload-ethereum';
 import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2';
 import { createWalletClient, createPublicClient, custom } from 'viem';
 import type { IrysConfig, IrysNetwork } from './types';
-import { getRpcUrl, getIrysNetwork } from '$lib/config';
+import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
 
 // Irys Uploader 类型
@@ -122,4 +122,87 @@ export async function fundIrys(uploader: IrysUploader, amount: string): Promise<
 export async function getUploadPrice(uploader: IrysUploader, bytes: number): Promise<string> {
 	const price = await uploader.getPrice(bytes);
 	return uploader.utils.fromAtomic(price).toString();
+}
+
+/**
+ * Calculate minimum required Irys balance based on upload price and gas multiplier
+ * @param uploader - Irys uploader instance
+ * @param dataSize - Size of data to upload in bytes
+ * @returns Minimum balance required (price * minMultiplier)
+ */
+async function calculateMinIrysBalance(uploader: IrysUploader, dataSize: number) {
+	const price = await uploader.getPrice(dataSize);
+	const minMultiplier = getMinGasFeeMultiplier();
+	// Multiply price by minMultiplier to ensure enough buffer
+	return price.multipliedBy(minMultiplier);
+}
+
+/**
+ * Calculate default Irys fund amount based on upload price and gas multiplier
+ * @param uploader - Irys uploader instance
+ * @param dataSize - Size of data to upload in bytes
+ * @returns Fund amount (price * defaultMultiplier)
+ */
+async function calculateIrysFundAmount(uploader: IrysUploader, dataSize: number) {
+	const price = await uploader.getPrice(dataSize);
+	const defaultMultiplier = getDefaultGasFeeMultiplier();
+	// Multiply price by defaultMultiplier for comfortable buffer
+	return price.multipliedBy(defaultMultiplier);
+}
+
+/**
+ * Check if Irys has sufficient balance for upload
+ * @param uploader - Irys uploader instance
+ * @param dataSize - Size of data to upload in bytes
+ * @returns true if balance is sufficient
+ */
+export async function hasIrysSufficientBalance(
+	uploader: IrysUploader,
+	dataSize: number
+): Promise<boolean> {
+	const balance = await uploader.getLoadedBalance();
+	const minBalance = await calculateMinIrysBalance(uploader, dataSize);
+	return balance.gte(minBalance);
+}
+
+/**
+ * Ensure Irys has sufficient balance, fund if necessary
+ * @param uploader - Irys uploader instance
+ * @param dataSize - Size of data to upload in bytes
+ * @returns true if balance is now sufficient
+ */
+export async function ensureIrysBalance(
+	uploader: IrysUploader,
+	dataSize: number
+): Promise<boolean> {
+	const balance = await uploader.getLoadedBalance();
+	const price = await uploader.getPrice(dataSize);
+	const minBalance = await calculateMinIrysBalance(uploader, dataSize);
+	const fundAmount = await calculateIrysFundAmount(uploader, dataSize);
+	
+	const balanceReadable = uploader.utils.fromAtomic(balance).toString();
+	const priceReadable = uploader.utils.fromAtomic(price).toString();
+	const minBalanceReadable = uploader.utils.fromAtomic(minBalance).toString();
+	const fundAmountReadable = uploader.utils.fromAtomic(fundAmount).toString();
+	
+	console.log(`Irys balance: ${balanceReadable} ${uploader.token}, price: ${priceReadable}, min required: ${minBalanceReadable}`);
+	
+	if (balance.gte(minBalance)) {
+		console.log('Irys balance sufficient');
+		return true;
+	}
+	
+	// Ensure fund amount meets minimum requirement
+	const actualFundAmount = fundAmount.gte(minBalance) ? fundAmount : minBalance;
+	const actualFundReadable = uploader.utils.fromAtomic(actualFundAmount).toString();
+	
+	console.log(`Irys balance insufficient, funding ${actualFundReadable} ${uploader.token} (${getDefaultGasFeeMultiplier()}x price)...`);
+	
+	try {
+		await fundIrys(uploader, actualFundReadable);
+		return true;
+	} catch (error) {
+		console.error('Failed to fund Irys:', error);
+		return false;
+	}
 }

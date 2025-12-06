@@ -3,9 +3,9 @@
  * Allows users to perform frequent operations without signing each time
  */
 
-import { createWalletClient, custom } from 'viem';
+import { createWalletClient, createPublicClient, custom, http, parseEther, formatEther } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { getBlogHubContractAddress, getSessionKeyManagerAddress } from '$lib/config';
+import { getBlogHubContractAddress, getSessionKeyManagerAddress, getRpcUrl, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
 
@@ -60,6 +60,9 @@ const DEFAULT_SPENDING_LIMIT = BigInt('10000000000000000000');
 // Session key validity duration (7 days in seconds)
 const SESSION_KEY_DURATION = 7 * 24 * 60 * 60;
 
+// Estimated gas for a typical transaction (used for calculating minimum balance)
+const ESTIMATED_GAS_UNITS = 200000n;
+
 /**
  * Get Ethereum account from wallet
  */
@@ -91,6 +94,126 @@ async function getWalletClient() {
 		chain,
 		transport: custom(window.ethereum)
 	});
+}
+
+/**
+ * Get public client for read-only operations
+ */
+function getPublicClient() {
+	const chain = getChainConfig();
+	return createPublicClient({
+		chain,
+		transport: http(getRpcUrl())
+	});
+}
+
+/**
+ * Get current gas price from the network
+ * @returns Gas price in wei
+ */
+async function getCurrentGasPrice(): Promise<bigint> {
+	const publicClient = getPublicClient();
+	return await publicClient.getGasPrice();
+}
+
+/**
+ * Calculate minimum required balance based on gas price
+ * @returns Minimum balance in wei (minMultiplier * gasPrice * estimatedGas)
+ */
+async function calculateMinBalance(): Promise<bigint> {
+	const gasPrice = await getCurrentGasPrice();
+	const minMultiplier = BigInt(getMinGasFeeMultiplier());
+	return gasPrice * ESTIMATED_GAS_UNITS * minMultiplier;
+}
+
+/**
+ * Calculate default fund amount based on gas price
+ * @returns Fund amount in wei (defaultMultiplier * gasPrice * estimatedGas)
+ */
+async function calculateFundAmount(): Promise<bigint> {
+	const gasPrice = await getCurrentGasPrice();
+	const defaultMultiplier = BigInt(getDefaultGasFeeMultiplier());
+	return gasPrice * ESTIMATED_GAS_UNITS * defaultMultiplier;
+}
+
+/**
+ * Get session key balance
+ * @param address - Session key address
+ * @returns Balance in wei
+ */
+export async function getSessionKeyBalance(address: string): Promise<bigint> {
+	const publicClient = getPublicClient();
+	return await publicClient.getBalance({ address: address as `0x${string}` });
+}
+
+/**
+ * Check if session key has sufficient balance
+ * @param address - Session key address
+ * @returns true if balance is sufficient
+ */
+export async function hasSessionKeySufficientBalance(address: string): Promise<boolean> {
+	const balance = await getSessionKeyBalance(address);
+	const minBalance = await calculateMinBalance();
+	return balance >= minBalance;
+}
+
+/**
+ * Fund session key with ETH from main wallet
+ * @param sessionKeyAddress - Session key address to fund
+ * @param amount - Amount to send (optional, calculated based on gas price if not provided)
+ * @returns Transaction hash
+ */
+export async function fundSessionKey(
+	sessionKeyAddress: string,
+	amount?: bigint
+): Promise<string> {
+	const walletClient = await getWalletClient();
+	
+	// Calculate fund amount if not provided
+	const fundAmount = amount ?? await calculateFundAmount();
+	
+	// Ensure fund amount meets minimum requirement
+	const minBalance = await calculateMinBalance();
+	const actualAmount = fundAmount >= minBalance ? fundAmount : minBalance;
+	
+	console.log(`Funding session key with ${formatEther(actualAmount)} ETH (min: ${formatEther(minBalance)} ETH)`);
+	
+	const txHash = await walletClient.sendTransaction({
+		to: sessionKeyAddress as `0x${string}`,
+		value: actualAmount
+	});
+	
+	// Wait for transaction confirmation
+	const publicClient = getPublicClient();
+	await publicClient.waitForTransactionReceipt({ hash: txHash });
+	
+	console.log(`Funded session key ${sessionKeyAddress} with ${formatEther(actualAmount)} ETH. Tx: ${txHash}`);
+	return txHash;
+}
+
+/**
+ * Ensure session key has sufficient balance, fund if necessary
+ * @param sessionKeyAddress - Session key address
+ * @returns true if balance is now sufficient
+ */
+export async function ensureSessionKeyBalance(sessionKeyAddress: string): Promise<boolean> {
+	const balance = await getSessionKeyBalance(sessionKeyAddress);
+	const minBalance = await calculateMinBalance();
+	
+	if (balance >= minBalance) {
+		console.log(`Session key balance sufficient: ${formatEther(balance)} ETH (min: ${formatEther(minBalance)} ETH)`);
+		return true;
+	}
+	
+	console.log(`Session key balance low (${formatEther(balance)} ETH), need at least ${formatEther(minBalance)} ETH, funding...`);
+	
+	try {
+		await fundSessionKey(sessionKeyAddress);
+		return true;
+	} catch (error) {
+		console.error('Failed to fund session key:', error);
+		return false;
+	}
 }
 
 /**
@@ -178,6 +301,9 @@ export async function createSessionKey(): Promise<StoredSessionKey> {
 	};
 
 	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(sessionKeyData));
+
+	// 5. Fund session key with initial balance for gas fees
+	await ensureSessionKeyBalance(sessionKeyAccount.address);
 
 	return sessionKeyData;
 }

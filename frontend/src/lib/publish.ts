@@ -11,7 +11,7 @@ import {
 } from '$lib/arweave';
 import { publishToContract, publishToContractWithSessionKey } from '$lib/contracts';
 import type { ArticleMetadata } from '$lib/arweave';
-import { getStoredSessionKey, type StoredSessionKey } from '$lib/sessionKey';
+import { getStoredSessionKey, ensureSessionKeyBalance, type StoredSessionKey } from '$lib/sessionKey';
 
 export interface PublishArticleParams {
 	title: string;
@@ -140,6 +140,13 @@ async function publishArticleWithSessionKeyInternal(
 		royaltyBps,
 		originalAuthor = ''
 	} = params;
+
+	// Step 0: Ensure session key has sufficient balance for gas fees
+	console.log('Step 0: Checking session key balance...');
+	const hasBalance = await ensureSessionKeyBalance(sessionKey.address);
+	if (!hasBalance) {
+		throw new Error('Failed to fund session key. Please try again or use MetaMask.');
+	}
 
 	// Step 1: Upload cover image with session key if provided
 	let coverImageHash: string | undefined;

@@ -567,3 +567,18 @@ Claude: 智能合约增加publishWithSessionKey，Irys 支持使用私钥直接�
        └─ 无 Session Key → 回退 MetaMask（3次签名）
 ```
 开发者：更新合约到anvil，然后更新SubSquid的abi，重新启动
+
+#### 2025-12-06 21:05  发布时报余额不足
+@Developers.md @sessionKey.ts 当前已经使用了Session Key用于无感发布提交内容，避免过多请求Metamask签名，但目前发布报402 error: Not enough balance for transaction；请帮我在授权时，检查临时密钥中是否余额充足，如果不足则自动转账避免失败  
+Claude: 发布文章时，自动检查余额，不足是转账。  
+```log
+upload.ts:93  POST https://devnet.irys.xyz/tx/ethereum 402 (Payment Required)
+upload.ts:97 Error when uploading image: Error: 402 error: Not enough balance for transaction
+    at async uploadImageWithUploader (upload.ts:93:19)
+    at async publishArticle (publish.ts:84:21)
+    at async handleSubmit (+page.svelte:179:16)
+```
+开发者：这是目前的错误，似乎是在irys时也缺少余额，请帮我在irys上传时也检查余额并转入  
+Claude：检查irys余额，不足时充值； 
+开发者：我发现充值的余额太少了，充值0.005，但网络费是0.08，这是测试网络；请帮我在irys和sepolia网络上都强制要求，最低充值不低于十倍网络费；默认按30倍网络费充值；做成可配置的。  
+Claude：新增了两个可配置变量；

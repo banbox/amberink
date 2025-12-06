@@ -1,7 +1,7 @@
 /**
  * Arweave 上传功能
  */
-import { getIrysUploader, getIrysUploaderDevnet, type IrysUploader } from './irys';
+import { getIrysUploader, getIrysUploaderDevnet, ensureIrysBalance, type IrysUploader } from './irys';
 import {
 	getSessionKeyIrysUploader,
 	getSessionKeyIrysUploaderDevnet,
@@ -44,6 +44,13 @@ export async function uploadArticleWithUploader(
 	};
 
 	const data = JSON.stringify(fullMetadata);
+	const dataSize = new TextEncoder().encode(data).length;
+
+	// 确保 Irys 余额充足
+	const hasBalance = await ensureIrysBalance(uploader, dataSize);
+	if (!hasBalance) {
+		throw new Error('Failed to fund Irys. Please try again.');
+	}
 
 	// 构建标签（用于 Arweave GraphQL 查询）
 	const tags: IrysTag[] = [
@@ -83,6 +90,13 @@ export async function uploadImage(file: File, network: IrysNetwork = 'devnet'): 
  */
 export async function uploadImageWithUploader(uploader: IrysUploader, file: File): Promise<string> {
 	const appName = getAppName();
+	
+	// 确保 Irys 余额充足
+	const hasBalance = await ensureIrysBalance(uploader, file.size);
+	if (!hasBalance) {
+		throw new Error('Failed to fund Irys. Please try again.');
+	}
+	
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: file.type },
 		{ name: 'App-Name', value: appName },
@@ -114,6 +128,13 @@ export async function uploadData(
 ): Promise<string> {
 	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
 	const appName = getAppName();
+
+	// 计算数据大小并确保余额充足
+	const dataSize = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
+	const hasBalance = await ensureIrysBalance(uploader, dataSize);
+	if (!hasBalance) {
+		throw new Error('Failed to fund Irys. Please try again.');
+	}
 
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: contentType },

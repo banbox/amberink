@@ -38,6 +38,8 @@ export {
 	getIrysBalance,
 	fundIrys,
 	getUploadPrice,
+	hasIrysSufficientBalance,
+	ensureIrysBalance,
 	type IrysUploader
 } from './irys';
 
