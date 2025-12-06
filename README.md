@@ -1,6 +1,6 @@
 # DBlog去中心化博客
 此项目完全去中心化，无后端参与，相关角色：前端 + 智能合约 + 索引查询 + 存储。
-基于Optimism(solidity) + Arweave(Irys) + Subsquid + Nuxt.js
+基于Optimism(solidity) + Arweave(Irys) + Subsquid + SvelteKit
 
 ## 如何学习？
 [最细节的手把手开发日志](learn/README.md)
@@ -11,7 +11,7 @@
 ```perl
 dblog/
 ├── contracts/        # Foundry 智能合约
-├── frontend/         # Nuxt.js
+├── frontend/         # SvelteKit
 ├── squid/            # Subsquid 链上索引
 ├── learn/            # 学习教程
 ├── .gitmodules       # 统一管理所有 submodules（如 foundry 的 lib/）
@@ -39,7 +39,7 @@ dblog/
 基于Irys作为数据上传获取链；（官方AR.IO的Turbo是中心化的）
 
 ## 前端集成
-Web3交互：viem + @wagmi/vue
-钱包连接UI：@reown/appkit的Vue模式
-数据查询：@urql/vue
-其他：prettier，eslint，tailwindcss，vitest，playwright，@nuxtjs/i18n
+Web3交互：viem + @wagmi/core
+钱包连接UI：@reown/appkit
+数据查询：@urql/svelte
+其他：prettier，eslint，tailwindcss，vitest，playwright，@inlang/paraglide-sveltekit

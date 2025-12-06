@@ -13,7 +13,7 @@
 | 部署脚本 | ✅ 已完成 | 支持本地/测试网/主网部署 |
 | SubSquid 索引 | 🔨 开发中 | ABI 已生成，Processor 已配置，待本地测试 |
 | Irys + Arweave | 🔲 待开发 | 文章内容永久存储 |
-| Nuxt.js 前端 | 🔲 待开发 | 用户界面、钱包集成 |
+| SvelteKit 前端 | ✅ 已完成 | 用户界面、钱包集成、i18n 国际化 |
 
 ---
 
@@ -37,7 +37,7 @@
 11. [文章上传与元数据](#11-文章上传与元数据)
 12. [内容获取与缓存](#12-内容获取与缓存)
 
-**Part 4: Nuxt.js 前端（待开发）**
+**Part 4: SvelteKit 前端（已完成）**
 13. [前端项目初始化](#13-前端项目初始化)
 14. [钱包连接与合约交互](#14-钱包连接与合约交互)
 15. [Session Key 无感交互](#15-session-key-无感交互)
@@ -602,26 +602,52 @@ sqd deploy .
 ```
 
 ### 9.3 前端集成
+
 ```shell
-npx nuxi@latest init frontend
+# 创建 SvelteKit 项目
+npx sv create frontend
 cd frontend
+npm install
 npm run dev
 ```
 
-```typescript
-// frontend/app/plugins/urql.ts
-import { createClient, cacheExchange, fetchExchange } from '@urql/vue'
+SvelteKit 前端使用原生 fetch 调用 GraphQL API：
 
-export default defineNuxtPlugin((nuxtApp) => {
-  const runtimeConfig = useRuntimeConfig()
+```typescript
+// frontend/src/lib/graphql.ts
+const GRAPHQL_URL = 'http://localhost:4350/graphql';
+
+export async function queryGraphQL<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  const response = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables })
+  });
   
-  const client = createClient({
-    url: runtimeConfig.public.subsquidGraphqlUrl || 'http://localhost:4350/graphql',
-    exchanges: [cacheExchange, fetchExchange]
-  })
-  
-  nuxtApp.vueApp.provide('urql', client)
-})
+  const result = await response.json();
+  if (result.errors) {
+    throw new Error(result.errors[0].message);
+  }
+  return result.data;
+}
+
+// 使用示例
+export async function getLatestArticles(limit: number = 20, offset: number = 0) {
+  return queryGraphQL<{ articles: Article[] }>(`
+    query LatestArticles($limit: Int!, $offset: Int!) {
+      articles(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
+        id
+        arweaveId
+        author { id }
+        originalAuthor
+        likes
+        dislikes
+        totalTips
+        createdAt
+      }
+    }
+  `, { limit, offset });
+}
 ```
 
 ---
@@ -684,150 +710,362 @@ Irys 有两个 Bundler 网络：
 
 ### 12.1 从 Arweave 获取内容
 
-[frontend/app/composables/arweave/fetch.ts](../frontend/app/composables/arweave/fetch.ts)
+> 📁 **实现文件**: [frontend/src/lib/arweave/fetch.ts](../frontend/src/lib/arweave/fetch.ts)
+
+```typescript
+// frontend/src/lib/arweave/fetch.ts
+import { getArweaveGateways } from '$lib/config';
+import type { ArticleMetadata } from './types';
+
+// 从 Arweave 获取文章内容
+export async function fetchArticleContent(arweaveId: string): Promise<ArticleMetadata> {
+  const gateways = getArweaveGateways();
+  
+  for (const gateway of gateways) {
+    try {
+      const response = await fetch(`${gateway}/${arweaveId}`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch from ${gateway}:`, error);
+    }
+  }
+  
+  throw new Error('Failed to fetch article from all gateways');
+}
+
+// 获取图片 URL
+export function getImageUrl(arweaveId: string): string {
+  const gateways = getArweaveGateways();
+  return `${gateways[0]}/${arweaveId}`;
+}
+```
 
 ### 12.2 客户端缓存策略
 
-[frontend/app/composables/arweave/cache.ts](../frontend/app/composables/arweave/cache.ts)
+> 📁 **实现文件**: [frontend/src/lib/arweave/cache.ts](../frontend/src/lib/arweave/cache.ts)
+
+```typescript
+// frontend/src/lib/arweave/cache.ts
+import { browser } from '$app/environment';
+import { fetchArticleContent } from './fetch';
+import type { ArticleMetadata, CachedArticle } from './types';
+
+const CACHE_PREFIX = 'dblog_article_';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+export function getCachedArticle(arweaveId: string): ArticleMetadata | null {
+  if (!browser) return null;
+  
+  const cached = localStorage.getItem(CACHE_PREFIX + arweaveId);
+  if (!cached) return null;
+  
+  const data: CachedArticle = JSON.parse(cached);
+  if (Date.now() - data.cachedAt > CACHE_DURATION) {
+    localStorage.removeItem(CACHE_PREFIX + arweaveId);
+    return null;
+  }
+  
+  return data.article;
+}
+
+export async function getArticleWithCache(arweaveId: string): Promise<ArticleMetadata> {
+  const cached = getCachedArticle(arweaveId);
+  if (cached) return cached;
+  
+  const article = await fetchArticleContent(arweaveId);
+  setCachedArticle(arweaveId, article);
+  return article;
+}
+```
 
 ### 12.3 模块导出索引
 
-[frontend/app/composables/arweave/index.ts](../frontend/app/composables/arweave/index.ts)
+> 📁 **实现文件**: [frontend/src/lib/arweave/index.ts](../frontend/src/lib/arweave/index.ts)
+
+```typescript
+// frontend/src/lib/arweave/index.ts
+// 类型导出
+export type {
+  ArticleMetadata,
+  ArticleBundle,
+  IrysTag,
+  UploadReceipt,
+  CachedArticle,
+  IrysNetwork,
+  IrysConfig
+} from './types';
+
+// Irys 客户端
+export { createIrysUploader, getIrysBalance, fundIrys, getUploadPrice } from './irys';
+
+// 上传功能
+export { uploadArticle, uploadImage, uploadData } from './upload';
+
+// 获取内容
+export { fetchArticleContent, getImageUrl, getArweaveUrl, checkContentExists } from './fetch';
+
+// 缓存功能
+export { getCachedArticle, setCachedArticle, getArticleWithCache, clearAllCache } from './cache';
+```
 
 ---
 
-# Part 4: Nuxt.js 前端
+# Part 4: SvelteKit 前端
 
 ## 13. 前端项目初始化
 
-### 13.1 创建 Nuxt.js 项目
+### 13.1 创建 SvelteKit 项目
 
 ```bash
 # 在项目根目录
-npx nuxi@latest init frontend
+npx sv create frontend
 
 cd frontend
 npm install
 
-# 安装 Tailwind CSS
-npm install -D @nuxtjs/tailwindcss
-npx tailwindcss init
+# Tailwind CSS v4 已集成，无需额外配置
 ```
 
 ### 13.2 安装依赖
 
 ```bash
 # Web3 相关
-npm install viem @wagmi/vue @wagmi/core @reown/appkit @reown/appkit-adapter-wagmi
-
-# GraphQL
-npm install @urql/vue graphql
+npm install viem
 
 # Arweave/Irys（浏览器端，使用 Viem v2）
 npm install @irys/web-upload @irys/web-upload-ethereum @irys/web-upload-ethereum-viem-v2
 
-# UI 组件
-npm install lucide-vue-next radix-vue tailwind-variants clsx tailwind-merge
+# 国际化 (Paraglide)
+npm install @inlang/paraglide-js
 
 # Markdown 渲染
-npm install marked dompurify @types/dompurify
+npm install -D mdsvex
 
-# 国际化
-npm install @nuxtjs/i18n
+# 开发依赖
+npm install -D @tailwindcss/typography @tailwindcss/vite
 ```
 
 ### 13.3 项目结构
 
 ```
 frontend/
-├── app/
-│   ├── assets/               # 静态资源
-│   ├── components/           # 可复用组件
-│   │   ├── ui/               # 基础 UI 组件
-│   │   ├── ArticleCard.vue
-│   │   ├── CommentList.vue
-│   │   └── WalletButton.vue
-│   ├── composables/          # Vue composables
-│   │   ├── useWallet.ts
-│   │   ├── useSession.ts
-│   │   ├── useContracts.ts   # 合约交互
-│   │   ├── useGraphql.ts     # GraphQL 客户端
-│   │   ├── useIrys.ts        # Irys 上传
-│   │   ├── useArweave.ts     # Arweave 获取
-│   │   └── useSessionKey.ts  # Session Key 管理
-│   ├── pages/
-│   │   ├── index.vue         # 首页（文章列表）
-│   │   ├── article/
-│   │   │   ├── [id].vue      # 文章详情
-│   │   │   └── new.vue       # 发布文章
-│   │   ├── user/
-│   │   │   └── [address].vue # 用户主页
-│   │   └── settings.vue      # 设置页面
-│   ├── layouts/
-│   │   └── default.vue       # 全局布局
-│   └── app.vue
-├── public/
-├── i18n/
-│   └── locales/              # 国际化文件
-├── tailwind.config.js
-└── nuxt.config.ts
+├── src/
+│   ├── lib/                  # 共享库代码
+│   │   ├── arweave/          # Arweave/Irys 集成
+│   │   │   ├── irys.ts       # Irys 客户端
+│   │   │   ├── upload.ts     # 上传功能
+│   │   │   ├── fetch.ts      # 内容获取
+│   │   │   ├── cache.ts      # 缓存管理
+│   │   │   └── types.ts      # 类型定义
+│   │   ├── components/       # 可复用组件
+│   │   │   ├── WalletButton.svelte
+│   │   │   └── SearchSelect.svelte
+│   │   ├── paraglide/        # i18n 生成代码
+│   │   ├── config.ts         # 应用配置
+│   │   ├── contracts.ts      # 合约交互
+│   │   ├── sessionKey.ts     # Session Key 管理
+│   │   └── publish.ts        # 发布流程编排
+│   ├── routes/               # 页面路由
+│   │   ├── +layout.svelte    # 全局布局
+│   │   ├── +page.svelte      # 首页
+│   │   └── publish/
+│   │       └── +page.svelte  # 发布文章页
+│   ├── app.html              # HTML 模板
+│   └── app.d.ts              # 类型声明
+├── messages/                 # i18n 翻译文件
+│   ├── en-us.json
+│   └── zh-cn.json
+├── static/                   # 静态资源
+├── svelte.config.js          # Svelte 配置
+├── vite.config.ts            # Vite 配置
+└── package.json
 ```
 
 ### 13.4 环境变量配置
 
 ```bash
 # frontend/.env
-NUXT_PUBLIC_CHAIN_ID=11155420
-NUXT_PUBLIC_RPC_URL=https://sepolia.optimism.io
-NUXT_PUBLIC_BLOG_HUB_ADDRESS=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
-NUXT_PUBLIC_SESSION_KEY_MANAGER_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
-NUXT_PUBLIC_PAYMASTER_ADDRESS=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
-NUXT_PUBLIC_SUBSQUID_GRAPHQL_URL=http://localhost:4350/graphql
-NUXT_PUBLIC_REOWN_PROJECT_ID=your_reown_project_id
+# BlogHub Contract Address (Optimism Sepolia)
+PUBLIC_BLOG_HUB_CONTRACT_ADDRESS=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+
+# Session Key Manager Contract Address
+PUBLIC_SESSION_KEY_MANAGER_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+# RPC URL for blockchain interactions
+PUBLIC_RPC_URL=https://sepolia.optimism.io
+
+# Irys Network: 'mainnet' (permanent storage) or 'devnet' (test, ~60 days)
+PUBLIC_IRYS_NETWORK=devnet
+
+# Application Info
+PUBLIC_APP_NAME=DBlog
+PUBLIC_APP_VERSION=1.0.0
+
+# Arweave Gateways (comma-separated)
+PUBLIC_ARWEAVE_GATEWAYS=https://gateway.irys.xyz,https://arweave.net,https://arweave.dev
 ```
 
 ---
 
 ## 14. 钱包连接与合约交互
 
-### 14.1 Wagmi 配置
+SvelteKit 前端使用 viem 直接与钱包和合约交互，无需 wagmi 封装。
+
+### 14.1 配置文件
+
+> 📁 **实现文件**: [frontend/src/lib/config.ts](../frontend/src/lib/config.ts)
 
 ```typescript
-// frontend/app/composables/useWagmi.ts
-import { createConfig, http } from '@wagmi/core'
-import { optimismSepolia, localhost } from '@wagmi/core/chains'
-import { injected, walletConnect } from '@wagmi/connectors'
+// frontend/src/lib/config.ts
+const defaults = {
+  blogHubContractAddress: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9' as `0x${string}`,
+  sessionKeyManagerAddress: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  rpcUrl: 'https://sepolia.optimism.io',
+  irysNetwork: 'devnet' as 'mainnet' | 'devnet',
+  appName: 'DBlog',
+  appVersion: '1.0.0',
+  arweaveGateways: ['https://gateway.irys.xyz', 'https://arweave.net', 'https://arweave.dev']
+};
 
-const runtimeConfig = useRuntimeConfig()
-const projectId = runtimeConfig.public.reownProjectId
+export function getBlogHubContractAddress(): `0x${string}` {
+  return getConfig().blogHubContractAddress;
+}
 
-export const config = createConfig({
-  chains: [optimismSepolia, localhost],
-  connectors: [
-    injected(),
-    walletConnect({ projectId })
-  ],
-  transports: {
-    [optimismSepolia.id]: http(),
-    [localhost.id]: http('http://localhost:8545')
-  }
-})
+export function getSessionKeyManagerAddress(): `0x${string}` {
+  return getConfig().sessionKeyManagerAddress;
+}
 ```
 
 ### 14.2 钱包连接组件
 
-> 📁 **实现文件**: `frontend/app/components/WalletButton.vue`
+> 📁 **实现文件**: [frontend/src/lib/components/WalletButton.svelte](../frontend/src/lib/components/WalletButton.svelte)
+
+```svelte
+<!-- frontend/src/lib/components/WalletButton.svelte -->
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { optimismSepolia } from 'viem/chains';
+  import * as m from '$lib/paraglide/messages';
+
+  let address = $state<string | undefined>();
+  let isConnected = $state(false);
+  let isLoading = $state(false);
+
+  let displayAddress = $derived(
+    address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''
+  );
+
+  async function handleConnect() {
+    if (typeof window === 'undefined' || !window.ethereum) {
+      alert('Please install MetaMask or another Ethereum wallet');
+      return;
+    }
+
+    isLoading = true;
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      }) as string[];
+      if (accounts.length > 0) {
+        address = accounts[0];
+        isConnected = true;
+      }
+      await ensureCorrectChain();
+    } catch (error) {
+      console.error('Failed to connect:', error);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  async function ensureCorrectChain() {
+    const targetChainIdHex = `0x${optimismSepolia.id.toString(16)}`;
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: targetChainIdHex }]
+      });
+    } catch (switchError: unknown) {
+      if ((switchError as { code?: number })?.code === 4902) {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: targetChainIdHex,
+            chainName: optimismSepolia.name,
+            nativeCurrency: optimismSepolia.nativeCurrency,
+            rpcUrls: [optimismSepolia.rpcUrls.default.http[0]],
+            blockExplorerUrls: [optimismSepolia.blockExplorers?.default.url]
+          }]
+        });
+      }
+    }
+  }
+</script>
+
+{#if isConnected}
+  <button class="..." onclick={handleDisconnect}>
+    <span class="h-2 w-2 rounded-full bg-green-400"></span>
+    {displayAddress}
+  </button>
+{:else}
+  <button class="..." disabled={isLoading} onclick={handleConnect}>
+    {isLoading ? '...' : m.connect_wallet()}
+  </button>
+{/if}
+```
 
 功能：
 - 连接/断开钱包
 - 显示连接状态和地址缩写
 - 自动切换到 Optimism Sepolia 网络
 - 监听账户和链变化事件
-- 支持 i18n 多语言
+- 支持 i18n 多语言 (Paraglide)
 
 ### 14.3 合约交互封装
 
-> 📁 **实现文件**: `frontend/app/composables/contracts.ts`
+> 📁 **实现文件**: [frontend/src/lib/contracts.ts](../frontend/src/lib/contracts.ts)
+
+```typescript
+// frontend/src/lib/contracts.ts
+import { createWalletClient, createPublicClient, custom, http } from 'viem';
+import { optimismSepolia } from 'viem/chains';
+import { getBlogHubContractAddress } from '$lib/config';
+
+// 获取钱包客户端
+async function getWalletClient() {
+  if (typeof window === 'undefined' || !window.ethereum) {
+    throw new Error('Ethereum provider not found');
+  }
+  await ensureCorrectChain();
+  const account = await getEthereumAccount();
+  return createWalletClient({
+    account,
+    chain: optimismSepolia,
+    transport: custom(window.ethereum)
+  });
+}
+
+// 发布文章到合约
+export async function publishToContract(
+  arweaveId: string,
+  categoryId: bigint,
+  royaltyBps: bigint,
+  originalAuthor: string = '',
+  title: string = '',
+  coverImage: string = ''
+): Promise<string> {
+  const walletClient = await getWalletClient();
+  const txHash = await walletClient.writeContract({
+    address: getBlogHubContractAddress(),
+    abi: BLOGHUB_ABI,
+    functionName: 'publish',
+    args: [arweaveId, categoryId, royaltyBps, originalAuthor, title, coverImage]
+  });
+  return txHash;
+}
+```
 
 包含以下功能：
 - `publishToContract()` - 发布文章到合约
@@ -836,14 +1074,83 @@ export const config = createConfig({
 - `getArticle()` - 读取文章信息
 - `EvaluationScore` - 评分枚举（Neutral=0, Like=1, Dislike=2）
 - `ArticleData` - 文章数据接口
+- `ContractError` - 合约错误类（支持 i18n 错误码）
 
 ---
 
 ## 15. Session Key 无感交互
 
+Session Key 允许用户授权临时密钥执行特定操作，实现无感交互体验。
+
 ### 15.1 Session Key 管理
 
-> 📁 **实现文件**: `frontend/app/composables/useSessionKey.ts`
+> 📁 **实现文件**: [frontend/src/lib/sessionKey.ts](../frontend/src/lib/sessionKey.ts)
+
+```typescript
+// frontend/src/lib/sessionKey.ts
+import { createWalletClient, custom } from 'viem';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { optimismSepolia } from 'viem/chains';
+import { browser } from '$app/environment';
+
+const SESSION_KEY_STORAGE = 'dblog_session_key';
+const SESSION_KEY_DURATION = 7 * 24 * 60 * 60; // 7 days
+
+export interface StoredSessionKey {
+  address: string;
+  privateKey: string;
+  owner: string;
+  validUntil: number;
+}
+
+// 获取存储的 Session Key
+export function getStoredSessionKey(): StoredSessionKey | null {
+  if (!browser) return null;
+  const stored = localStorage.getItem(SESSION_KEY_STORAGE);
+  if (!stored) return null;
+  
+  const data: StoredSessionKey = JSON.parse(stored);
+  if (Date.now() / 1000 > data.validUntil) {
+    localStorage.removeItem(SESSION_KEY_STORAGE);
+    return null;
+  }
+  return data;
+}
+
+// 生成并注册新的 Session Key
+export async function createSessionKey(): Promise<StoredSessionKey> {
+  const account = await getEthereumAccount();
+  const privateKey = generatePrivateKey();
+  const sessionKeyAccount = privateKeyToAccount(privateKey);
+  
+  const validAfter = Math.floor(Date.now() / 1000);
+  const validUntil = validAfter + SESSION_KEY_DURATION;
+  
+  const walletClient = await getWalletClient();
+  await walletClient.writeContract({
+    address: getSessionKeyManagerAddress(),
+    abi: SESSION_KEY_MANAGER_ABI,
+    functionName: 'registerSessionKey',
+    args: [
+      sessionKeyAccount.address,
+      validAfter,
+      validUntil,
+      getBlogHubContractAddress(),
+      ALLOWED_SELECTORS,
+      DEFAULT_SPENDING_LIMIT
+    ]
+  });
+  
+  const sessionKeyData: StoredSessionKey = {
+    address: sessionKeyAccount.address,
+    privateKey: privateKey,
+    owner: account,
+    validUntil
+  };
+  localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(sessionKeyData));
+  return sessionKeyData;
+}
+```
 
 包含以下功能：
 - `StoredSessionKey` - Session Key 数据结构接口
@@ -852,16 +1159,21 @@ export const config = createConfig({
 - `createSessionKey()` - 生成并注册新的 Session Key（7天有效期）
 - `revokeSessionKey()` - 撤销 Session Key
 - `clearLocalSessionKey()` - 清除本地存储的 Session Key
-- `getSessionKeyWallet()` - 获取 Session Key 钱包实例用于签名
+- `getSessionKeyAccount()` - 获取 Session Key 账户实例用于签名
 
-### 15.2 Session Key 状态组件
+### 15.2 允许的函数选择器
 
-> 📁 **实现文件**: `frontend/app/components/SessionKeyStatus.vue`
+```typescript
+// 允许 Session Key 调用的函数
+const ALLOWED_SELECTORS: `0x${string}`[] = [
+  '0xff1f090a', // evaluate
+  '0xdffd40f2', // likeComment
+  '0x63c3cc16'  // follow
+];
 
-功能：
-- 显示 Session Key 启用状态和有效期
-- 启用/撤销无感交互模式
-- 支持 i18n 多语言
+// 默认消费额度 (10 ETH)
+const DEFAULT_SPENDING_LIMIT = BigInt('10000000000000000000');
+```
 
 ---
 
@@ -869,307 +1181,262 @@ export const config = createConfig({
 
 ### 16.1 全局布局
 
-```vue
-<!-- frontend/app/layouts/default.vue -->
-<script setup lang="ts">
-import WalletButton from '~/components/WalletButton.vue'
+> 📁 **实现文件**: [frontend/src/routes/+layout.svelte](../frontend/src/routes/+layout.svelte)
+
+```svelte
+<!-- frontend/src/routes/+layout.svelte -->
+<script lang="ts">
+  import './layout.css';
+  import WalletButton from '$lib/components/WalletButton.svelte';
+  import * as m from '$lib/paraglide/messages';
+  import { page } from '$app/state';
+  import { locales, getLocale, localizeHref } from '$lib/paraglide/runtime';
+
+  let { children } = $props();
 </script>
 
-<template>
-  <div class="min-h-screen bg-gray-50">
-    <header class="bg-white border-b">
-      <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
-        <NuxtLink to="/" class="text-xl font-bold">DBlog</NuxtLink>
-        
-        <div class="flex items-center gap-4">
-          <NuxtLink to="/article/new" class="text-gray-600 hover:text-gray-900">
-            发布文章
-          </NuxtLink>
-          <WalletButton />
+<div class="flex min-h-screen flex-col bg-gray-50">
+  <!-- Header -->
+  <header class="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+    <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+      <a href="/" class="flex items-center gap-2">
+        <span class="text-xl font-bold text-gray-900">DBlog</span>
+      </a>
+
+      <div class="flex items-center gap-4">
+        <!-- Language Switcher -->
+        <div class="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+          {#each locales as locale}
+            <a
+              href={localizeHref(page.url.pathname, { locale })}
+              class="rounded-md px-3 py-1.5 text-sm font-medium"
+              class:bg-white={getLocale() === locale}
+            >
+              {locale === 'en-us' ? 'EN' : '中'}
+            </a>
+          {/each}
         </div>
-      </nav>
-    </header>
-    
-    <main class="container mx-auto px-4 py-8">
-      <slot />
-    </main>
-    
-    <footer class="bg-white border-t mt-auto">
-      <div class="container mx-auto px-4 py-6 text-center text-gray-500">
-        DBlog - 去中心化博客 | Powered by Optimism + Arweave
+        <WalletButton />
       </div>
-    </footer>
-  </div>
-</template>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1">
+    {@render children()}
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="mx-auto max-w-7xl px-4 py-8 text-center text-gray-500">
+      {m.tagline()} | Powered by Optimism + Arweave
+    </div>
+  </footer>
+</div>
 ```
 
-### 16.2 首页（文章列表）
+功能：
+- 响应式布局，支持移动端
+- 粘性导航栏带模糊背景
+- 集成语言切换器 (Paraglide i18n)
+- 钱包连接按钮
 
-```vue
-<!-- frontend/app/pages/index.vue -->
-<script setup lang="ts">
-import { useQuery } from '@urql/vue'
-import { gql } from 'graphql-tag'
-import ArticleCard from '~/components/ArticleCard.vue'
+### 16.2 发布文章页面
 
-const LatestArticlesQuery = gql`
-  query LatestArticles($limit: Int!, $offset: Int!) {
-    articles(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
-      id
-      arweaveId
-      author { id }
-      originalAuthor
-      likes
-      dislikes
-      totalTips
-      createdAt
+> 📁 **实现文件**: [frontend/src/routes/publish/+page.svelte](../frontend/src/routes/publish/+page.svelte)
+
+```svelte
+<!-- frontend/src/routes/publish/+page.svelte -->
+<script lang="ts">
+  import * as m from '$lib/paraglide/messages';
+  import { publishArticle } from '$lib/publish';
+  import { ContractError } from '$lib/contracts';
+  import { CATEGORY_KEYS } from '$lib/data';
+  import SearchSelect from '$lib/components/SearchSelect.svelte';
+
+  // Form state using Svelte 5 runes
+  let title = $state('');
+  let summary = $state('');
+  let content = $state('');
+  let selectedCategory = $state<bigint | null>(null);
+  let coverImageFile = $state<File | null>(null);
+  let coverImagePreview = $state<string | null>(null);
+  let royaltyBps = $state<bigint>(500n);
+
+  // Submit state
+  let isSubmitting = $state(false);
+  let submitStatus = $state<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  let statusMessage = $state('');
+
+  // Handle form submission
+  async function handleSubmit() {
+    if (isSubmitting) return;
+    
+    try {
+      isSubmitting = true;
+      submitStatus = 'uploading';
+      statusMessage = m.uploading_to_arweave();
+
+      const result = await publishArticle({
+        title: title.trim(),
+        summary: summary.trim(),
+        content: content.trim(),
+        tags: [],
+        coverImage: coverImageFile,
+        categoryId: selectedCategory ?? 0n,
+        royaltyBps: royaltyBps
+      });
+
+      submitStatus = 'success';
+      statusMessage = m.publish_success({ 
+        arweaveId: result.arweaveId, 
+        txHash: result.txHash 
+      });
+    } catch (error) {
+      submitStatus = 'error';
+      if (error instanceof ContractError) {
+        statusMessage = m[`error_${error.code}`]?.() ?? error.message;
+      } else {
+        statusMessage = m.publish_failed({ 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    } finally {
+      isSubmitting = false;
     }
   }
-`
-
-const { data, fetching, error } = useQuery({
-  query: LatestArticlesQuery,
-  variables: { limit: 20, offset: 0 }
-})
 </script>
 
-<template>
-  <div class="max-w-3xl mx-auto">
-    <h1 class="text-2xl font-bold mb-6">最新文章</h1>
-    
-    <p v-if="fetching" class="text-gray-500">加载中...</p>
-    <p v-else-if="error" class="text-red-500">加载失败: {{ error.message }}</p>
-    <div v-else class="space-y-4">
-      <ArticleCard 
-        v-for="article in data?.articles || []" 
-        :key="article.id" 
-        :article="article" 
-      />
-    </div>
-  </div>
-</template>
-```
+<div class="min-h-screen bg-white">
+  <div class="mx-auto max-w-3xl px-6 py-12">
+    <header class="mb-12">
+      <h1 class="mb-2 text-4xl font-light">{m.publish_article()}</h1>
+      <p class="text-gray-500">{m.share_thoughts()}</p>
+    </header>
 
-### 16.3 文章卡片组件
-
-```vue
-<!-- frontend/app/components/ArticleCard.vue -->
-<script setup lang="ts">
-import { getArticleWithCache } from '~/composables/useCache'
-import { formatEther } from 'viem'
-import { ThumbsUp, ThumbsDown } from 'lucide-vue-next'
-
-interface Article {
-  id: string
-  arweaveId: string
-  author: { id: string }
-  likes: number
-  dislikes: number
-  totalTips: bigint
-  createdAt: string
-}
-
-const props = defineProps<{
-  article: Article
-}>()
-
-const metadata = ref<{ title: string; summary: string } | null>(null)
-
-onMounted(async () => {
-  try {
-    metadata.value = await getArticleWithCache(props.article.arweaveId)
-  } catch (error) {
-    console.error('Failed to load article metadata:', error)
-  }
-})
-</script>
-
-<template>
-  <NuxtLink 
-    :to="`/article/${article.id}`" 
-    class="block p-6 bg-white rounded-lg border hover:shadow-md transition"
-  >
-    <template v-if="metadata">
-      <h2 class="text-xl font-semibold mb-2">{{ metadata.title }}</h2>
-      <p class="text-gray-600 mb-4 line-clamp-2">{{ metadata.summary }}</p>
-    </template>
-    <div v-else class="animate-pulse">
-      <div class="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-      <div class="h-4 bg-gray-200 rounded w-full mb-4"></div>
-    </div>
-    
-    <div class="flex items-center justify-between text-sm text-gray-500">
-      <span>
-        {{ article.author.id.slice(0, 6) }}...{{ article.author.id.slice(-4) }}
-      </span>
-      
-      <div class="flex items-center gap-4">
-        <span class="flex items-center gap-1">
-          <ThumbsUp :size="16" />
-          {{ article.likes }}
-        </span>
-        <span class="flex items-center gap-1">
-          <ThumbsDown :size="16" />
-          {{ article.dislikes }}
-        </span>
-        <span v-if="article.totalTips > 0n" class="text-green-600">
-          {{ formatEther(article.totalTips) }} ETH
-        </span>
-      </div>
-    </div>
-  </NuxtLink>
-</template>
-```
-
-### 16.4 发布文章页面
-
-```vue
-<!-- frontend/app/pages/article/new.vue -->
-<script setup lang="ts">
-import { publishArticle } from '~/composables/usePublish'
-
-const router = useRouter()
-
-const title = ref('')
-const summary = ref('')
-const content = ref('')
-const tags = ref('')
-const categoryId = ref(1n)
-const royaltyBps = ref(500n)  // 5%
-const coverImage = ref<File | null>(null)
-const isPublishing = ref(false)
-const error = ref('')
-
-async function handleSubmit() {
-  if (!title.value || !content.value) {
-    error.value = '请填写标题和内容'
-    return
-  }
-  
-  isPublishing.value = true
-  error.value = ''
-  
-  try {
-    const { arweaveId } = await publishArticle(
-      title.value,
-      summary.value,
-      content.value,
-      coverImage.value,
-      tags.value.split(',').map(t => t.trim()).filter(Boolean),
-      categoryId.value,
-      royaltyBps.value
-    )
-    
-    // 跳转到文章页面
-    router.push(`/article/${arweaveId}`)
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '发布失败'
-  } finally {
-    isPublishing.value = false
-  }
-}
-
-function handleImageChange(e: Event) {
-  const input = e.target as HTMLInputElement
-  coverImage.value = input.files?.[0] || null
-}
-</script>
-
-<template>
-  <div class="max-w-3xl mx-auto">
-    <h1 class="text-2xl font-bold mb-6">发布文章</h1>
-    
-    <div v-if="error" class="p-4 bg-red-100 text-red-600 rounded mb-4">{{ error }}</div>
-    
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-8">
+      <!-- Title -->
       <div>
-        <label class="block text-sm font-medium mb-2">标题</label>
-        <input 
-          v-model="title"
-          type="text" 
-          class="w-full px-4 py-2 border rounded-lg"
-          placeholder="文章标题"
+        <label for="title" class="mb-2 block text-sm font-medium">
+          {m.title()} *
+        </label>
+        <input
+          id="title"
+          bind:value={title}
+          type="text"
+          placeholder={m.input_article_title()}
+          class="w-full rounded-lg border px-4 py-3"
+          disabled={isSubmitting}
         />
       </div>
-      
+
+      <!-- Content (Markdown) -->
       <div>
-        <label class="block text-sm font-medium mb-2">摘要</label>
-        <textarea 
-          v-model="summary"
-          class="w-full px-4 py-2 border rounded-lg"
-          rows="2"
-          placeholder="简短描述"
+        <label for="content" class="mb-2 block text-sm font-medium">
+          {m.content()} ({m.markdown_supported()}) *
+        </label>
+        <textarea
+          id="content"
+          bind:value={content}
+          placeholder={m.write_article_here()}
+          rows="12"
+          class="w-full rounded-lg border px-4 py-3 font-mono text-sm"
+          disabled={isSubmitting}
         ></textarea>
       </div>
-      
-      <div>
-        <label class="block text-sm font-medium mb-2">内容 (Markdown)</label>
-        <textarea 
-          v-model="content"
-          class="w-full px-4 py-2 border rounded-lg font-mono"
-          rows="15"
-          placeholder="使用 Markdown 格式编写..."
-        ></textarea>
-      </div>
-      
-      <div>
-        <label class="block text-sm font-medium mb-2">封面图片</label>
-        <input 
-          type="file" 
-          accept="image/*"
-          class="w-full"
-          @change="handleImageChange"
-        />
-      </div>
-      
-      <div>
-        <label class="block text-sm font-medium mb-2">标签（逗号分隔）</label>
-        <input 
-          v-model="tags"
-          type="text" 
-          class="w-full px-4 py-2 border rounded-lg"
-          placeholder="Web3, 区块链, 教程"
-        />
-      </div>
-      
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium mb-2">分类</label>
-          <select v-model="categoryId" class="w-full px-4 py-2 border rounded-lg">
-            <option :value="1n">技术</option>
-            <option :value="2n">生活</option>
-            <option :value="3n">观点</option>
-          </select>
+
+      <!-- Status Message -->
+      {#if submitStatus !== 'idle'}
+        <div class="rounded-lg px-4 py-3 text-sm"
+          class:bg-green-50={submitStatus === 'success'}
+          class:bg-red-50={submitStatus === 'error'}
+          class:bg-blue-50={submitStatus === 'uploading'}
+        >
+          {statusMessage}
         </div>
-        
-        <div>
-          <label class="block text-sm font-medium mb-2">版税比例</label>
-          <select v-model="royaltyBps" class="w-full px-4 py-2 border rounded-lg">
-            <option :value="0n">0%</option>
-            <option :value="250n">2.5%</option>
-            <option :value="500n">5%</option>
-            <option :value="1000n">10%</option>
-          </select>
-        </div>
-      </div>
-      
-      <button 
+      {/if}
+
+      <!-- Submit Button -->
+      <button
         type="submit"
-        class="w-full py-3 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
-        :disabled="isPublishing"
+        disabled={isSubmitting}
+        class="w-full rounded-lg bg-gray-900 px-6 py-3 font-medium text-white disabled:opacity-50"
       >
-        {{ isPublishing ? '发布中...' : '发布文章' }}
+        {isSubmitting ? m.uploading_to_arweave() : m.publish_article()}
       </button>
     </form>
   </div>
-</template>
+</div>
+```
+
+功能：
+- 使用 Svelte 5 runes (`$state`, `$derived`) 管理表单状态
+- 支持 Markdown 内容编辑
+- 封面图片上传预览
+- 分类选择器组件 (SearchSelect)
+- 完整的发布流程：上传到 Arweave → 发布到合约
+- i18n 国际化支持
+- 合约错误处理与友好提示
+
+### 16.3 发布流程编排
+
+> 📁 **实现文件**: [frontend/src/lib/publish.ts](../frontend/src/lib/publish.ts)
+
+```typescript
+// frontend/src/lib/publish.ts
+import { uploadArticle, uploadImage } from '$lib/arweave';
+import { publishToContract } from '$lib/contracts';
+
+export interface PublishArticleParams {
+  title: string;
+  summary: string;
+  content: string;
+  tags: string[];
+  coverImage: File | null;
+  categoryId: bigint;
+  royaltyBps: bigint;
+  originalAuthor?: string;
+}
+
+export async function publishArticle(params: PublishArticleParams) {
+  const { title, summary, content, tags, coverImage, categoryId, royaltyBps, originalAuthor = '' } = params;
+
+  // Step 1: Upload cover image if provided
+  let coverImageHash: string | undefined;
+  if (coverImage) {
+    coverImageHash = await uploadImage(coverImage, 'devnet');
+  }
+
+  // Step 2: Upload article to Arweave
+  const arweaveId = await uploadArticle({
+    title: title.trim(),
+    summary: summary.trim(),
+    content: content.trim(),
+    coverImage: coverImageHash,
+    tags
+  }, 'devnet');
+
+  // Step 3: Publish to blockchain
+  const txHash = await publishToContract(
+    arweaveId,
+    categoryId,
+    royaltyBps,
+    originalAuthor,
+    title.trim(),
+    coverImageHash || ''
+  );
+
+  return { arweaveId, txHash };
+}
 ```
 
 ---
 
-## 前端集成指南（原第6章，保留作为参考）
+## 前端集成指南
 
 ### 合约 ABI 导出
+
+SvelteKit 前端在 `$lib/contracts.ts` 中直接定义了所需的 ABI，无需单独导出文件。如果需要完整 ABI：
 
 ```bash
 # 导出 ABI 文件
@@ -1181,10 +1448,8 @@ forge build
 # - out/BlogPaymaster.sol/BlogPaymaster.json
 # - out/SessionKeyManager.sol/SessionKeyManager.json
 
-# 提取纯 ABI
-cat out/BlogHub.sol/BlogHub.json | jq '.abi' > ../frontend/src/abi/BlogHub.json
-cat out/BlogPaymaster.sol/BlogPaymaster.json | jq '.abi' > ../frontend/src/abi/BlogPaymaster.json
-cat out/SessionKeyManager.sol/SessionKeyManager.json | jq '.abi' > ../frontend/src/abi/SessionKeyManager.json
+# 提取纯 ABI (可选)
+cat out/BlogHub.sol/BlogHub.json | jq '.abi' > ../frontend/src/lib/abi/BlogHub.json
 ```
 
 ---
@@ -1419,10 +1684,11 @@ cast estimate <CONTRACT> <FUNCTION_SIG> <ARGS> --rpc-url <RPC_URL>
 
 ---
 
-*文档版本: 2.0.0*
-*最后更新: 2025-11*
+*文档版本: 3.0.0*
+*最后更新: 2025-12*
 
 **更新日志:**
+- v3.0.0: 前端框架从 Nuxt.js 迁移到 SvelteKit；更新第13-16章为 SvelteKit 实现；使用 Svelte 5 runes 语法；集成 Paraglide i18n 国际化；使用 Tailwind CSS v4；简化依赖（移除 wagmi，直接使用 viem）
 - v2.0.0: 完整重构文档结构；新增 SubSquid 索引开发指南（第6-9章）；新增 Irys+Arweave 存储集成指南（第10-12章）；新增 Nuxt.js 前端开发指南（第13-16章）；添加项目进度概览
 - v1.2.0: 更新合约地址（BlogHub Proxy: 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9）；更新函数选择器；移除 withdraw/accountBalance 相关功能（打赏现为直接转账）
 - v1.1.0: `publish` 函数新增 `originalAuthor` 参数，支持代发文章记录真实作者

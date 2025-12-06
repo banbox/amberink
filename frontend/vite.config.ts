@@ -9,7 +9,7 @@ export default defineConfig({
 		tailwindcss(),
 		nodePolyfills({
 			// 只 polyfill 需要的模块
-			include: ['buffer', 'events', 'stream', 'util', 'process']
+			include: ['buffer', 'events', 'stream', 'util', 'process', 'crypto']
 		}),
 		sveltekit(),
 		paraglideVitePlugin({
