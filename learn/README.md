@@ -598,3 +598,7 @@ Claude：重点更新了`frontend\src\lib\arweave`下的几个文件
 #### 2025-12-07 19:00  智能合约更新
 文章内容和图片等的存储改为使用irys的链上可变文件夹，前端frontend已完成修改，自动对封面图片、文章内容，文章内图片等进行关联；所以智能合约中无需再存储coverImage，只存储文章ID即arweaveHash即可，文章固定子路径index.md，封面图片固定coverImage；合约中的uri也需要更新，使用irys的预览URL格式；请阅读 doc\irys\features\onchain-folders.mdx ，和前端相关内容，然后对 contracts\src\BlogHub.sol 中的相关代码进行修改，无需考虑历史兼容性；然后对智能合约测试代码，以及部署代码等相关的地方也进行修改，最后对squid中相关的索引等内容一并进行更新  
 Claude: 已更新contracts和squid中的若干文件
+
+#### 2025-12-07 19:30  前端剩余文件更新
+README.md  frontend\README.md  当前智能合约中删除了冗余的coverImage字段，每个文章使用链上可变文件夹；前端的 frontend\src\lib\arweave 中已经进行了更新，不过外部的publish.ts和发布页面可能尚未修改，依然使用旧的智能合约函数签名。请阅读当前智能合约的abi，然后对前端项目中包括文章列表，SubSquid索引接口，文章发布，文章详情等部分都进行排查，使用正确的格式进行保存、索引和展示。 doc\irys\features\onchain-folders.mdx
+

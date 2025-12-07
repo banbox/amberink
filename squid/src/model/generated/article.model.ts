@@ -13,7 +13,7 @@ export class Article {
     id!: string
 
     @StringColumn_({nullable: false})
-    arweaveId!: string  // Irys 可变文件夹的 manifest ID（文章内容: index.md，封面图片: coverImage）
+    arweaveId!: string
 
     @Index_()
     @ManyToOne_(() => User, {nullable: true})

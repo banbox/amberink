@@ -5,6 +5,7 @@ import { gql } from '@urql/svelte';
 
 /**
  * Get articles with pagination and optional category filter
+ * Note: coverImage is no longer stored on-chain, use arweaveId/coverImage path to access cover
  */
 export const ARTICLES_QUERY = gql`
 	query Articles($limit: Int!, $offset: Int!, $categoryId: BigInt) {
@@ -21,7 +22,6 @@ export const ARTICLES_QUERY = gql`
 			}
 			originalAuthor
 			title
-			coverImage
 			categoryId
 			likes
 			dislikes
@@ -35,6 +35,7 @@ export const ARTICLES_QUERY = gql`
 
 /**
  * Get all articles (no category filter)
+ * Note: coverImage is no longer stored on-chain, use arweaveId/coverImage path to access cover
  */
 export const ALL_ARTICLES_QUERY = gql`
 	query AllArticles($limit: Int!, $offset: Int!) {
@@ -46,7 +47,6 @@ export const ALL_ARTICLES_QUERY = gql`
 			}
 			originalAuthor
 			title
-			coverImage
 			categoryId
 			likes
 			dislikes
@@ -80,15 +80,18 @@ export const TOTAL_ARTICLE_COUNT_QUERY = gql`
 	}
 `;
 
+/**
+ * Article data from GraphQL
+ * Note: Cover image is accessed via arweaveId/coverImage path in Irys mutable folder
+ */
 export interface ArticleData {
 	id: string;
-	arweaveId: string;
+	arweaveId: string;  // Irys mutable folder manifest ID
 	author: {
 		id: string;
 	};
 	originalAuthor: string | null;
 	title: string;
-	coverImage: string | null;
 	categoryId: string;
 	likes: number;
 	dislikes: number;
@@ -110,6 +113,7 @@ export interface ArticleCountResult {
 
 /**
  * Get single article by ID
+ * Note: coverImage is no longer stored on-chain, use arweaveId/coverImage path to access cover
  */
 export const ARTICLE_BY_ID_QUERY = gql`
 	query ArticleById($id: String!) {
@@ -121,7 +125,6 @@ export const ARTICLE_BY_ID_QUERY = gql`
 			}
 			originalAuthor
 			title
-			coverImage
 			categoryId
 			royaltyBps
 			likes
@@ -134,15 +137,18 @@ export const ARTICLE_BY_ID_QUERY = gql`
 	}
 `;
 
+/**
+ * Article detail data from GraphQL
+ * Note: Cover image is accessed via arweaveId/coverImage path in Irys mutable folder
+ */
 export interface ArticleDetailData {
 	id: string;
-	arweaveId: string;
+	arweaveId: string;  // Irys mutable folder manifest ID
 	author: {
 		id: string;
 	};
 	originalAuthor: string | null;
 	title: string;
-	coverImage: string | null;
 	categoryId: string;
 	royaltyBps: number;
 	likes: number;

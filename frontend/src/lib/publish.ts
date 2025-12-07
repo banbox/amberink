@@ -5,9 +5,7 @@
 
 import {
 	uploadArticleFolder,
-	uploadArticleFolderWithSessionKey,
-	getCoverImageUrl,
-	ARTICLE_COVER_IMAGE_FILE
+	uploadArticleFolderWithSessionKey
 } from '$lib/arweave';
 import type { ArticleFolderUploadParams } from '$lib/arweave';
 import { publishToContract, publishToContractWithSessionKey } from '$lib/contracts';
@@ -91,23 +89,18 @@ export async function publishArticle(params: PublishArticleParams): Promise<Publ
 		console.log(`Article folder uploaded: ${folderResult.manifestId}`);
 
 		// 使用 manifest ID 作为 arweaveId（文章的唯一标识）
+		// 封面图片通过 arweaveId/coverImage 路径访问（在 Irys 可变文件夹内）
 		const arweaveId = folderResult.manifestId;
 
-		// 封面图片 URL：使用文件夹内的 coverImage 路径
-		// 格式: manifestId/coverImage
-		const coverImageForContract = folderResult.coverImageTxId
-			? `${arweaveId}/${ARTICLE_COVER_IMAGE_FILE}`
-			: '';
-
 		// Step 2: Publish to blockchain
+		// 注意：智能合约不再存储 coverImage 字段，封面图片通过 arweaveId/coverImage 路径访问
 		console.log('Step 2: Publishing to blockchain...');
 		const txHash = await publishToContract(
 			arweaveId,
 			categoryId,
 			royaltyBps,
 			originalAuthor,
-			title.trim(),
-			coverImageForContract
+			title.trim()
 		);
 		console.log(`Article published to blockchain: ${txHash}`);
 
@@ -163,14 +156,11 @@ async function publishArticleWithSessionKeyInternal(
 	console.log(`Article folder uploaded: ${folderResult.manifestId}`);
 
 	// 使用 manifest ID 作为 arweaveId（文章的唯一标识）
+	// 封面图片通过 arweaveId/coverImage 路径访问（在 Irys 可变文件夹内）
 	const arweaveId = folderResult.manifestId;
 
-	// 封面图片 URL：使用文件夹内的 coverImage 路径
-	const coverImageForContract = folderResult.coverImageTxId
-		? `${arweaveId}/${ARTICLE_COVER_IMAGE_FILE}`
-		: '';
-
 	// Step 2: Publish to blockchain with session key
+	// 注意：智能合约不再存储 coverImage 字段，封面图片通过 arweaveId/coverImage 路径访问
 	console.log('Step 2: Publishing to blockchain with Session Key...');
 	const txHash = await publishToContractWithSessionKey(
 		sessionKey,
@@ -178,8 +168,7 @@ async function publishArticleWithSessionKeyInternal(
 		categoryId,
 		royaltyBps,
 		originalAuthor,
-		title.trim(),
-		coverImageForContract
+		title.trim()
 	);
 	console.log(`Article published to blockchain: ${txHash}`);
 

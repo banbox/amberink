@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
-	import { getArweaveGateways } from '$lib/config';
+	import { getCoverImageUrl } from '$lib/arweave';
 	import { getArticleWithCache } from '$lib/arweave/cache';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
@@ -48,14 +48,13 @@
 		return (m as unknown as Record<string, () => string>)[key]?.() || key;
 	}
 
-	// Get cover image URL
-	function getCoverUrl(coverImage: string | null): string | null {
-		if (!coverImage) return null;
-		const gateways = getArweaveGateways();
-		return `${gateways[0]}/${coverImage}`;
+	// Get cover image URL from Irys mutable folder
+	// Cover image is accessed via arweaveId/coverImage path
+	function getCoverUrl(arweaveId: string): string {
+		return getCoverImageUrl(arweaveId, true);
 	}
 
-	const coverUrl = $derived(getCoverUrl(article.coverImage));
+	const coverUrl = $derived(getCoverUrl(article.arweaveId));
 	const categoryName = $derived(getCategoryName(article.categoryId));
 	const authorDisplay = $derived(article.originalAuthor || shortAddress(article.author.id));
 	const authorAddress = $derived(article.author.id);
@@ -90,17 +89,21 @@
 		{m.back_to_home?.() || 'Back to Home'}
 	</a>
 
-	<!-- Cover Image -->
-	{#if coverUrl}
-		<div class="mb-8 overflow-hidden rounded-2xl">
-			<img
-				src={coverUrl}
-				alt={article.title}
-				class="h-auto w-full object-cover"
-				style="max-height: 480px;"
-			/>
-		</div>
-	{/if}
+	<!-- Cover Image (loaded from Irys mutable folder: arweaveId/coverImage) -->
+	<div class="mb-8 overflow-hidden rounded-2xl" id="cover-container">
+		<img
+			src={coverUrl}
+			alt={article.title}
+			class="h-auto w-full object-cover"
+			style="max-height: 480px;"
+			onerror={(e) => {
+				// Hide container if cover image doesn't exist
+				const target = e.currentTarget as HTMLImageElement;
+				const container = target.parentElement;
+				if (container) container.style.display = 'none';
+			}}
+		/>
+	</div>
 
 	<!-- Header -->
 	<header class="mb-8">

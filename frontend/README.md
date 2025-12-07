@@ -17,6 +17,7 @@ npm run build
 application-id: dblog
 creator: address
 ```
+每篇文章对应一个irys的可变链上文件夹；文章内容固定子路径index.md；封面图固定coverImage
 
 ## 安全风险
 临时密钥存储在localstorage，同域名下其他页面可读取

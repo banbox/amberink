@@ -182,8 +182,7 @@ const BLOGHUB_ABI = [
 			{ name: '_categoryId', type: 'uint64' },
 			{ name: '_royaltyBps', type: 'uint96' },
 			{ name: '_originalAuthor', type: 'string' },
-			{ name: '_title', type: 'string' },
-			{ name: '_coverImage', type: 'string' }
+			{ name: '_title', type: 'string' }
 		],
 		outputs: [{ type: 'uint256' }],
 		stateMutability: 'nonpayable'
@@ -216,17 +215,12 @@ const BLOGHUB_ABI = [
 		type: 'function',
 		inputs: [{ name: '_articleId', type: 'uint256' }],
 		outputs: [
-			{ name: 'arweaveId', type: 'string' },
+			{ name: 'arweaveHash', type: 'string' },
 			{ name: 'author', type: 'address' },
-			{ name: 'categoryId', type: 'uint64' },
-			{ name: 'royaltyBps', type: 'uint96' },
 			{ name: 'originalAuthor', type: 'string' },
 			{ name: 'title', type: 'string' },
-			{ name: 'coverImage', type: 'string' },
-			{ name: 'createdAt', type: 'uint256' },
-			{ name: 'likes', type: 'uint256' },
-			{ name: 'dislikes', type: 'uint256' },
-			{ name: 'totalTips', type: 'uint256' }
+			{ name: 'categoryId', type: 'uint64' },
+			{ name: 'timestamp', type: 'uint64' }
 		],
 		stateMutability: 'view'
 	},
@@ -241,7 +235,6 @@ const BLOGHUB_ABI = [
 			{ name: '_royaltyBps', type: 'uint96' },
 			{ name: '_originalAuthor', type: 'string' },
 			{ name: '_title', type: 'string' },
-			{ name: '_coverImage', type: 'string' },
 			{ name: 'deadline', type: 'uint256' },
 			{ name: 'signature', type: 'bytes' }
 		],
@@ -370,12 +363,11 @@ async function getWalletClient() {
 
 /**
  * Publish article to BlogHub contract
- * @param arweaveId - Arweave hash of article content
+ * @param arweaveId - Irys mutable folder manifest ID (content at index.md, cover at coverImage)
  * @param categoryId - Category ID (0-based)
  * @param royaltyBps - Royalty basis points (0-10000, where 100 = 1%)
  * @param originalAuthor - Original author name (optional, for repost scenarios)
  * @param title - Article title (max 128 bytes)
- * @param coverImage - Cover image Arweave hash (optional, max 64 bytes)
  * @returns Transaction hash
  */
 export async function publishToContract(
@@ -383,8 +375,7 @@ export async function publishToContract(
 	categoryId: bigint,
 	royaltyBps: bigint,
 	originalAuthor: string = '',
-	title: string = '',
-	coverImage: string = ''
+	title: string = ''
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required');
@@ -398,16 +389,12 @@ export async function publishToContract(
 		throw new Error('Royalty percentage cannot exceed 100% (10000 basis points)');
 	}
 
-	if (originalAuthor && originalAuthor.length > 64) {
-		throw new Error('Original author name is too long (max 64 characters)');
+	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) {
+		throw new Error('Original author name is too long (max 64 bytes)');
 	}
 
 	if (title && new TextEncoder().encode(title).length > 128) {
 		throw new Error('Title is too long (max 128 bytes)');
-	}
-
-	if (coverImage && coverImage.length > 64) {
-		throw new Error('Cover image hash is too long (max 64 characters)');
 	}
 
 	try {
@@ -418,7 +405,7 @@ export async function publishToContract(
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'publish',
-			args: [arweaveId, categoryId, royaltyBps, originalAuthor, title, coverImage]
+			args: [arweaveId, categoryId, royaltyBps, originalAuthor, title]
 		});
 
 		console.log(`Article published to contract. Tx: ${txHash}`);
@@ -514,19 +501,15 @@ export async function followUser(targetAddress: `0x${string}`, isFollow: boolean
 
 /**
  * Article data structure returned from contract
+ * Note: Cover image is accessed via arweaveId/coverImage path in Irys mutable folder
  */
 export interface ArticleData {
-	arweaveId: string;
+	arweaveHash: string;  // Irys mutable folder manifest ID
 	author: `0x${string}`;
-	categoryId: bigint;
-	royaltyBps: bigint;
 	originalAuthor: string;
 	title: string;
-	coverImage: string;
-	createdAt: bigint;
-	likes: bigint;
-	dislikes: bigint;
-	totalTips: bigint;
+	categoryId: bigint;
+	timestamp: bigint;
 }
 
 /**
@@ -551,31 +534,21 @@ export async function getArticle(articleId: bigint): Promise<ArticleData> {
 
 		// Result is a tuple, map to named object
 		const [
-			arweaveId,
+			arweaveHash,
 			author,
-			categoryId,
-			royaltyBps,
 			originalAuthor,
 			title,
-			coverImage,
-			createdAt,
-			likes,
-			dislikes,
-			totalTips
-		] = result as [string, `0x${string}`, bigint, bigint, string, string, string, bigint, bigint, bigint, bigint];
+			categoryId,
+			timestamp
+		] = result as [string, `0x${string}`, string, string, bigint, bigint];
 
 		return {
-			arweaveId,
+			arweaveHash,
 			author,
-			categoryId,
-			royaltyBps,
 			originalAuthor,
 			title,
-			coverImage,
-			createdAt,
-			likes,
-			dislikes,
-			totalTips
+			categoryId,
+			timestamp
 		};
 	} catch (error) {
 		console.error('Error reading article:', error);
@@ -595,7 +568,6 @@ export async function getArticle(articleId: bigint): Promise<ArticleData> {
  * @param royaltyBps - Royalty basis points
  * @param originalAuthor - Original author name
  * @param title - Article title
- * @param coverImage - Cover image hash
  * @param deadline - Signature deadline timestamp
  */
 async function createPublishSignature(
@@ -605,7 +577,6 @@ async function createPublishSignature(
 	royaltyBps: bigint,
 	originalAuthor: string,
 	title: string,
-	coverImage: string,
 	deadline: bigint
 ): Promise<`0x${string}`> {
 	const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
@@ -614,13 +585,13 @@ async function createPublishSignature(
 	const callData = encodeFunctionData({
 		abi: BLOGHUB_ABI,
 		functionName: 'publish',
-		args: [arweaveId, categoryId, royaltyBps, originalAuthor, title, coverImage]
+		args: [arweaveId, categoryId, royaltyBps, originalAuthor, title]
 	});
 
 	// Create message hash: keccak256(owner, target, selector, callData, value, deadline, nonce)
 	// Note: This should match the SessionKeyManager's signature verification
 	const blogHub = getBlogHubContractAddress();
-	const publishSelector = '0xacb9420e' as `0x${string}`;
+	const publishSelector = '0xc7e76bf0' as `0x${string}`; // publish(string,uint64,uint96,string,string)
 	
 	// Create the message to sign (simplified - actual implementation depends on SessionKeyManager)
 	const messageHash = keccak256(
@@ -640,12 +611,11 @@ async function createPublishSignature(
 /**
  * Publish article to contract using Session Key (no MetaMask interaction needed)
  * @param sessionKey - Stored session key data
- * @param arweaveId - Arweave hash of article content
+ * @param arweaveId - Irys mutable folder manifest ID (content at index.md, cover at coverImage)
  * @param categoryId - Category ID (0-based)
  * @param royaltyBps - Royalty basis points (0-10000, where 100 = 1%)
  * @param originalAuthor - Original author name (optional)
  * @param title - Article title (max 128 bytes)
- * @param coverImage - Cover image Arweave hash (optional, max 64 bytes)
  * @returns Transaction hash
  */
 export async function publishToContractWithSessionKey(
@@ -654,8 +624,7 @@ export async function publishToContractWithSessionKey(
 	categoryId: bigint,
 	royaltyBps: bigint,
 	originalAuthor: string = '',
-	title: string = '',
-	coverImage: string = ''
+	title: string = ''
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required');
@@ -669,16 +638,12 @@ export async function publishToContractWithSessionKey(
 		throw new Error('Royalty percentage cannot exceed 100% (10000 basis points)');
 	}
 
-	if (originalAuthor && originalAuthor.length > 64) {
-		throw new Error('Original author name is too long (max 64 characters)');
+	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) {
+		throw new Error('Original author name is too long (max 64 bytes)');
 	}
 
 	if (title && new TextEncoder().encode(title).length > 128) {
 		throw new Error('Title is too long (max 128 bytes)');
-	}
-
-	if (coverImage && coverImage.length > 64) {
-		throw new Error('Cover image hash is too long (max 64 characters)');
 	}
 
 	// Check session key validity
@@ -708,7 +673,6 @@ export async function publishToContractWithSessionKey(
 			royaltyBps,
 			originalAuthor,
 			title,
-			coverImage,
 			deadline
 		);
 
@@ -725,7 +689,6 @@ export async function publishToContractWithSessionKey(
 				royaltyBps,
 				originalAuthor,
 				title,
-				coverImage,
 				deadline,
 				signature
 			]

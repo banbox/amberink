@@ -2,7 +2,7 @@
 	import type { ArticleData } from '$lib/graphql';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import * as m from '$lib/paraglide/messages';
-	import { getArweaveGateways } from '$lib/config';
+	import { getCoverImageUrl } from '$lib/arweave';
 
 	interface Props {
 		article: ArticleData;
@@ -44,14 +44,13 @@
 		return (m as unknown as Record<string, () => string>)[key]?.() || key;
 	}
 
-	// Get cover image URL
-	function getCoverUrl(coverImage: string | null): string | null {
-		if (!coverImage) return null;
-		const gateways = getArweaveGateways();
-		return `${gateways[0]}/${coverImage}`;
+	// Get cover image URL from Irys mutable folder
+	// Cover image is accessed via arweaveId/coverImage path
+	function getCoverUrl(arweaveId: string): string {
+		return getCoverImageUrl(arweaveId, true);
 	}
 
-	const coverUrl = $derived(getCoverUrl(article.coverImage));
+	const coverUrl = $derived(getCoverUrl(article.arweaveId));
 	const categoryName = $derived(getCategoryName(article.categoryId));
 	const authorDisplay = $derived(article.originalAuthor || shortAddress(article.author.id));
 </script>
@@ -60,27 +59,32 @@
 	href="/a/{article.id}"
 	class="group block overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:border-gray-300 hover:shadow-md"
 >
-	<!-- Cover Image -->
+	<!-- Cover Image (loaded from Irys mutable folder: arweaveId/coverImage) -->
 	<div class="relative aspect-video overflow-hidden bg-gray-100">
-		{#if coverUrl}
-			<img
-				src={coverUrl}
-				alt={article.title}
-				class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-				loading="lazy"
-			/>
-		{:else}
-			<div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-				<svg class="h-12 w-12 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="1.5"
-						d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-					/>
-				</svg>
-			</div>
-		{/if}
+		<img
+			src={coverUrl}
+			alt={article.title}
+			class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+			loading="lazy"
+			onerror={(e) => {
+				// Hide image and show fallback on error
+				const target = e.currentTarget as HTMLImageElement;
+				target.style.display = 'none';
+				const fallback = target.nextElementSibling as HTMLElement;
+				if (fallback) fallback.style.display = 'flex';
+			}}
+		/>
+		<!-- Fallback when cover image doesn't exist or fails to load -->
+		<div class="hidden h-full w-full items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100" style="display: none;">
+			<svg class="h-12 w-12 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="1.5"
+					d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+				/>
+			</svg>
+		</div>
 
 		<!-- Category Badge -->
 		{#if categoryName}
