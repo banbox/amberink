@@ -104,7 +104,8 @@ export {
 	ARTICLE_INDEX_FILE,
 	ARTICLE_COVER_IMAGE_FILE,
 	downloadManifest,
-	createArticleFolderManifest,
+	generateArticleFolderManifest,
+	createArticleFolderManifest, // @deprecated - 使用 generateArticleFolderManifest
 	appendToManifest,
 	uploadManifest,
 	uploadUpdatedManifest,

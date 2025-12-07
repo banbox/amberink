@@ -50,7 +50,29 @@ export async function downloadManifest(manifestId: string): Promise<IrysManifest
 }
 
 /**
- * 创建新的文章文件夹 manifest
+ * 使用 Irys SDK 生成文章文件夹 manifest
+ * @param uploader - Irys uploader 实例
+ * @param files - 文件映射 (文件名 -> 交易ID)
+ * @param indexFile - 可选的索引文件路径
+ * @returns SDK 生成的 manifest 对象（可直接 JSON.stringify 后上传）
+ */
+export async function generateArticleFolderManifest(
+	uploader: IrysUploader | SessionKeyIrysUploader,
+	files: Map<string, string>,
+	indexFile?: string
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+	// 使用 Irys SDK 的 generateFolder 方法生成正确格式的 manifest
+	const manifest = await uploader.uploader.generateFolder({ 
+		items: files,
+		indexFile 
+	});
+	return manifest;
+}
+
+/**
+ * 手动创建文章文件夹 manifest（仅用于向后兼容或特殊情况）
+ * @deprecated 推荐使用 generateArticleFolderManifest
  * @param files - 文件映射 (文件名 -> 交易ID)
  */
 export function createArticleFolderManifest(files: Map<string, string>): IrysManifest {
@@ -91,12 +113,13 @@ export function appendToManifest(
 /**
  * 上传 manifest 到 Irys（创建新文件夹）
  * @param uploader - Irys uploader 实例
- * @param manifest - Manifest 对象
+ * @param manifest - Manifest 对象（可以是 SDK 生成的或手动创建的）
  * @param customTags - 额外的自定义标签
  */
 export async function uploadManifest(
 	uploader: IrysUploader | SessionKeyIrysUploader,
-	manifest: IrysManifest,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	manifest: IrysManifest | any,
 	customTags: IrysTag[] = []
 ): Promise<string> {
 	const appName = getAppName();
@@ -118,13 +141,14 @@ export async function uploadManifest(
 /**
  * 上传更新的 manifest（可变文件夹）
  * @param uploader - Irys uploader 实例
- * @param manifest - 更新后的 Manifest 对象
+ * @param manifest - 更新后的 Manifest 对象（可以是 SDK 生成的或手动创建的）
  * @param originalManifestId - 原始 manifest ID（用于 Root-TX 标签）
  * @param customTags - 额外的自定义标签
  */
 export async function uploadUpdatedManifest(
 	uploader: IrysUploader | SessionKeyIrysUploader,
-	manifest: IrysManifest,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	manifest: IrysManifest | any,
 	originalManifestId: string,
 	customTags: IrysTag[] = []
 ): Promise<string> {

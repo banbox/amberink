@@ -602,3 +602,12 @@ Claude: 已更新contracts和squid中的若干文件
 #### 2025-12-07 19:30  前端剩余文件更新
 README.md  frontend\README.md  当前智能合约中删除了冗余的coverImage字段，每个文章使用链上可变文件夹；前端的 frontend\src\lib\arweave 中已经进行了更新，不过外部的publish.ts和发布页面可能尚未修改，依然使用旧的智能合约函数签名。请阅读当前智能合约的abi，然后对前端项目中包括文章列表，SubSquid索引接口，文章发布，文章详情等部分都进行排查，使用正确的格式进行保存、索引和展示。 doc\irys\features\onchain-folders.mdx
 
+#### 2025-12-07 19:50  小文件跳过irys余额检查
+当前存储文件使用irys，对于100KB以下的文件免费；但当前发布文章时，虽然是小图片，依然走了充值的逻辑，请帮我增加一个配置，记录免费的最大文件大小，固定设为100KB；发布文章时检查图片和文章内容，当都不超过限制时，忽略irys的余额检查；sepolia的余额检查照旧  
+Claude: 修改完成
+
+#### 2025-12-07 20:07  链上文件夹未生效检测
+README.md  doc\Developers.md  当前已支持了使用irys的链上可更新文件夹管理发布的文章内容和封面等文件，不过刚才测试并未如预期进行。
+[log...] 上面是浏览器控制台输出的日志，总共Metamask弹出了4次； 查看日志中的相关代码行，实际并未正确使用链上文件夹，请阅读doc\irys\features\onchain-folders.mdx 了解正确用法，然后在frontend\src\lib下检索相关的代码文件，找出其中错误用法并进行纠正。  
+Claude：修改完成
+

@@ -11,7 +11,7 @@ import type { ArticleMetadata, IrysTag, IrysNetwork, ArticleFolderUploadParams, 
 import { getAppName, getAppVersion } from '$lib/config';
 import type { StoredSessionKey } from '$lib/sessionKey';
 import {
-	createArticleFolderManifest,
+	generateArticleFolderManifest,
 	uploadManifest,
 	ARTICLE_INDEX_FILE,
 	ARTICLE_COVER_IMAGE_FILE
@@ -352,15 +352,16 @@ export async function uploadArticleFolderWithUploader(
 		coverImageTxId = await uploadCoverImageFile(uploader, coverImage);
 	}
 
-	// Step 3: 创建文件夹 manifest
-	console.log('Creating article folder manifest...');
+	// Step 3: 使用 Irys SDK 生成文件夹 manifest
+	console.log('Creating article folder manifest using Irys SDK...');
 	const files = new Map<string, string>();
 	files.set(ARTICLE_INDEX_FILE, indexTxId);
 	if (coverImageTxId) {
 		files.set(ARTICLE_COVER_IMAGE_FILE, coverImageTxId);
 	}
 
-	const manifest = createArticleFolderManifest(files);
+	// 使用 SDK 的 generateFolder 方法生成正确格式的 manifest
+	const manifest = await generateArticleFolderManifest(uploader, files, ARTICLE_INDEX_FILE);
 
 	// Step 4: 上传 manifest，添加文章元数据标签
 	const manifestTags: IrysTag[] = [

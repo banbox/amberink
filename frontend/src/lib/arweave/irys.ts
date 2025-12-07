@@ -19,7 +19,7 @@ import { WebEthereum } from '@irys/web-upload-ethereum';
 import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2';
 import { createWalletClient, createPublicClient, custom } from 'viem';
 import type { IrysConfig, IrysNetwork } from './types';
-import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier } from '$lib/config';
+import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getIrysFreeUploadLimit } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
 
 // Irys Uploader 类型
@@ -166,7 +166,17 @@ export async function hasIrysSufficientBalance(
 }
 
 /**
+ * Check if data size is within Irys free upload limit
+ * @param dataSize - Size of data to upload in bytes
+ * @returns true if data is free to upload (under 100KB)
+ */
+export function isWithinIrysFreeLimit(dataSize: number): boolean {
+	return dataSize <= getIrysFreeUploadLimit();
+}
+
+/**
  * Ensure Irys has sufficient balance, fund if necessary
+ * For files under 100KB, Irys uploads are free, so balance check is skipped.
  * @param uploader - Irys uploader instance
  * @param dataSize - Size of data to upload in bytes
  * @returns true if balance is now sufficient
@@ -175,6 +185,13 @@ export async function ensureIrysBalance(
 	uploader: IrysUploader,
 	dataSize: number
 ): Promise<boolean> {
+	// Skip balance check for small files (under 100KB) - Irys uploads are free
+	const freeLimit = getIrysFreeUploadLimit();
+	if (dataSize <= freeLimit) {
+		console.log(`Data size (${dataSize} bytes) is within Irys free limit (${freeLimit} bytes), skipping balance check`);
+		return true;
+	}
+
 	const balance = await uploader.getLoadedBalance();
 	const price = await uploader.getPrice(dataSize);
 	const minBalance = await calculateMinIrysBalance(uploader, dataSize);

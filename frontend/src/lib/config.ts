@@ -33,7 +33,9 @@ const defaults = {
 	subsquidEndpoint: 'http://localhost:4350/graphql',
 	// Gas fee multipliers for funding
 	minGasFeeMultiplier: 10,      // Minimum: 10x gas fee
-	defaultGasFeeMultiplier: 30   // Default: 30x gas fee
+	defaultGasFeeMultiplier: 30,  // Default: 30x gas fee
+	// Irys free upload limit (files under this size are free on Irys)
+	irysFreeUploadLimit: 102400   // 100KB in bytes
 };
 
 /**
@@ -56,7 +58,8 @@ export const config = {
 		: defaults.minGasFeeMultiplier,
 	defaultGasFeeMultiplier: PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER 
 		? parseInt(PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER, 10) 
-		: defaults.defaultGasFeeMultiplier
+		: defaults.defaultGasFeeMultiplier,
+	irysFreeUploadLimit: defaults.irysFreeUploadLimit
 } as const;
 
 // Helper functions for backward compatibility
@@ -102,6 +105,10 @@ export function getMinGasFeeMultiplier(): number {
 
 export function getDefaultGasFeeMultiplier(): number {
 	return config.defaultGasFeeMultiplier;
+}
+
+export function getIrysFreeUploadLimit(): number {
+	return config.irysFreeUploadLimit;
 }
 
 export { defaults as defaultConfig };
