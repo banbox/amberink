@@ -139,6 +139,40 @@ export async function uploadManifest(
 }
 
 /**
+ * 上传 manifest 到 Irys，支持 paidBy 参数（Balance Approvals 机制）
+ * @param uploader - Irys uploader 实例
+ * @param manifest - Manifest 对象
+ * @param customTags - 额外的自定义标签
+ * @param paidBy - 可选，付费账户地址
+ */
+export async function uploadManifestWithPayer(
+	uploader: IrysUploader | SessionKeyIrysUploader,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	manifest: IrysManifest | any,
+	customTags: IrysTag[] = [],
+	paidBy?: string
+): Promise<string> {
+	const appName = getAppName();
+	const appVersion = getAppVersion();
+	
+	const tags: IrysTag[] = [
+		{ name: 'Type', value: 'manifest' },
+		{ name: 'Content-Type', value: 'application/x.irys-manifest+json' },
+		{ name: 'App-Name', value: appName },
+		{ name: 'App-Version', value: appVersion },
+		...customTags
+	];
+	
+	const uploadOptions = paidBy 
+		? { tags, upload: { paidBy } }
+		: { tags };
+	
+	const receipt = await uploader.upload(JSON.stringify(manifest), uploadOptions);
+	console.log(`Manifest uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
+	return receipt.id;
+}
+
+/**
  * 上传更新的 manifest（可变文件夹）
  * @param uploader - Irys uploader 实例
  * @param manifest - 更新后的 Manifest 对象（可以是 SDK 生成的或手动创建的）

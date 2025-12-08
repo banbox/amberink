@@ -5,7 +5,8 @@ import { getIrysUploader, getIrysUploaderDevnet, ensureIrysBalance, type IrysUpl
 import {
 	getSessionKeyIrysUploader,
 	getSessionKeyIrysUploaderDevnet,
-	isSessionKeyValid
+	isSessionKeyValid,
+	getSessionKeyOwner
 } from './irys-session';
 import type { ArticleMetadata, IrysTag, IrysNetwork, ArticleFolderUploadParams, ArticleFolderUploadResult } from './types';
 import { getAppName, getAppVersion } from '$lib/config';
@@ -13,6 +14,7 @@ import type { StoredSessionKey } from '$lib/sessionKey';
 import {
 	generateArticleFolderManifest,
 	uploadManifest,
+	uploadManifestWithPayer,
 	ARTICLE_INDEX_FILE,
 	ARTICLE_COVER_IMAGE_FILE
 } from './folder';
@@ -159,11 +161,95 @@ export async function uploadData(
 }
 
 // ============================================================
+//                  带 paidBy 参数的上传功能（用于 Balance Approvals）
+// ============================================================
+
+/**
+ * 使用指定 uploader 和 payer 上传文章（Balance Approvals 机制）
+ * @param uploader - Irys uploader 实例
+ * @param metadata - 文章元数据
+ * @param paidBy - 付费账户地址（主账户）
+ */
+export async function uploadArticleWithUploaderAndPayer(
+	uploader: IrysUploader,
+	metadata: Omit<ArticleMetadata, 'createdAt' | 'version'>,
+	paidBy: string
+): Promise<string> {
+	// 准备完整数据
+	const appName = getAppName();
+	const appVersion = getAppVersion();
+	const fullMetadata: ArticleMetadata = {
+		...metadata,
+		version: appVersion,
+		createdAt: Date.now()
+	};
+
+	const data = JSON.stringify(fullMetadata);
+
+	// 构建标签（用于 Arweave GraphQL 查询）
+	const tags: IrysTag[] = [
+		{ name: 'Content-Type', value: 'application/json' },
+		{ name: 'App-Name', value: appName },
+		{ name: 'App-Version', value: appVersion },
+		{ name: 'Type', value: 'article' },
+		{ name: 'Title', value: metadata.title },
+		...metadata.tags.map((tag) => ({ name: 'Tag', value: tag }))
+	];
+
+	try {
+		// 使用 paidBy 参数，由主账户付费
+		const receipt = await uploader.upload(data, { 
+			tags,
+			upload: { paidBy }
+		});
+		console.log(`Article uploaded with paidBy ==> https://gateway.irys.xyz/${receipt.id}`);
+		return receipt.id;
+	} catch (e) {
+		console.error('Error when uploading article with paidBy:', e);
+		throw e;
+	}
+}
+
+/**
+ * 使用指定 uploader 和 payer 上传图片（Balance Approvals 机制）
+ * @param uploader - Irys uploader 实例
+ * @param file - 图片文件
+ * @param paidBy - 付费账户地址（主账户）
+ */
+export async function uploadImageWithUploaderAndPayer(
+	uploader: IrysUploader,
+	file: File,
+	paidBy: string
+): Promise<string> {
+	const appName = getAppName();
+	
+	const tags: IrysTag[] = [
+		{ name: 'Content-Type', value: file.type },
+		{ name: 'App-Name', value: appName },
+		{ name: 'Type', value: 'image' }
+	];
+
+	try {
+		// 使用 paidBy 参数，由主账户付费
+		const receipt = await uploader.uploadFile(file, { 
+			tags,
+			upload: { paidBy }
+		});
+		console.log(`Image uploaded with paidBy ==> https://gateway.irys.xyz/${receipt.id}`);
+		return receipt.id;
+	} catch (e) {
+		console.error('Error when uploading image with paidBy:', e);
+		throw e;
+	}
+}
+
+// ============================================================
 //                  Session Key 上传功能
 // ============================================================
 
 /**
  * 使用 Session Key 上传文章到 Arweave（无需 MetaMask 签名）
+ * 使用 Irys Balance Approvals 机制，由主账户付费
  * @param sessionKey - 存储的 Session Key 数据
  * @param metadata - 文章元数据
  * @param network - 网络类型（默认 devnet）
@@ -182,11 +268,14 @@ export async function uploadArticleWithSessionKey(
 			? await getSessionKeyIrysUploader(sessionKey)
 			: await getSessionKeyIrysUploaderDevnet(sessionKey);
 
-	return uploadArticleWithUploader(uploader, metadata);
+	// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
+	const ownerAddress = getSessionKeyOwner(sessionKey);
+	return uploadArticleWithUploaderAndPayer(uploader, metadata, ownerAddress);
 }
 
 /**
  * 使用 Session Key 上传图片到 Arweave（无需 MetaMask 签名）
+ * 使用 Irys Balance Approvals 机制，由主账户付费
  * @param sessionKey - 存储的 Session Key 数据
  * @param file - 图片文件
  * @param network - 网络类型（默认 devnet）
@@ -205,11 +294,14 @@ export async function uploadImageWithSessionKey(
 			? await getSessionKeyIrysUploader(sessionKey)
 			: await getSessionKeyIrysUploaderDevnet(sessionKey);
 
-	return uploadImageWithUploader(uploader, file);
+	// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
+	const ownerAddress = getSessionKeyOwner(sessionKey);
+	return uploadImageWithUploaderAndPayer(uploader, file, ownerAddress);
 }
 
 /**
  * 使用 Session Key 上传任意数据到 Arweave（无需 MetaMask 签名）
+ * 使用 Irys Balance Approvals 机制，由主账户付费
  * @param sessionKey - 存储的 Session Key 数据
  * @param data - 数据（字符串或 Buffer）
  * @param contentType - 内容类型
@@ -233,6 +325,7 @@ export async function uploadDataWithSessionKey(
 			: await getSessionKeyIrysUploaderDevnet(sessionKey);
 
 	const appName = getAppName();
+	const ownerAddress = getSessionKeyOwner(sessionKey);
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: contentType },
 		{ name: 'App-Name', value: appName },
@@ -240,7 +333,11 @@ export async function uploadDataWithSessionKey(
 	];
 
 	try {
-		const receipt = await uploader.upload(data, { tags });
+		// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
+		const receipt = await uploader.upload(data, { 
+			tags,
+			upload: { paidBy: ownerAddress }
+		});
 		console.log(`Data uploaded with session key ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
@@ -259,21 +356,25 @@ export async function uploadDataWithSessionKey(
  * @param content - Markdown 内容
  * @param title - 文章标题（用于标签）
  * @param articleTags - 文章标签
+ * @param paidBy - 可选，付费账户地址（Balance Approvals 机制）
  */
 async function uploadMarkdownContent(
 	uploader: IrysUploader,
 	content: string,
 	title: string,
-	articleTags: string[]
+	articleTags: string[],
+	paidBy?: string
 ): Promise<string> {
 	const appName = getAppName();
 	const appVersion = getAppVersion();
 	const dataSize = new TextEncoder().encode(content).length;
 
-	// 确保 Irys 余额充足
-	const hasBalance = await ensureIrysBalance(uploader, dataSize);
-	if (!hasBalance) {
-		throw new Error('Failed to fund Irys for markdown content. Please try again.');
+	// 如果没有 paidBy，需要确保 Irys 余额充足
+	if (!paidBy) {
+		const hasBalance = await ensureIrysBalance(uploader, dataSize);
+		if (!hasBalance) {
+			throw new Error('Failed to fund Irys for markdown content. Please try again.');
+		}
 	}
 
 	const tags: IrysTag[] = [
@@ -286,7 +387,10 @@ async function uploadMarkdownContent(
 	];
 
 	try {
-		const receipt = await uploader.upload(content, { tags });
+		const uploadOptions = paidBy 
+			? { tags, upload: { paidBy } }
+			: { tags };
+		const receipt = await uploader.upload(content, uploadOptions);
 		console.log(`Markdown content uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
@@ -299,17 +403,21 @@ async function uploadMarkdownContent(
  * 上传封面图片到 Arweave（作为 coverImage）
  * @param uploader - Irys uploader 实例
  * @param file - 图片文件
+ * @param paidBy - 可选，付费账户地址（Balance Approvals 机制）
  */
 async function uploadCoverImageFile(
 	uploader: IrysUploader,
-	file: File
+	file: File,
+	paidBy?: string
 ): Promise<string> {
 	const appName = getAppName();
 
-	// 确保 Irys 余额充足
-	const hasBalance = await ensureIrysBalance(uploader, file.size);
-	if (!hasBalance) {
-		throw new Error('Failed to fund Irys for cover image. Please try again.');
+	// 如果没有 paidBy，需要确保 Irys 余额充足
+	if (!paidBy) {
+		const hasBalance = await ensureIrysBalance(uploader, file.size);
+		if (!hasBalance) {
+			throw new Error('Failed to fund Irys for cover image. Please try again.');
+		}
 	}
 
 	const tags: IrysTag[] = [
@@ -319,7 +427,10 @@ async function uploadCoverImageFile(
 	];
 
 	try {
-		const receipt = await uploader.uploadFile(file, { tags });
+		const uploadOptions = paidBy 
+			? { tags, upload: { paidBy } }
+			: { tags };
+		const receipt = await uploader.uploadFile(file, uploadOptions);
 		console.log(`Cover image uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
@@ -334,22 +445,24 @@ async function uploadCoverImageFile(
  * 
  * @param uploader - Irys uploader 实例
  * @param params - 文章文件夹上传参数
+ * @param paidBy - 可选，付费账户地址（Balance Approvals 机制）
  */
 export async function uploadArticleFolderWithUploader(
 	uploader: IrysUploader,
-	params: ArticleFolderUploadParams
+	params: ArticleFolderUploadParams,
+	paidBy?: string
 ): Promise<ArticleFolderUploadResult> {
 	const { title, summary, content, coverImage, tags: articleTags } = params;
 
 	// Step 1: 上传文章内容（index.md）
 	console.log('Uploading article content (index.md)...');
-	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags);
+	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, paidBy);
 
 	// Step 2: 上传封面图片（如果有）
 	let coverImageTxId: string | undefined;
 	if (coverImage) {
 		console.log('Uploading cover image...');
-		coverImageTxId = await uploadCoverImageFile(uploader, coverImage);
+		coverImageTxId = await uploadCoverImageFile(uploader, coverImage, paidBy);
 	}
 
 	// Step 3: 使用 Irys SDK 生成文件夹 manifest
@@ -370,15 +483,17 @@ export async function uploadArticleFolderWithUploader(
 		...articleTags.map((tag) => ({ name: 'Article-Tag', value: tag }))
 	];
 
-	// 计算 manifest 大小并确保余额
-	const manifestData = JSON.stringify(manifest);
-	const manifestSize = new TextEncoder().encode(manifestData).length;
-	const hasBalance = await ensureIrysBalance(uploader, manifestSize);
-	if (!hasBalance) {
-		throw new Error('Failed to fund Irys for manifest. Please try again.');
+	// 如果没有 paidBy，需要确保余额
+	if (!paidBy) {
+		const manifestData = JSON.stringify(manifest);
+		const manifestSize = new TextEncoder().encode(manifestData).length;
+		const hasBalance = await ensureIrysBalance(uploader, manifestSize);
+		if (!hasBalance) {
+			throw new Error('Failed to fund Irys for manifest. Please try again.');
+		}
 	}
 
-	const manifestId = await uploadManifest(uploader, manifest, manifestTags);
+	const manifestId = await uploadManifestWithPayer(uploader, manifest, manifestTags, paidBy);
 
 	console.log(`Article folder created:`);
 	console.log(`  - Manifest: https://gateway.irys.xyz/${manifestId}`);
@@ -409,6 +524,7 @@ export async function uploadArticleFolder(
 
 /**
  * 使用 Session Key 上传文章文件夹到 Arweave（无需 MetaMask 签名）
+ * 使用 Irys Balance Approvals 机制，由主账户付费
  * @param sessionKey - 存储的 Session Key 数据
  * @param params - 文章文件夹上传参数
  * @param network - 网络类型（默认 devnet）
@@ -427,6 +543,7 @@ export async function uploadArticleFolderWithSessionKey(
 			? await getSessionKeyIrysUploader(sessionKey)
 			: await getSessionKeyIrysUploaderDevnet(sessionKey);
 
-	// Session Key uploader 类型与 IrysUploader 兼容
-	return uploadArticleFolderWithUploader(uploader as unknown as IrysUploader, params);
+	// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
+	const ownerAddress = getSessionKeyOwner(sessionKey);
+	return uploadArticleFolderWithUploader(uploader as unknown as IrysUploader, params, ownerAddress);
 }

@@ -1,6 +1,13 @@
 /**
  * Session Key 签名的 Irys 上传器
- * 允许使用 Session Key 私钥签名上传，无需 MetaMask 交互
+ * 
+ * 使用 Session Key 私钥初始化 Irys Uploader：
+ * - 通过 ViemV2Adapter + privateKeyToAccount 使用 Session Key 私钥
+ * - 使用 http transport（不是 custom(window.ethereum)）避免 MetaMask 签名
+ * - 结合 Balance Approvals 机制，由主账户付费
+ * - 这样上传时完全无需 MetaMask 签名
+ * 
+ * 参考: https://docs.irys.xyz/build/d/features/balance-approvals
  */
 
 import { WebUploader } from '@irys/web-upload';
@@ -18,13 +25,18 @@ export type SessionKeyIrysUploader = Awaited<ReturnType<typeof createSessionKeyI
 
 /**
  * 使用 Session Key 私钥创建 Viem 客户端
+ * 关键：使用 http transport + privateKeyToAccount，而不是 custom(window.ethereum)
+ * 这样签名操作使用本地私钥，不会触发 MetaMask
  * @param sessionKey - 存储的 Session Key 数据
  */
 function createSessionKeyViemClients(sessionKey: StoredSessionKey) {
+	// 使用 Session Key 私钥创建账户
 	const account = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
 	const chain = getChainConfig();
 	const rpcUrl = getRpcUrl();
 
+	// 关键：使用 http transport，不是 custom(window.ethereum)
+	// 这样 walletClient 会使用本地私钥签名，不会触发 MetaMask
 	const walletClient = createWalletClient({
 		account,
 		chain,
@@ -41,6 +53,7 @@ function createSessionKeyViemClients(sessionKey: StoredSessionKey) {
 
 /**
  * 使用 Session Key 创建 Irys Uploader
+ * 使用本地私钥签名，无需 MetaMask
  * @param sessionKey - 存储的 Session Key 数据
  * @param config - Irys 配置（可选）
  */
@@ -50,10 +63,10 @@ export async function createSessionKeyIrysUploader(
 ) {
 	const { walletClient, publicClient } = createSessionKeyViemClients(sessionKey);
 
-	// 使用类型断言解决 viem 版本与 @irys/web-upload-ethereum-viem-v2 的类型不兼容问题
+	// 使用 ViemV2Adapter，但底层使用的是 http transport + privateKeyToAccount
+	// 这样签名操作使用本地私钥，不会触发 MetaMask
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const viemAdapter = ViemV2Adapter(walletClient as any, { publicClient: publicClient as any });
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let builder = WebUploader(WebEthereum).withAdapter(viemAdapter);
 
 	const network = config?.network || getIrysNetwork();
@@ -94,4 +107,12 @@ export function isSessionKeyValid(sessionKey: StoredSessionKey | null): boolean 
 	if (!sessionKey) return false;
 	// 检查是否过期
 	return Date.now() / 1000 < sessionKey.validUntil;
+}
+
+/**
+ * 获取 Session Key 的 owner 地址（用于 paidBy 参数）
+ * @param sessionKey - 存储的 Session Key 数据
+ */
+export function getSessionKeyOwner(sessionKey: StoredSessionKey): string {
+	return sessionKey.owner;
 }

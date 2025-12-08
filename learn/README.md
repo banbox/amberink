@@ -611,3 +611,10 @@ README.md  doc\Developers.md  当前已支持了使用irys的链上可更新文�
 [log...] 上面是浏览器控制台输出的日志，总共Metamask弹出了4次； 查看日志中的相关代码行，实际并未正确使用链上文件夹，请阅读doc\irys\features\onchain-folders.mdx 了解正确用法，然后在frontend\src\lib下检索相关的代码文件，找出其中错误用法并进行纠正。  
 Claude：修改完成
 
+#### 2025-12-07 20:27  无感发布未生效排查
+@README.md 当前项目在用户登录时创建临时本地密钥，一次性唤起Metamask授权；后续发布文章和点赞评论直接使用本地临时密钥对，无需唤起Metamask，体验更顺滑；但当前测试发布文章时，依然要求四次签名：前三次分别是文章内容、封面图、manifest文件；第四次是记录到智能合约中；目前项目已经实现了Session Key机制，但可能并未正确使用。请阅读 doc\Developers.md 了解概要信息，然后重点分析梳理 frontend\src\lib中的逻辑，检查是哪里有问题，找出根本原因，给出解决方案，并进行修复  
+Claude：已添加irys的余额审批  
+开发者：当前依然是上传3次弹3次Metamask签名；核心问题应该是，使用irys时，应该用临时密钥对钱包，而不是Metamask钱包；这需要通过在Uploader初始化后，调用withWallet实现，请参考 doc\irys\features\onchain-folders.mdx 的111行，根据当前项目需求和配置，帮我纠正  
+Claude: 说解决了，实际啥也没改，只加了些注释 
+
+

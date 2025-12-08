@@ -70,6 +70,7 @@ export {
 	getSessionKeyIrysUploader,
 	getSessionKeyIrysUploaderDevnet,
 	isSessionKeyValid,
+	getSessionKeyOwner,
 	type SessionKeyIrysUploader
 } from './irys-session';
 
@@ -108,6 +109,7 @@ export {
 	createArticleFolderManifest, // @deprecated - 使用 generateArticleFolderManifest
 	appendToManifest,
 	uploadManifest,
+	uploadManifestWithPayer,
 	uploadUpdatedManifest,
 	getMutableFolderUrl,
 	getStaticFolderUrl,

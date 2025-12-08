@@ -8,6 +8,8 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { getBlogHubContractAddress, getSessionKeyManagerAddress, getRpcUrl, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
+import { getIrysUploaderDevnet, getIrysUploader, type IrysUploader } from '$lib/arweave/irys';
+import { getIrysNetwork } from '$lib/config';
 
 const SESSION_KEY_STORAGE = 'dblog_session_key';
 
@@ -259,7 +261,39 @@ export async function isSessionKeyValidForCurrentWallet(): Promise<boolean> {
 }
 
 /**
+ * Create Irys Balance Approval for Session Key
+ * This allows the Session Key to upload to Irys using the main account's balance
+ * @param uploader - Irys uploader instance (connected with main account)
+ * @param sessionKeyAddress - Session Key address to approve
+ * @param expiresInSeconds - Approval expiration time in seconds (default: 7 days)
+ */
+async function createIrysBalanceApproval(
+	uploader: IrysUploader,
+	sessionKeyAddress: string,
+	expiresInSeconds: number = SESSION_KEY_DURATION
+): Promise<void> {
+	try {
+		// Create a large approval amount (1 ETH worth in atomic units)
+		// This should be enough for many uploads
+		const approvalAmount = uploader.utils.toAtomic(1);
+		
+		console.log(`Creating Irys Balance Approval for ${sessionKeyAddress}...`);
+		const receipt = await uploader.approval.createApproval({
+			amount: approvalAmount,
+			approvedAddress: sessionKeyAddress,
+			expiresInSeconds
+		});
+		console.log(`Irys Balance Approval created:`, receipt);
+	} catch (error) {
+		console.error('Failed to create Irys Balance Approval:', error);
+		// Don't throw - this is not critical for session key creation
+		// The user can still fund the session key directly if needed
+	}
+}
+
+/**
  * Generate and register a new session key
+ * Also creates Irys Balance Approval for gasless uploads
  * @returns Created session key data
  */
 export async function createSessionKey(): Promise<StoredSessionKey> {
@@ -275,7 +309,7 @@ export async function createSessionKey(): Promise<StoredSessionKey> {
 	const validAfter = Math.floor(Date.now() / 1000);
 	const validUntil = validAfter + SESSION_KEY_DURATION;
 
-	// 3. Get wallet client and register session key
+	// 3. Get wallet client and register session key on blockchain
 	const walletClient = await getWalletClient();
 
 	await walletClient.writeContract({
@@ -292,7 +326,19 @@ export async function createSessionKey(): Promise<StoredSessionKey> {
 		]
 	});
 
-	// 4. Save to localStorage
+	// 4. Create Irys Balance Approval for the Session Key
+	// This allows the Session Key to upload using the main account's Irys balance
+	try {
+		const irysNetwork = getIrysNetwork();
+		const uploader = irysNetwork === 'mainnet' 
+			? await getIrysUploader() 
+			: await getIrysUploaderDevnet();
+		await createIrysBalanceApproval(uploader, sessionKeyAccount.address, SESSION_KEY_DURATION);
+	} catch (error) {
+		console.warn('Failed to create Irys Balance Approval, continuing anyway:', error);
+	}
+
+	// 5. Save to localStorage
 	const sessionKeyData: StoredSessionKey = {
 		address: sessionKeyAccount.address,
 		privateKey: privateKey,
@@ -302,7 +348,7 @@ export async function createSessionKey(): Promise<StoredSessionKey> {
 
 	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(sessionKeyData));
 
-	// 5. Fund session key with initial balance for gas fees
+	// 6. Fund session key with initial balance for gas fees (for smart contract calls)
 	await ensureSessionKeyBalance(sessionKeyAccount.address);
 
 	return sessionKeyData;

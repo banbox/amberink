@@ -9,7 +9,7 @@ import {
 } from '$lib/arweave';
 import type { ArticleFolderUploadParams } from '$lib/arweave';
 import { publishToContract, publishToContractWithSessionKey } from '$lib/contracts';
-import { getStoredSessionKey, ensureSessionKeyBalance, type StoredSessionKey } from '$lib/sessionKey';
+import { getStoredSessionKey, hasSessionKeySufficientBalance, type StoredSessionKey } from '$lib/sessionKey';
 
 export interface PublishArticleParams {
 	title: string;
@@ -135,11 +135,12 @@ async function publishArticleWithSessionKeyInternal(
 		originalAuthor = ''
 	} = params;
 
-	// Step 0: Ensure session key has sufficient balance for gas fees
+	// Step 0: Check session key has sufficient balance for gas fees
+	// Note: Session key is funded when created, we only check here (no MetaMask signature needed)
 	console.log('Step 0: Checking session key balance...');
-	const hasBalance = await ensureSessionKeyBalance(sessionKey.address);
+	const hasBalance = await hasSessionKeySufficientBalance(sessionKey.address);
 	if (!hasBalance) {
-		throw new Error('Failed to fund session key. Please try again or use MetaMask.');
+		throw new Error('Session key balance is insufficient. Please create a new session key to refund.');
 	}
 
 	// Step 1: Upload article folder with session key (content + cover image)
