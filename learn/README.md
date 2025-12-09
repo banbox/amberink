@@ -664,3 +664,12 @@ Claude：createPublishSignature 函数的签名方式完全错误。它使用了
 Claude: 已完成  
 开发者：正文部分是markdown内容，帮我使用mdsvex组件渲染显示；markdown中是否可能包含危险的内容如脚本等？如何进行防御？  
 Claude：使用marked渲染，DOMPurify防御  
+
+#### 2025-12-09 18:30  详情页赞赏、不喜欢、评论功能
+@Developers.md  @contracts.md 请帮我在详情页面支持赞赏、不喜欢、评论功能，根据智能合约中的相关函数，使用Session Key无感请求。  
+Claude：已实现  
+开发者：对于交互栏部分，在当前页面使用了两次，帮我用svelte 的snippet提取，减少代码冗余；然后左侧改为赞赏、评论数量、不喜欢3个，去掉点赞。  
+Claude：已完成  
+开发者："evaluateWithSessionKey" reverted with the following signature: 0x7efaad92 
+@Developers.md @contracts.md 当前评论文章时出现上面错误，请帮我根据错误，查阅相关代码，分析定位原因，并解决  
+Claude：已解决，缺少评论所需的最小赞赏金额

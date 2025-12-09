@@ -8,6 +8,21 @@
 	import { onMount } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
+	import { parseEther } from 'viem';
+	import {
+		EvaluationScore,
+		evaluateArticle,
+		evaluateArticleWithSessionKey,
+		followUser,
+		followUserWithSessionKey,
+		ContractError
+	} from '$lib/contracts';
+	import {
+		getStoredSessionKey,
+		isSessionKeyValidForCurrentWallet,
+		type StoredSessionKey
+	} from '$lib/sessionKey';
+	import { getMinActionValue } from '$lib/config';
 
 	let { data }: { data: PageData } = $props();
 	const article = data.article;
@@ -16,6 +31,26 @@
 	let articleContent = $state<ArticleMetadata | null>(null);
 	let contentLoading = $state(true);
 	let contentError = $state<string | null>(null);
+
+	// Wallet & Session Key state
+	let walletAddress = $state<string | null>(null);
+	let sessionKey = $state<StoredSessionKey | null>(null);
+	let hasValidSessionKey = $state(false);
+
+	// Interaction state
+	let isDisliking = $state(false);
+	let isFollowing = $state(false);
+	let isCommenting = $state(false);
+	let isTipping = $state(false);
+
+	// UI state
+	let showTipModal = $state(false);
+	let tipAmount = $state('0.001');
+	let commentText = $state('');
+	let feedbackMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+
+	// Local counts (optimistic updates)
+	let localDislikes = $state(article.dislikes);
 
 	// Format address to short form
 	function shortAddress(address: string): string {
@@ -71,7 +106,162 @@
 			});
 		} else {
 			navigator.clipboard.writeText(window.location.href);
-			alert(m.link_copied());
+			showFeedback('success', m.link_copied({}));
+		}
+	}
+
+	// Show feedback message
+	function showFeedback(type: 'success' | 'error', text: string) {
+		feedbackMessage = { type, text };
+		setTimeout(() => {
+			feedbackMessage = null;
+		}, 3000);
+	}
+
+	// Get error message from ContractError
+	function getErrorMessage(error: unknown): string {
+		if (error instanceof ContractError) {
+			const errorMessages: Record<string, string> = {
+				user_rejected: m.error_user_rejected({}),
+				insufficient_funds: m.error_insufficient_funds({}),
+				network_error: m.error_network_error({}),
+				contract_reverted: m.error_contract_reverted({}),
+				gas_estimation_failed: m.error_gas_estimation_failed({}),
+				nonce_too_low: m.error_nonce_too_low({}),
+				replacement_underpriced: m.error_replacement_underpriced({}),
+				wallet_not_connected: m.error_wallet_not_connected({}),
+				wrong_network: m.error_wrong_network({}),
+				timeout: m.error_timeout({}),
+				unknown_error: m.error_unknown({})
+			};
+			return errorMessages[error.code] || error.message;
+		}
+		return error instanceof Error ? error.message : String(error);
+	}
+
+	// Check wallet connection
+	async function checkWalletConnection() {
+		if (typeof window === 'undefined' || !window.ethereum) return;
+		try {
+			const accounts = (await window.ethereum.request({ method: 'eth_accounts' })) as string[];
+			if (accounts.length > 0) {
+				walletAddress = accounts[0];
+				sessionKey = getStoredSessionKey();
+				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+			}
+		} catch (e) {
+			console.error('Failed to check wallet:', e);
+		}
+	}
+
+	// Handle Dislike
+	async function handleDislike() {
+		if (!walletAddress) {
+			showFeedback('error', m.please_connect_wallet({}));
+			return;
+		}
+		isDisliking = true;
+		try {
+			const articleId = BigInt(article.id);
+			if (hasValidSessionKey && sessionKey) {
+				await evaluateArticleWithSessionKey(sessionKey, articleId, EvaluationScore.Dislike, '');
+			} else {
+				await evaluateArticle(articleId, EvaluationScore.Dislike, '');
+			}
+			localDislikes += 1;
+			showFeedback('success', m.dislike_success({}));
+		} catch (error) {
+			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
+		} finally {
+			isDisliking = false;
+		}
+	}
+
+	// Handle Follow
+	async function handleFollow() {
+		if (!walletAddress) {
+			showFeedback('error', m.please_connect_wallet({}));
+			return;
+		}
+		isFollowing = true;
+		try {
+			const targetAddress = article.author.id as `0x${string}`;
+			if (hasValidSessionKey && sessionKey) {
+				await followUserWithSessionKey(sessionKey, targetAddress, true);
+			} else {
+				await followUser(targetAddress, true);
+			}
+			showFeedback('success', m.follow_success({}));
+		} catch (error) {
+			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
+		} finally {
+			isFollowing = false;
+		}
+	}
+
+	// Handle Tip
+	async function handleTip() {
+		if (!walletAddress) {
+			showFeedback('error', m.please_connect_wallet({}));
+			return;
+		}
+		const amount = parseFloat(tipAmount);
+		if (isNaN(amount) || amount <= 0) {
+			showFeedback('error', 'Invalid tip amount');
+			return;
+		}
+		isTipping = true;
+		try {
+			const articleId = BigInt(article.id);
+			const tipWei = parseEther(tipAmount);
+			if (hasValidSessionKey && sessionKey) {
+				await evaluateArticleWithSessionKey(
+					sessionKey, articleId, EvaluationScore.Like, '',
+					'0x0000000000000000000000000000000000000000', 0n, tipWei
+				);
+			} else {
+				await evaluateArticle(
+					articleId, EvaluationScore.Like, '',
+					'0x0000000000000000000000000000000000000000', 0n, tipWei
+				);
+			}
+			showTipModal = false;
+			tipAmount = '0.001';
+			showFeedback('success', m.tip_success({}));
+		} catch (error) {
+			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
+		} finally {
+			isTipping = false;
+		}
+	}
+
+	// Handle Comment
+	async function handleComment() {
+		if (!walletAddress) {
+			showFeedback('error', m.please_connect_wallet({}));
+			return;
+		}
+		if (!commentText.trim()) return;
+		isCommenting = true;
+		try {
+			const articleId = BigInt(article.id);
+			// Comments require minActionValue to prevent spam (contract requirement)
+			const minValue = getMinActionValue();
+			if (hasValidSessionKey && sessionKey) {
+				await evaluateArticleWithSessionKey(
+					sessionKey, articleId, EvaluationScore.Neutral, commentText.trim(),
+					'0x0000000000000000000000000000000000000000', 0n, minValue
+				);
+			} else {
+				await evaluateArticle(articleId, EvaluationScore.Neutral, commentText.trim(),
+					'0x0000000000000000000000000000000000000000', 0n, minValue);
+			}
+			commentText = '';
+			showFeedback('success', m.comment_success({}));
+		} catch (error) {
+			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
+		} finally {
+			isCommenting = false;
 		}
 	}
 
@@ -81,8 +271,23 @@
 	const authorAddress = $derived(article.author.id);
 	const readingTime = $derived(articleContent?.content ? getReadingTime(articleContent.content) : 0);
 
-	// Fetch article content from Arweave
+	// Fetch article content from Arweave and check wallet
 	onMount(async () => {
+		await checkWalletConnection();
+		// Listen for account changes
+		if (typeof window !== 'undefined' && window.ethereum?.on) {
+			window.ethereum.on('accountsChanged', async (accounts: unknown) => {
+				const accts = accounts as string[];
+				walletAddress = accts.length > 0 ? accts[0] : null;
+				if (walletAddress) {
+					sessionKey = getStoredSessionKey();
+					hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+				} else {
+					sessionKey = null;
+					hasValidSessionKey = false;
+				}
+			});
+		}
 		try {
 			articleContent = await getArticleWithCache(article.arweaveId);
 		} catch (e) {
@@ -127,16 +332,18 @@
 					<span class="text-gray-300">·</span>
 					<button
 						type="button"
-						class="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+						class="text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+						onclick={handleFollow}
+						disabled={isFollowing}
 					>
-						{m.follow()}
+						{isFollowing ? m.processing({}) : m.follow({})}
 					</button>
 				</div>
 
 				<!-- Read time & Date -->
 				<div class="flex items-center gap-1 text-sm text-gray-500">
 					{#if readingTime > 0}
-						<span>{readingTime} {m.min_read()}</span>
+						<span>{readingTime} {m.min_read({})}</span>
 						<span class="mx-1">·</span>
 					{/if}
 					<time datetime={article.createdAt}>
@@ -147,76 +354,81 @@
 		</div>
 	</header>
 
-	<!-- Interaction Bar (Top) -->
-	<div class="mb-8 flex items-center justify-between border-y border-gray-100 py-3">
-		<div class="flex items-center gap-5">
-			<!-- Clap/Like -->
-			<button
-				type="button"
-				class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-			>
-				<svg class="h-6 w-6" viewBox="0 0 24 24" fill="none">
-					<path
-						d="M8.5 14.5L5.5 11.5C4.67 10.67 4.67 9.33 5.5 8.5C6.33 7.67 7.67 7.67 8.5 8.5L11.5 11.5M11.5 11.5L8.5 8.5C7.67 7.67 7.67 6.33 8.5 5.5C9.33 4.67 10.67 4.67 11.5 5.5L14.5 8.5M11.5 11.5L14.5 8.5M14.5 8.5L17.5 5.5C18.33 4.67 19.67 4.67 20.5 5.5C21.33 6.33 21.33 7.67 20.5 8.5L12 17L8.5 20.5"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				<span class="text-sm">{article.likes}</span>
-			</button>
+	{#snippet interactionBar(position: 'top' | 'bottom')}
+	<div class={position === 'top' ? 'mb-8' : 'mt-12'} >
+		<div class="flex items-center justify-between border-y border-gray-100 py-3">
+			<div class="flex items-center gap-5">
+				<!-- Tip/Appreciate -->
+				<button
+					type="button"
+					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-amber-500"
+					onclick={() => showTipModal = true}
+					title={m.tip({})}
+				>
+					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+					<span class="text-sm">{formatTips(article.totalTips)}</span>
+				</button>
 
-			<!-- Dislike -->
-			<button
-				type="button"
-				class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-				title={m.dislike()}
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M7.5 15h2.25m8.024-9.75c.011.05.028.1.052.148.591 1.2.924 2.55.924 3.977a8.96 8.96 0 01-.999 4.125m.023-8.25c-.076-.365.183-.75.575-.75h.908c.889 0 1.713.518 1.972 1.368.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398C20.613 14.547 19.833 15 19 15h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 00.303-.54m.023-8.25H16.48a4.5 4.5 0 01-1.423-.23l-3.114-1.04a4.5 4.5 0 00-1.423-.23H6.504c-.618 0-1.217.247-1.605.729A11.95 11.95 0 002.25 12c0 .434.023.863.068 1.285C2.427 14.306 3.346 15 4.372 15h3.126c.618 0 .991.724.725 1.282A7.471 7.471 0 007.5 19.5a2.25 2.25 0 002.25 2.25.75.75 0 00.75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 002.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384"
-					/>
-				</svg>
-			</button>
+				<!-- Comments -->
+				<a
+					href="#comments"
+					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+					title={m.comments({})}
+				>
+					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+						/>
+					</svg>
+					<span class="text-sm">0</span>
+				</a>
 
-			<!-- Comments -->
-			<button
-				type="button"
-				class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-				title={m.comments()}
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
-					/>
-				</svg>
-				<span class="text-sm">0</span>
-			</button>
-		</div>
+				<!-- Dislike -->
+				<button
+					type="button"
+					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-red-500 disabled:opacity-50"
+					onclick={handleDislike}
+					disabled={isDisliking}
+					title={m.dislike({})}
+				>
+					<svg class="h-5 w-5" class:animate-pulse={isDisliking} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M7.5 15h2.25m8.024-9.75c.011.05.028.1.052.148.591 1.2.924 2.55.924 3.977a8.96 8.96 0 01-.999 4.125m.023-8.25c-.076-.365.183-.75.575-.75h.908c.889 0 1.713.518 1.972 1.368.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398C20.613 14.547 19.833 15 19 15h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 00.303-.54m.023-8.25H16.48a4.5 4.5 0 01-1.423-.23l-3.114-1.04a4.5 4.5 0 00-1.423-.23H6.504c-.618 0-1.217.247-1.605.729A11.95 11.95 0 002.25 12c0 .434.023.863.068 1.285C2.427 14.306 3.346 15 4.372 15h3.126c.618 0 .991.724.725 1.282A7.471 7.471 0 007.5 19.5a2.25 2.25 0 002.25 2.25.75.75 0 00.75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 002.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384"
+						/>
+					</svg>
+					<span class="text-sm">{localDislikes}</span>
+				</button>
+			</div>
 
-		<!-- Right side: Share -->
-		<div class="flex items-center gap-3">
-			<button
-				type="button"
-				onclick={handleShare}
-				class="text-gray-500 transition-colors hover:text-gray-900"
-				title={m.share()}
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"
-					/>
-				</svg>
-			</button>
+			<!-- Right side: Share -->
+			<div class="flex items-center gap-3">
+				<button
+					type="button"
+					onclick={handleShare}
+					class="text-gray-500 transition-colors hover:text-gray-900"
+					title={m.share({})}
+				>
+					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"
+						/>
+					</svg>
+				</button>
+			</div>
 		</div>
 	</div>
+{/snippet}
+
+	<!-- Interaction Bar (Top) -->
+	{@render interactionBar('top')}
 
 	<!-- Cover Image -->
 	<div class="mb-10 overflow-hidden" id="cover-container">
@@ -241,7 +453,7 @@
 						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 					</svg>
-					<span>{m.loading_content()}</span>
+					<span>{m.loading_content({})}</span>
 				</div>
 			</div>
 		{:else if contentError}
@@ -253,7 +465,7 @@
 					rel="noopener noreferrer"
 					class="mt-3 inline-block text-sm text-red-600 underline hover:text-red-800"
 				>
-					{m.view_on_arweave()}
+					{m.view_on_arweave({})}
 				</a>
 			</div>
 		{:else if articleContent?.content}
@@ -262,7 +474,7 @@
 			</div>
 		{:else}
 			<div class="py-8 text-center text-gray-500">
-				<p>{m.no_content()}</p>
+				<p>{m.no_content({})}</p>
 			</div>
 		{/if}
 	</div>
@@ -275,102 +487,71 @@
 	{/if}
 
 	<!-- Interaction Bar (Bottom) -->
-	<div class="mt-12 flex items-center justify-between border-y border-gray-100 py-3">
-		<div class="flex items-center gap-5">
-			<!-- Clap/Like -->
-			<button
-				type="button"
-				class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-			>
-				<svg class="h-6 w-6" viewBox="0 0 24 24" fill="none">
-					<path
-						d="M8.5 14.5L5.5 11.5C4.67 10.67 4.67 9.33 5.5 8.5C6.33 7.67 7.67 7.67 8.5 8.5L11.5 11.5M11.5 11.5L8.5 8.5C7.67 7.67 7.67 6.33 8.5 5.5C9.33 4.67 10.67 4.67 11.5 5.5L14.5 8.5M11.5 11.5L14.5 8.5M14.5 8.5L17.5 5.5C18.33 4.67 19.67 4.67 20.5 5.5C21.33 6.33 21.33 7.67 20.5 8.5L12 17L8.5 20.5"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				<span class="text-sm">{article.likes}</span>
-			</button>
-
-			<!-- Dislike -->
-			<button
-				type="button"
-				class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-				title={m.dislike()}
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M7.5 15h2.25m8.024-9.75c.011.05.028.1.052.148.591 1.2.924 2.55.924 3.977a8.96 8.96 0 01-.999 4.125m.023-8.25c-.076-.365.183-.75.575-.75h.908c.889 0 1.713.518 1.972 1.368.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398C20.613 14.547 19.833 15 19 15h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 00.303-.54m.023-8.25H16.48a4.5 4.5 0 01-1.423-.23l-3.114-1.04a4.5 4.5 0 00-1.423-.23H6.504c-.618 0-1.217.247-1.605.729A11.95 11.95 0 002.25 12c0 .434.023.863.068 1.285C2.427 14.306 3.346 15 4.372 15h3.126c.618 0 .991.724.725 1.282A7.471 7.471 0 007.5 19.5a2.25 2.25 0 002.25 2.25.75.75 0 00.75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 002.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384"
-					/>
-				</svg>
-			</button>
-
-			<!-- Comments -->
-			<button
-				type="button"
-				class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-				title={m.comments()}
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
-					/>
-				</svg>
-				<span class="text-sm">0</span>
-			</button>
-		</div>
-
-		<!-- Right side: Share -->
-		<div class="flex items-center gap-3">
-			<button
-				type="button"
-				onclick={handleShare}
-				class="text-gray-500 transition-colors hover:text-gray-900"
-				title={m.share()}
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"
-					/>
-				</svg>
-			</button>
-		</div>
-	</div>
+	{@render interactionBar('bottom')}
 
 	<!-- Comments Section -->
-	<section class="mt-10">
+	<section class="mt-10" id="comments">
 		<h2 class="mb-6 text-xl font-bold text-gray-900">
-			{m.comments()}
+			{m.comments({})}
 		</h2>
+		
+		<!-- Comment Input -->
+		<div class="mb-6">
+			<div class="flex gap-3">
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-sm font-medium text-white">
+					{walletAddress ? shortAddress(walletAddress).slice(0, 2).toUpperCase() : '?'}
+				</div>
+				<div class="flex-1">
+					<textarea
+						bind:value={commentText}
+						placeholder={m.write_comment({})}
+						rows="3"
+						class="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+						disabled={isCommenting}
+					></textarea>
+					<div class="mt-2 flex items-center justify-between">
+						<div class="text-xs text-gray-400">
+							{#if !walletAddress}
+								{m.please_connect_wallet({})}
+							{:else if !hasValidSessionKey}
+								<span class="text-amber-600">{m.enable_seamless_for_interaction({})}</span>
+							{/if}
+						</div>
+						<button
+							type="button"
+							onclick={handleComment}
+							disabled={isCommenting || !commentText.trim() || !walletAddress}
+							class="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{isCommenting ? m.posting({}) : m.post_comment({})}
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Comments List (placeholder) -->
 		<div class="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center text-gray-500">
-			<p>{m.no_comments()}</p>
+			<p>{m.no_comments({})}</p>
 		</div>
 	</section>
 
 	<!-- Transaction Info (collapsed) -->
 	<details class="mt-10 text-sm text-gray-500">
 		<summary class="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
-			{m.blockchain_info()}
+			{m.blockchain_info({})}
 		</summary>
 		<div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 rounded-lg bg-gray-50 p-4">
 			<div>
-				<span class="font-medium text-gray-700">{m.article_id()}:</span>
+				<span class="font-medium text-gray-700">{m.article_id({})}:</span>
 				{article.id}
 			</div>
 			<div>
-				<span class="font-medium text-gray-700">{m.block()}:</span>
+				<span class="font-medium text-gray-700">{m.block({})}:</span>
 				{article.blockNumber}
 			</div>
 			<div class="flex items-center gap-1">
-				<span class="font-medium text-gray-700">{m.transaction()}:</span>
+				<span class="font-medium text-gray-700">{m.transaction({})}:</span>
 				<a
 					href={`https://sepolia-optimism.etherscan.io/tx/${article.txHash}`}
 					target="_blank"
@@ -394,3 +575,76 @@
 		</div>
 	</details>
 </article>
+
+<!-- Tip Modal -->
+{#if showTipModal}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" onclick={() => showTipModal = false}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="mb-4 text-lg font-bold text-gray-900">{m.tip_author({})}</h3>
+			
+			<div class="mb-4">
+				<label for="tip-amount" class="mb-2 block text-sm font-medium text-gray-700">{m.tip_amount({})}</label>
+				<div class="flex items-center gap-2">
+					<input
+						id="tip-amount"
+						type="number"
+						bind:value={tipAmount}
+						step="0.001"
+						min="0.001"
+						placeholder={m.tip_placeholder({})}
+						class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+						disabled={isTipping}
+					/>
+					<span class="text-sm font-medium text-gray-600">{m.eth({})}</span>
+				</div>
+			</div>
+
+			<!-- Quick amounts -->
+			<div class="mb-6 flex gap-2">
+				{#each ['0.001', '0.005', '0.01', '0.05'] as amount}
+					<button
+						type="button"
+						onclick={() => tipAmount = amount}
+						class="flex-1 rounded-lg border border-gray-200 py-1.5 text-sm transition-colors hover:border-emerald-500 hover:bg-emerald-50"
+						class:border-emerald-500={tipAmount === amount}
+						class:bg-emerald-50={tipAmount === amount}
+					>
+						{amount}
+					</button>
+				{/each}
+			</div>
+
+			<div class="flex gap-3">
+				<button
+					type="button"
+					onclick={() => showTipModal = false}
+					class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+					disabled={isTipping}
+				>
+					{m.cancel({})}
+				</button>
+				<button
+					type="button"
+					onclick={handleTip}
+					disabled={isTipping || !tipAmount}
+					class="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
+				>
+					{isTipping ? m.processing({}) : m.send_tip({})}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Feedback Toast -->
+{#if feedbackMessage}
+	<div
+		class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transform rounded-lg px-6 py-3 shadow-lg transition-all"
+		class:bg-emerald-600={feedbackMessage.type === 'success'}
+		class:bg-red-600={feedbackMessage.type === 'error'}
+	>
+		<p class="text-sm font-medium text-white">{feedbackMessage.text}</p>
+	</div>
+{/if}

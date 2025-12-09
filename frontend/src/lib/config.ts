@@ -35,7 +35,9 @@ const defaults = {
 	minGasFeeMultiplier: 10,      // Minimum: 10x gas fee
 	defaultGasFeeMultiplier: 30,  // Default: 30x gas fee
 	// Irys free upload limit (files under this size are free on Irys)
-	irysFreeUploadLimit: 102400   // 100KB in bytes
+	irysFreeUploadLimit: 102400,   // 100KB in bytes
+	// Minimum action value for comments (anti-spam, matches contract minActionValue)
+	minActionValue: 20000000000000n  // 0.00002 ether in wei
 };
 
 /**
@@ -59,7 +61,8 @@ export const config = {
 	defaultGasFeeMultiplier: PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER 
 		? parseInt(PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER, 10) 
 		: defaults.defaultGasFeeMultiplier,
-	irysFreeUploadLimit: defaults.irysFreeUploadLimit
+	irysFreeUploadLimit: defaults.irysFreeUploadLimit,
+	minActionValue: defaults.minActionValue
 } as const;
 
 // Helper functions for backward compatibility
@@ -109,6 +112,10 @@ export function getDefaultGasFeeMultiplier(): number {
 
 export function getIrysFreeUploadLimit(): number {
 	return config.irysFreeUploadLimit;
+}
+
+export function getMinActionValue(): bigint {
+	return config.minActionValue;
 }
 
 export { defaults as defaultConfig };

@@ -240,6 +240,37 @@ const BLOGHUB_ABI = [
 		],
 		outputs: [{ type: 'uint256' }],
 		stateMutability: 'nonpayable'
+	},
+	{
+		name: 'evaluateWithSessionKey',
+		type: 'function',
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'sessionKey', type: 'address' },
+			{ name: '_articleId', type: 'uint256' },
+			{ name: '_score', type: 'uint8' },
+			{ name: '_comment', type: 'string' },
+			{ name: '_referrer', type: 'address' },
+			{ name: '_parentCommentId', type: 'uint256' },
+			{ name: 'deadline', type: 'uint256' },
+			{ name: 'signature', type: 'bytes' }
+		],
+		outputs: [],
+		stateMutability: 'payable'
+	},
+	{
+		name: 'followWithSessionKey',
+		type: 'function',
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'sessionKey', type: 'address' },
+			{ name: '_target', type: 'address' },
+			{ name: '_isFollow', type: 'bool' },
+			{ name: 'deadline', type: 'uint256' },
+			{ name: 'signature', type: 'bytes' }
+		],
+		outputs: [],
+		stateMutability: 'nonpayable'
 	}
 ] as const;
 
@@ -633,31 +664,42 @@ async function getSessionKeyNonce(
 	return data.nonce;
 }
 
+// Function selectors for Session Key operations
+const FUNCTION_SELECTORS = {
+	publish: '0xc7e76bf0' as `0x${string}`,      // publish(string,uint64,uint96,string,string)
+	evaluate: '0xff1f090a' as `0x${string}`,     // evaluate(uint256,uint8,string,address,uint256)
+	follow: '0x63c3cc16' as `0x${string}`,       // follow(address,bool)
+	likeComment: '0xdffd40f2' as `0x${string}`   // likeComment(uint256,uint256,address,address)
+};
+
 /**
- * Create EIP-712 signature for Session Key publish operation
+ * Create EIP-712 signature for Session Key operation
  * @param sessionKey - Stored session key data
+ * @param selector - Function selector
  * @param callData - Encoded function call data
+ * @param value - ETH value to send (for tips)
  * @param deadline - Signature deadline timestamp
  * @param nonce - Current nonce from SessionKeyManager
  */
 async function createSessionKeySignature(
 	sessionKey: StoredSessionKey,
+	selector: `0x${string}`,
 	callData: `0x${string}`,
+	value: bigint,
 	deadline: bigint,
 	nonce: bigint
 ): Promise<`0x${string}`> {
 	const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
 	const blogHub = getBlogHubContractAddress();
-	const publishSelector = '0xc7e76bf0' as `0x${string}`; // publish(string,uint64,uint96,string,string)
 
 	// Create EIP-712 typed data message
 	const message = {
 		owner: sessionKey.owner as `0x${string}`,
 		sessionKey: sessionKey.address as `0x${string}`,
 		target: blogHub,
-		selector: publishSelector,
+		selector: selector,
 		callData: callData,
-		value: 0n,
+		value: value,
 		nonce: nonce,
 		deadline: deadline
 	};
@@ -746,7 +788,9 @@ export async function publishToContractWithSessionKey(
 		// Create EIP-712 signature
 		const signature = await createSessionKeySignature(
 			sessionKey,
+			FUNCTION_SELECTORS.publish,
 			callData,
+			0n,
 			deadline,
 			nonce
 		);
@@ -773,6 +817,184 @@ export async function publishToContractWithSessionKey(
 		return txHash;
 	} catch (error) {
 		console.error('Error publishing with session key:', error);
+		throw parseContractError(error);
+	}
+}
+
+/**
+ * Evaluate article using Session Key (like/dislike/tip/comment without MetaMask popup)
+ * @param sessionKey - Stored session key data
+ * @param articleId - Article ID to evaluate
+ * @param score - 0=neutral, 1=like, 2=dislike
+ * @param comment - Comment text
+ * @param referrer - Referrer address (optional)
+ * @param parentCommentId - Parent comment ID for replies (optional)
+ * @param tipAmount - Tip amount in wei (optional)
+ * @returns Transaction hash
+ */
+export async function evaluateArticleWithSessionKey(
+	sessionKey: StoredSessionKey,
+	articleId: bigint,
+	score: EvaluationScore,
+	comment: string,
+	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	parentCommentId: bigint = 0n,
+	tipAmount: bigint = 0n
+): Promise<string> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative');
+	}
+
+	if (score < 0 || score > 2) {
+		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
+	}
+
+	// Check session key validity
+	if (Date.now() / 1000 > sessionKey.validUntil) {
+		throw new Error('Session key has expired');
+	}
+
+	try {
+		const chain = getChainConfig();
+		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
+		
+		// Create wallet client with session key
+		const walletClient = createWalletClient({
+			account: sessionKeyAccount,
+			chain,
+			transport: http(getRpcUrl())
+		});
+
+		// Set deadline to 5 minutes from now
+		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+		// Encode the evaluate function call data
+		const callData = encodeFunctionData({
+			abi: BLOGHUB_ABI,
+			functionName: 'evaluate',
+			args: [articleId, score, comment, referrer, parentCommentId]
+		});
+
+		// Get current nonce from SessionKeyManager
+		const nonce = await getSessionKeyNonce(
+			sessionKey.owner as `0x${string}`,
+			sessionKey.address as `0x${string}`
+		);
+
+		// Create EIP-712 signature
+		const signature = await createSessionKeySignature(
+			sessionKey,
+			FUNCTION_SELECTORS.evaluate,
+			callData,
+			tipAmount,
+			deadline,
+			nonce
+		);
+
+		// Call evaluateWithSessionKey
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'evaluateWithSessionKey',
+			args: [
+				sessionKey.owner as `0x${string}`,
+				sessionKey.address as `0x${string}`,
+				articleId,
+				score,
+				comment,
+				referrer,
+				parentCommentId,
+				deadline,
+				signature
+			],
+			value: tipAmount
+		});
+
+		console.log(`Article evaluated with session key. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error evaluating with session key:', error);
+		throw parseContractError(error);
+	}
+}
+
+/**
+ * Follow/unfollow user using Session Key (without MetaMask popup)
+ * @param sessionKey - Stored session key data
+ * @param targetAddress - Address to follow/unfollow
+ * @param isFollow - true to follow, false to unfollow
+ * @returns Transaction hash
+ */
+export async function followUserWithSessionKey(
+	sessionKey: StoredSessionKey,
+	targetAddress: `0x${string}`,
+	isFollow: boolean
+): Promise<string> {
+	if (!targetAddress || targetAddress === '0x0000000000000000000000000000000000000000') {
+		throw new Error('Invalid target address');
+	}
+
+	// Check session key validity
+	if (Date.now() / 1000 > sessionKey.validUntil) {
+		throw new Error('Session key has expired');
+	}
+
+	try {
+		const chain = getChainConfig();
+		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
+		
+		// Create wallet client with session key
+		const walletClient = createWalletClient({
+			account: sessionKeyAccount,
+			chain,
+			transport: http(getRpcUrl())
+		});
+
+		// Set deadline to 5 minutes from now
+		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+		// Encode the follow function call data
+		const callData = encodeFunctionData({
+			abi: BLOGHUB_ABI,
+			functionName: 'follow',
+			args: [targetAddress, isFollow]
+		});
+
+		// Get current nonce from SessionKeyManager
+		const nonce = await getSessionKeyNonce(
+			sessionKey.owner as `0x${string}`,
+			sessionKey.address as `0x${string}`
+		);
+
+		// Create EIP-712 signature
+		const signature = await createSessionKeySignature(
+			sessionKey,
+			FUNCTION_SELECTORS.follow,
+			callData,
+			0n,
+			deadline,
+			nonce
+		);
+
+		// Call followWithSessionKey
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'followWithSessionKey',
+			args: [
+				sessionKey.owner as `0x${string}`,
+				sessionKey.address as `0x${string}`,
+				targetAddress,
+				isFollow,
+				deadline,
+				signature
+			]
+		});
+
+		console.log(`Follow status updated with session key. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error following with session key:', error);
 		throw parseContractError(error);
 	}
 }
