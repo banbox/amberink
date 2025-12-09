@@ -142,7 +142,7 @@
 				onclick={() => fetchArticles(true)}
 				class="mt-2 text-sm font-medium text-red-600 hover:text-red-800"
 			>
-				{m.retry?.() || 'Retry'}
+				{m.retry()}
 			</button>
 		</div>
 	{/if}
@@ -169,8 +169,8 @@
 					d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
 				/>
 			</svg>
-			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_articles?.() || 'No articles yet'}</h3>
-			<p class="mt-2 text-gray-500">{m.be_first_to_publish?.() || 'Be the first to publish!'}</p>
+			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_articles()}</h3>
+			<p class="mt-2 text-gray-500">{m.be_first_to_publish()}</p>
 		</div>
 	{/if}
 
@@ -193,7 +193,7 @@
 						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 					></path>
 				</svg>
-				<span>{m.loading?.() || 'Loading...'}</span>
+				<span>{m.loading()}</span>
 			</div>
 		</div>
 	{/if}
@@ -201,7 +201,7 @@
 	<!-- End of List -->
 	{#if !hasMore && articles.length > 0 && !loading}
 		<div class="py-8 text-center text-gray-500">
-			<p>{m.no_more_articles?.() || 'No more articles'}</p>
+			<p>{m.no_more_articles()}</p>
 		</div>
 	{/if}
 </div>

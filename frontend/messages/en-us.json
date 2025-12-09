@@ -135,5 +135,11 @@
 	"link_copied": "Link copied!",
 	"article_id": "Article ID",
 	"block": "Block",
-	"transaction": "Tx"
+	"transaction": "Tx",
+	"follow": "Follow",
+	"comments": "Comments",
+	"no_comments": "No comments yet. Be the first to share your thoughts!",
+	"blockchain_info": "Blockchain Info",
+	"dislike": "Dislike",
+	"clap": "Clap"
 }

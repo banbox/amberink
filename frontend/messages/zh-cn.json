@@ -135,5 +135,11 @@
 	"link_copied": "链接已复制！",
 	"article_id": "文章 ID",
 	"block": "区块",
-	"transaction": "交易"
+	"transaction": "交易",
+	"follow": "关注",
+	"comments": "评论",
+	"no_comments": "暂无评论，来发表第一条评论吧！",
+	"blockchain_info": "区块链信息",
+	"dislike": "不喜欢",
+	"clap": "赞赏"
 }

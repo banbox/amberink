@@ -70,7 +70,7 @@
 				? 'bg-blue-600 text-white'
 				: 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
 		>
-			{m.all?.() || 'All'}
+			{m.all()}
 		</button>
 
 		<!-- Category Buttons -->
@@ -93,12 +93,12 @@
 			class="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
 		>
 			{#if showAll}
-				<span>{m.show_less?.() || 'Less'}</span>
+				<span>{m.show_less()}</span>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
 				</svg>
 			{:else}
-				<span>{m.show_more?.() || 'More'}</span>
+				<span>{m.show_more()}</span>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
 				</svg>
