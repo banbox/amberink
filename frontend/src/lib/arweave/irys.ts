@@ -1,6 +1,10 @@
 /**
  * Irys 客户端初始化
  * 支持 Mainnet（永久存储）和 Devnet（测试用，约60天后删除）
+ * 
+ * 两种模式：
+ * 1. MetaMask 模式：使用 window.ethereum 连接钱包，每次上传需要签名
+ * 2. Session Key 模式：使用临时私钥本地签名，无需 MetaMask 弹窗
  */
 
 // 扩展 Window 类型以支持 ethereum
@@ -17,13 +21,16 @@ declare global {
 import { WebUploader } from '@irys/web-upload';
 import { WebEthereum } from '@irys/web-upload-ethereum';
 import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2';
-import { createWalletClient, createPublicClient, custom } from 'viem';
-import type { IrysConfig, IrysNetwork } from './types';
+import { createWalletClient, createPublicClient, custom, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import type { IrysConfig } from './types';
 import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getIrysFreeUploadLimit } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
+import type { StoredSessionKey } from '$lib/sessionKey';
 
 // Irys Uploader 类型
 export type IrysUploader = Awaited<ReturnType<typeof createIrysUploader>>;
+export type SessionKeyIrysUploader = IrysUploader;
 
 /**
  * 获取以太坊账户
@@ -92,6 +99,177 @@ export async function getIrysUploader(): Promise<IrysUploader> {
  */
 export async function getIrysUploaderDevnet(): Promise<IrysUploader> {
 	return createIrysUploader({ network: 'devnet' });
+}
+
+// ============================================================
+//                  Session Key Irys 客户端
+// ============================================================
+
+/**
+ * 创建一个自定义 EIP-1193 Provider，使用本地私钥签名
+ * 对于签名请求，使用本地账户签名；对于其他请求，转发到 RPC
+ * @param account - viem 账户（包含私钥）
+ * @param rpcUrl - RPC URL
+ */
+function createLocalSignerProvider(
+	account: ReturnType<typeof privateKeyToAccount>,
+	rpcUrl: string
+) {
+	return {
+		request: async ({ method, params }: { method: string; params?: unknown[] }) => {
+			// 处理签名请求 - 使用本地私钥
+			if (method === 'eth_signTypedData_v4' || method === 'eth_signTypedData') {
+				const [, typedDataJson] = params as [string, string];
+				const typedData = JSON.parse(typedDataJson);
+				
+				// 使用 viem 的 signTypedData
+				const signature = await account.signTypedData({
+					domain: typedData.domain,
+					types: typedData.types,
+					primaryType: typedData.primaryType,
+					message: typedData.message
+				});
+				return signature;
+			}
+			
+			if (method === 'personal_sign') {
+				const [message] = params as [string, string];
+				const signature = await account.signMessage({ 
+					message: { raw: message as `0x${string}` }
+				});
+				return signature;
+			}
+			
+			if (method === 'eth_sign') {
+				const [, message] = params as [string, string];
+				const signature = await account.signMessage({
+					message: { raw: message as `0x${string}` }
+				});
+				return signature;
+			}
+			
+			if (method === 'eth_accounts' || method === 'eth_requestAccounts') {
+				return [account.address];
+			}
+			
+			if (method === 'eth_chainId') {
+				const chain = getChainConfig();
+				return `0x${chain.id.toString(16)}`;
+			}
+			
+			// 其他请求转发到 RPC
+			const response = await fetch(rpcUrl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: Date.now(),
+					method,
+					params
+				})
+			});
+			const json = await response.json();
+			if (json.error) {
+				throw new Error(json.error.message);
+			}
+			return json.result;
+		}
+	};
+}
+
+/**
+ * 使用 Session Key 私钥创建 Viem 客户端
+ * 关键：使用自定义 provider，签名操作使用本地私钥，不发送到 RPC
+ * @param sessionKey - 存储的 Session Key 数据
+ */
+function createSessionKeyViemClients(sessionKey: StoredSessionKey) {
+	// 使用 Session Key 私钥创建账户
+	const account = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
+	const chain = getChainConfig();
+	const rpcUrl = getRpcUrl();
+
+	// 创建自定义 provider，签名使用本地私钥
+	const localProvider = createLocalSignerProvider(account, rpcUrl);
+
+	// 使用 custom transport 包装自定义 provider
+	const walletClient = createWalletClient({
+		account,
+		chain,
+		transport: custom(localProvider)
+	});
+
+	const publicClient = createPublicClient({
+		chain,
+		transport: http(rpcUrl)
+	});
+
+	return { walletClient, publicClient, account };
+}
+
+/**
+ * 使用 Session Key 创建 Irys Uploader
+ * 使用本地私钥签名，无需 MetaMask
+ * @param sessionKey - 存储的 Session Key 数据
+ * @param config - Irys 配置（可选）
+ */
+export async function createSessionKeyIrysUploader(
+	sessionKey: StoredSessionKey,
+	config?: Partial<IrysConfig>
+): Promise<IrysUploader> {
+	const { walletClient, publicClient } = createSessionKeyViemClients(sessionKey);
+
+	// 使用 ViemV2Adapter，但底层使用的是 http transport + privateKeyToAccount
+	// 这样签名操作使用本地私钥，不会触发 MetaMask
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const viemAdapter = ViemV2Adapter(walletClient as any, { publicClient: publicClient as any });
+	let builder = WebUploader(WebEthereum).withAdapter(viemAdapter);
+
+	const network = config?.network || getIrysNetwork();
+	const rpcUrl = config?.rpcUrl || getRpcUrl();
+
+	if (network === 'devnet') {
+		builder = builder.withRpc(rpcUrl).devnet();
+	}
+
+	return await builder;
+}
+
+/**
+ * 获取 Session Key 的 Irys Mainnet Uploader
+ * @param sessionKey - 存储的 Session Key 数据
+ */
+export async function getSessionKeyIrysUploader(
+	sessionKey: StoredSessionKey
+): Promise<IrysUploader> {
+	return createSessionKeyIrysUploader(sessionKey, { network: 'mainnet' });
+}
+
+/**
+ * 获取 Session Key 的 Irys Devnet Uploader
+ * @param sessionKey - 存储的 Session Key 数据
+ */
+export async function getSessionKeyIrysUploaderDevnet(
+	sessionKey: StoredSessionKey
+): Promise<IrysUploader> {
+	return createSessionKeyIrysUploader(sessionKey, { network: 'devnet' });
+}
+
+/**
+ * 检查 Session Key 是否有效
+ * @param sessionKey - 存储的 Session Key 数据
+ */
+export function isSessionKeyValid(sessionKey: StoredSessionKey | null): boolean {
+	if (!sessionKey) return false;
+	// 检查是否过期
+	return Date.now() / 1000 < sessionKey.validUntil;
+}
+
+/**
+ * 获取 Session Key 的 owner 地址（用于 paidBy 参数）
+ * @param sessionKey - 存储的 Session Key 数据
+ */
+export function getSessionKeyOwner(sessionKey: StoredSessionKey): string {
+	return sessionKey.owner;
 }
 
 /**

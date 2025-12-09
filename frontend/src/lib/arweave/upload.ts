@@ -1,13 +1,17 @@
 /**
  * Arweave 上传功能
  */
-import { getIrysUploader, getIrysUploaderDevnet, ensureIrysBalance, type IrysUploader } from './irys';
 import {
+	getIrysUploader,
+	getIrysUploaderDevnet,
+	ensureIrysBalance,
 	getSessionKeyIrysUploader,
 	getSessionKeyIrysUploaderDevnet,
 	isSessionKeyValid,
-	getSessionKeyOwner
-} from './irys-session';
+	getSessionKeyOwner,
+	isWithinIrysFreeLimit,
+	type IrysUploader
+} from './irys';
 import type { ArticleMetadata, IrysTag, IrysNetwork, ArticleFolderUploadParams, ArticleFolderUploadResult } from './types';
 import { getAppName, getAppVersion } from '$lib/config';
 import type { StoredSessionKey } from '$lib/sessionKey';
@@ -185,6 +189,12 @@ export async function uploadArticleWithUploaderAndPayer(
 	};
 
 	const data = JSON.stringify(fullMetadata);
+	const dataSize = new TextEncoder().encode(data).length;
+
+	// Check if within Irys free limit (100KB) - if so, don't use paidBy
+	// Irys devnet free uploads don't work with paidBy parameter
+	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	// 构建标签（用于 Arweave GraphQL 查询）
 	const tags: IrysTag[] = [
@@ -197,15 +207,14 @@ export async function uploadArticleWithUploaderAndPayer(
 	];
 
 	try {
-		// 使用 paidBy 参数，由主账户付费
-		const receipt = await uploader.upload(data, { 
-			tags,
-			upload: { paidBy }
-		});
-		console.log(`Article uploaded with paidBy ==> https://gateway.irys.xyz/${receipt.id}`);
+		const uploadOptions = effectivePaidBy
+			? { tags, upload: { paidBy: effectivePaidBy } }
+			: { tags };
+		const receipt = await uploader.upload(data, uploadOptions);
+		console.log(`Article uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
-		console.error('Error when uploading article with paidBy:', e);
+		console.error('Error when uploading article:', e);
 		throw e;
 	}
 }
@@ -222,6 +231,11 @@ export async function uploadImageWithUploaderAndPayer(
 	paidBy: string
 ): Promise<string> {
 	const appName = getAppName();
+
+	// Check if within Irys free limit (100KB) - if so, don't use paidBy
+	// Irys devnet free uploads don't work with paidBy parameter
+	const isFreeUpload = isWithinIrysFreeLimit(file.size);
+	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 	
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: file.type },
@@ -230,15 +244,14 @@ export async function uploadImageWithUploaderAndPayer(
 	];
 
 	try {
-		// 使用 paidBy 参数，由主账户付费
-		const receipt = await uploader.uploadFile(file, { 
-			tags,
-			upload: { paidBy }
-		});
-		console.log(`Image uploaded with paidBy ==> https://gateway.irys.xyz/${receipt.id}`);
+		const uploadOptions = effectivePaidBy
+			? { tags, upload: { paidBy: effectivePaidBy } }
+			: { tags };
+		const receipt = await uploader.uploadFile(file, uploadOptions);
+		console.log(`Image uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
-		console.error('Error when uploading image with paidBy:', e);
+		console.error('Error when uploading image:', e);
 		throw e;
 	}
 }
@@ -326,6 +339,13 @@ export async function uploadDataWithSessionKey(
 
 	const appName = getAppName();
 	const ownerAddress = getSessionKeyOwner(sessionKey);
+	const dataSize = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
+
+	// Check if within Irys free limit (100KB) - if so, don't use paidBy
+	// Irys devnet free uploads don't work with paidBy parameter
+	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const effectivePaidBy = isFreeUpload ? undefined : ownerAddress;
+
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: contentType },
 		{ name: 'App-Name', value: appName },
@@ -333,11 +353,10 @@ export async function uploadDataWithSessionKey(
 	];
 
 	try {
-		// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
-		const receipt = await uploader.upload(data, { 
-			tags,
-			upload: { paidBy: ownerAddress }
-		});
+		const uploadOptions = effectivePaidBy
+			? { tags, upload: { paidBy: effectivePaidBy } }
+			: { tags };
+		const receipt = await uploader.upload(data, uploadOptions);
 		console.log(`Data uploaded with session key ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
@@ -369,8 +388,13 @@ async function uploadMarkdownContent(
 	const appVersion = getAppVersion();
 	const dataSize = new TextEncoder().encode(content).length;
 
-	// 如果没有 paidBy，需要确保 Irys 余额充足
-	if (!paidBy) {
+	// Check if within Irys free limit (100KB) - if so, don't use paidBy
+	// Irys devnet free uploads don't work with paidBy parameter
+	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
+
+	// 如果没有 paidBy 或者是免费上传，需要确保 Irys 余额充足
+	if (!effectivePaidBy) {
 		const hasBalance = await ensureIrysBalance(uploader, dataSize);
 		if (!hasBalance) {
 			throw new Error('Failed to fund Irys for markdown content. Please try again.');
@@ -387,8 +411,8 @@ async function uploadMarkdownContent(
 	];
 
 	try {
-		const uploadOptions = paidBy 
-			? { tags, upload: { paidBy } }
+		const uploadOptions = effectivePaidBy 
+			? { tags, upload: { paidBy: effectivePaidBy } }
 			: { tags };
 		const receipt = await uploader.upload(content, uploadOptions);
 		console.log(`Markdown content uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
@@ -412,8 +436,13 @@ async function uploadCoverImageFile(
 ): Promise<string> {
 	const appName = getAppName();
 
-	// 如果没有 paidBy，需要确保 Irys 余额充足
-	if (!paidBy) {
+	// Check if within Irys free limit (100KB) - if so, don't use paidBy
+	// Irys devnet free uploads don't work with paidBy parameter
+	const isFreeUpload = isWithinIrysFreeLimit(file.size);
+	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
+
+	// 如果没有 paidBy 或者是免费上传，需要确保 Irys 余额充足
+	if (!effectivePaidBy) {
 		const hasBalance = await ensureIrysBalance(uploader, file.size);
 		if (!hasBalance) {
 			throw new Error('Failed to fund Irys for cover image. Please try again.');
@@ -427,8 +456,8 @@ async function uploadCoverImageFile(
 	];
 
 	try {
-		const uploadOptions = paidBy 
-			? { tags, upload: { paidBy } }
+		const uploadOptions = effectivePaidBy 
+			? { tags, upload: { paidBy: effectivePaidBy } }
 			: { tags };
 		const receipt = await uploader.uploadFile(file, uploadOptions);
 		console.log(`Cover image uploaded ==> https://gateway.irys.xyz/${receipt.id}`);

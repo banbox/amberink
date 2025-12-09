@@ -3,13 +3,43 @@
  * Coordinates upload to Arweave and publishing to blockchain
  */
 
-import {
-	uploadArticleFolder,
-	uploadArticleFolderWithSessionKey
-} from '$lib/arweave';
+import { uploadArticleFolderWithSessionKey } from '$lib/arweave';
 import type { ArticleFolderUploadParams } from '$lib/arweave';
-import { publishToContract, publishToContractWithSessionKey } from '$lib/contracts';
-import { getStoredSessionKey, hasSessionKeySufficientBalance, type StoredSessionKey } from '$lib/sessionKey';
+import { publishToContractWithSessionKey } from '$lib/contracts';
+import {
+	getStoredSessionKey,
+	createSessionKey,
+	hasSessionKeySufficientBalance,
+	isSessionKeyValidForCurrentWallet,
+	type StoredSessionKey
+} from '$lib/sessionKey';
+
+/**
+ * Get a valid session key, creating one if necessary
+ * This triggers ONE MetaMask signature if no valid session key exists
+ * @returns Valid session key
+ */
+async function getOrCreateValidSessionKey(): Promise<StoredSessionKey> {
+	// Check if we have a stored session key
+	let sessionKey = getStoredSessionKey();
+
+	// Validate: exists, not expired, and belongs to current wallet
+	if (sessionKey) {
+		const isValid = await isSessionKeyValidForCurrentWallet();
+		if (isValid) {
+			console.log('Using existing valid Session Key');
+			return sessionKey;
+		}
+		console.log('Stored Session Key is invalid or belongs to different wallet');
+	}
+
+	// No valid session key - create a new one (requires ONE MetaMask signature)
+	console.log('Creating new Session Key (requires MetaMask signature)...');
+	sessionKey = await createSessionKey();
+	console.log(`New Session Key created: ${sessionKey.address}`);
+
+	return sessionKey;
+}
 
 export interface PublishArticleParams {
 	title: string;
@@ -63,51 +93,13 @@ export async function publishArticle(params: PublishArticleParams): Promise<Publ
 	}
 
 	try {
-		// Check if we have a valid session key for gasless publishing
-		const sessionKey = getStoredSessionKey();
-		const useSessionKey = sessionKey && Date.now() / 1000 < sessionKey.validUntil;
+		// Get or create a valid session key
+		// This ensures we only need ONE MetaMask signature (for session key creation)
+		// instead of multiple signatures for each upload operation
+		let sessionKey = await getOrCreateValidSessionKey();
 
-		if (useSessionKey && sessionKey) {
-			console.log('Using Session Key for gasless publishing...');
-			return await publishArticleWithSessionKeyInternal(params, sessionKey);
-		}
-
-		// Fallback to traditional publishing with MetaMask
-		console.log('Using MetaMask for publishing...');
-
-		// Step 1: Upload article folder (content + cover image)
-		console.log('Step 1: Uploading article folder to Arweave...');
-		const folderParams: ArticleFolderUploadParams = {
-			title: title.trim(),
-			summary: summary.trim(),
-			content: content.trim(),
-			coverImage: coverImage || undefined,
-			tags
-		};
-
-		const folderResult = await uploadArticleFolder(folderParams, 'devnet');
-		console.log(`Article folder uploaded: ${folderResult.manifestId}`);
-
-		// 使用 manifest ID 作为 arweaveId（文章的唯一标识）
-		// 封面图片通过 arweaveId/coverImage 路径访问（在 Irys 可变文件夹内）
-		const arweaveId = folderResult.manifestId;
-
-		// Step 2: Publish to blockchain
-		// 注意：智能合约不再存储 coverImage 字段，封面图片通过 arweaveId/coverImage 路径访问
-		console.log('Step 2: Publishing to blockchain...');
-		const txHash = await publishToContract(
-			arweaveId,
-			categoryId,
-			royaltyBps,
-			originalAuthor,
-			title.trim()
-		);
-		console.log(`Article published to blockchain: ${txHash}`);
-
-		return {
-			arweaveId,
-			txHash
-		};
+		console.log('Using Session Key for gasless publishing...');
+		return await publishArticleWithSessionKeyInternal(params, sessionKey);
 	} catch (error) {
 		console.error('Error during article publishing:', error);
 		throw error;
@@ -186,16 +178,6 @@ async function publishArticleWithSessionKeyInternal(
  * @throws Error if no valid session key is available
  */
 export async function publishArticleGasless(params: PublishArticleParams): Promise<PublishArticleResult> {
-	const sessionKey = getStoredSessionKey();
-	
-	if (!sessionKey) {
-		throw new Error('No session key found. Please create a session key first.');
-	}
-
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired. Please create a new session key.');
-	}
-
 	// Validation
 	if (!params.title.trim()) {
 		throw new Error('Title is required');
@@ -214,6 +196,8 @@ export async function publishArticleGasless(params: PublishArticleParams): Promi
 	}
 
 	try {
+		// Get or create a valid session key
+		const sessionKey = await getOrCreateValidSessionKey();
 		return await publishArticleWithSessionKeyInternal(params, sessionKey);
 	} catch (error) {
 		console.error('Error during gasless article publishing:', error);

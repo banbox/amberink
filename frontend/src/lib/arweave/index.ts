@@ -34,17 +34,26 @@ export type {
 	ArticleFolderUploadResult
 } from './types';
 
-// Irys 客户端
+// Irys 客户端（包含 MetaMask 模式和 Session Key 模式）
 export {
+	// MetaMask 模式
 	createIrysUploader,
 	getIrysUploader,
 	getIrysUploaderDevnet,
+	// Session Key 模式（无需 MetaMask 签名）
+	createSessionKeyIrysUploader,
+	getSessionKeyIrysUploader,
+	getSessionKeyIrysUploaderDevnet,
+	isSessionKeyValid,
+	getSessionKeyOwner,
+	// 通用功能
 	getIrysBalance,
 	fundIrys,
 	getUploadPrice,
 	hasIrysSufficientBalance,
 	ensureIrysBalance,
-	type IrysUploader
+	type IrysUploader,
+	type SessionKeyIrysUploader
 } from './irys';
 
 // 上传功能
@@ -63,16 +72,6 @@ export {
 	uploadArticleFolderWithUploader,
 	uploadArticleFolderWithSessionKey
 } from './upload';
-
-// Session Key Irys 客户端
-export {
-	createSessionKeyIrysUploader,
-	getSessionKeyIrysUploader,
-	getSessionKeyIrysUploaderDevnet,
-	isSessionKeyValid,
-	getSessionKeyOwner,
-	type SessionKeyIrysUploader
-} from './irys-session';
 
 // 获取内容
 export {

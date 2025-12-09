@@ -9,8 +9,8 @@
  * 参考: https://docs.irys.xyz/build/features/onchain-folders
  */
 
-import type { IrysUploader } from './irys';
-import type { SessionKeyIrysUploader } from './irys-session';
+import type { IrysUploader, SessionKeyIrysUploader } from './irys';
+import { isWithinIrysFreeLimit } from './irys';
 import type { IrysTag, ArticleFolderManifest } from './types';
 import { getAppName, getAppVersion, getArweaveGateways } from '$lib/config';
 
@@ -154,6 +154,13 @@ export async function uploadManifestWithPayer(
 ): Promise<string> {
 	const appName = getAppName();
 	const appVersion = getAppVersion();
+	const manifestData = JSON.stringify(manifest);
+	const dataSize = new TextEncoder().encode(manifestData).length;
+	
+	// Check if within Irys free limit (100KB) - if so, don't use paidBy
+	// Irys devnet free uploads don't work with paidBy parameter
+	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 	
 	const tags: IrysTag[] = [
 		{ name: 'Type', value: 'manifest' },
@@ -163,11 +170,11 @@ export async function uploadManifestWithPayer(
 		...customTags
 	];
 	
-	const uploadOptions = paidBy 
-		? { tags, upload: { paidBy } }
+	const uploadOptions = effectivePaidBy 
+		? { tags, upload: { paidBy: effectivePaidBy } }
 		: { tags };
 	
-	const receipt = await uploader.upload(JSON.stringify(manifest), uploadOptions);
+	const receipt = await uploader.upload(manifestData, uploadOptions);
 	console.log(`Manifest uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 	return receipt.id;
 }
