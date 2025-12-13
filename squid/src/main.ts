@@ -52,9 +52,9 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     title: event.title,
                     categoryId: event.categoryId,
                     royaltyBps: 0, // 事件中不包含此字段，可通过合约查询或前端处理
-                    likes: 0,
-                    dislikes: 0,
                     totalTips: 0n,
+                    likeAmount: 0n,
+                    dislikeAmount: 0n,
                     createdAt: new Date(block.header.timestamp),
                     blockNumber: block.header.height,
                     txHash: log.transactionHash
@@ -101,13 +101,19 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article = await ctx.store.get(Article, articleId)
                 }
                 if (article) {
-                    if (event.score === 1) {
-                        article.likes += 1
-                    } else if (event.score === 2) {
-                        article.dislikes += 1
-                    }
+                    const evaluatorId = event.user.toLowerCase()
+                    const authorId = (article.author as any)?.id?.toLowerCase()
+                    const isSelfEvaluation = authorId != null && evaluatorId === authorId
                     if (event.amountPaid > 0n) {
                         article.totalTips += event.amountPaid
+
+                        if (!isSelfEvaluation) {
+                            if (event.score === 1) {
+                                article.likeAmount += event.amountPaid
+                            } else if (event.score === 2) {
+                                article.dislikeAmount += event.amountPaid
+                            }
+                        }
                     }
                     // 将修改后的文章加入更新队列
                     articlesToUpdate.set(articleId, article)

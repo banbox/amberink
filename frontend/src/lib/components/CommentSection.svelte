@@ -79,7 +79,7 @@
 
 	<!-- Comments List -->
 	{#if comments && comments.length > 0}
-		<div class="space-y-6 mb-5">
+		<div class="space-y-6 mb-2">
 			{#each comments as comment (comment.id)}
 				<article class="comment-item">
 					<!-- Row 1: Avatar + Nickname + Date -->

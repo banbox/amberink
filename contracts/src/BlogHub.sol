@@ -47,6 +47,9 @@ contract BlogHub is
     error SessionKeyManagerNotSet();
     error OriginalAuthorTooLong();
     error TitleTooLong();
+    error InsufficientPayment();
+    error MaxSupplyReached();
+    error CollectNotEnabled();
     
     // 定义常量：最大评论长度（字节）
     // 140单词英文大约 700-1000 字节，中文约 400 汉字 = 1200 字节
@@ -59,6 +62,13 @@ contract BlogHub is
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
+    // --- 枚举 ---
+    enum Originality {
+        Original,       // 完全原创
+        SemiOriginal,   // 部分原创
+        Reprint         // 转载
+    }
+
     // --- 结构体 ---
     struct Article {
         string arweaveHash;    // Irys 可变文件夹的 manifest ID
@@ -67,6 +77,12 @@ contract BlogHub is
         string title;          // 文章标题（最大128字节，用于列表展示）
         uint64 categoryId;
         uint64 timestamp;
+        // New Fields
+        address trueAuthor;    // 真实作者钱包地址（用于接收资金）
+        uint256 collectPrice;  // 收藏价格
+        uint256 maxCollectSupply; // 最大收藏数量 (0 表示不可收藏，除非是老数据兼容处理)
+        uint256 collectCount;     // 当前收藏数量
+        Originality originality;  // 原创性声明
     }
 
     // 最大原作者名称长度（64字节，足够存储大多数用户名/ENS域名）
@@ -100,7 +116,11 @@ contract BlogHub is
         string arweaveId,       // Irys 可变文件夹的 manifest ID
         string originalAuthor,
         string title,
-        uint256 timestamp
+        uint256 timestamp,
+        address trueAuthor,
+        uint256 collectPrice,
+        uint256 maxCollectSupply,
+        Originality originality
     );
 
     // 核心评价事件：SubSquid 可通过 score 区分喜欢(1)还是不喜欢(2)
@@ -109,6 +129,15 @@ contract BlogHub is
         address indexed user,
         uint8 score, // 1: Like, 0: Neutral, 2: Dislike
         uint256 amountPaid,
+        uint256 timestamp
+    );
+
+    // 收藏事件
+    event ArticleCollected(
+        uint256 indexed articleId,
+        address indexed collector,
+        uint256 amount,
+        uint256 tokenId,
         uint256 timestamp
     );
 
@@ -223,21 +252,21 @@ contract BlogHub is
 
         // --- 资金处理 ---
         if (amount > 0) {
-            // 2. 资金分配
+            // 资金分配
             if (_score == SCORE_DISLIKE) {
                 // 不喜欢时，金额归平台（直接转账）
                 (bool success, ) = payable(platformTreasury).call{value: amount}("");
                 if (!success) revert TransferFailed();
             } else {
-                // 1. 铸造凭证给打赏者
-                _mint(sender, _articleId, 1, "");
-
+                
                 address[] memory invalidAddrs = new address[](1);
                 invalidAddrs[0] = article.author;
                 address validReferrer = _validateReferrer(_referrer, sender, invalidAddrs);
                 uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
                 if (authorShare > 0) {
-                    (bool success, ) = payable(article.author).call{value: authorShare}("");
+                    // 优先转给 trueAuthor
+                    address recipient = article.trueAuthor != address(0) ? article.trueAuthor : article.author;
+                    (bool success, ) = payable(recipient).call{value: authorShare}("");
                     if (!success) revert TransferFailed();
                 }
             }
@@ -263,6 +292,63 @@ contract BlogHub is
     }
 
     /**
+     * @dev 执行收藏的核心逻辑
+     */
+    function _executeCollect(
+        address sender,
+        uint256 _articleId,
+        address _referrer,
+        uint256 amount
+    ) internal {
+        if (_articleId >= nextArticleId) revert ArticleNotFound();
+        
+        // 需重新读取 storage 以更新 collectCount
+        Article storage articleStorage = articles[_articleId];
+        Article memory article = articles[_articleId]; // memory copy for reading config
+
+        if (article.maxCollectSupply > 0 && article.collectCount >= article.maxCollectSupply) {
+            revert MaxSupplyReached();
+        }
+        // 如果 maxCollectSupply 为 0，且 collectCount 也为 0 (旧文章默认值)，这里需要判断策略。
+        // 假设 maxCollectSupply 0 意味着不可收藏（除非特殊逻辑）。
+        // 简单起见，如果 maxCollectSupply == 0，视为不可收藏。
+        // 如果想发布无限量的，作者应设置一个极大值。
+        if (article.maxCollectSupply == 0) {
+            revert CollectNotEnabled();
+        }
+
+        if (amount < article.collectPrice) {
+            revert InsufficientPayment();
+        }
+
+        // 更新计数
+        articleStorage.collectCount++;
+
+        // 铸造 NFT
+        _mint(sender, _articleId, 1, "");
+
+        // 资金分配
+        address[] memory invalidAddrs = new address[](1);
+        invalidAddrs[0] = article.author;
+        address validReferrer = _validateReferrer(_referrer, sender, invalidAddrs);
+        uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
+        
+        if (authorShare > 0) {
+            address recipient = article.trueAuthor != address(0) ? article.trueAuthor : article.author;
+            (bool success, ) = payable(recipient).call{value: authorShare}("");
+            if (!success) revert TransferFailed();
+        }
+
+        emit ArticleCollected(
+            _articleId,
+            sender,
+            amount,
+            _articleId, // TokenID = ArticleID
+            block.timestamp
+        );
+    }
+
+    /**
      * @dev 执行评论点赞的核心逻辑（内部函数）
      * @param sender 操作发起人
      * @param _articleId 文章ID
@@ -285,9 +371,6 @@ contract BlogHub is
 
         Article memory article = articles[_articleId];
 
-        // 铸造凭证给点赞者
-        _mint(sender, _articleId, 1, "");
-
         // --- 资金分配 ---
         address[] memory invalidAddrs = new address[](2);
         invalidAddrs[0] = article.author;
@@ -300,7 +383,9 @@ contract BlogHub is
         uint256 commenterShare = remaining - halfShare;
 
         if (halfShare > 0) {
-            (bool success1, ) = payable(article.author).call{value: halfShare}("");
+            // 作者份额给 trueAuthor
+            address recipient = article.trueAuthor != address(0) ? article.trueAuthor : article.author;
+            (bool success1, ) = payable(recipient).call{value: halfShare}("");
             if (!success1) revert TransferFailed();
         }
         if (commenterShare > 0) {
@@ -366,18 +451,17 @@ contract BlogHub is
     /**
      * @dev 发布文章 (铸造 NFT)
      * 支持 meta-transactions (使用 _msgSender())
-     * @param _arweaveId Irys 可变文件夹的 manifest ID（文章内容固定路径 index.md，封面图片固定路径 coverImage）
-     * @param _categoryId 分类ID
-     * @param _royaltyBps 版税比例 (basis points)
-     * @param _originalAuthor 真实作者名称（用于代发场景，为空则表示发布者即作者）
-     * @param _title 文章标题（用于列表展示，最大128字节）
      */
     function publish(
         string calldata _arweaveId,
         uint64 _categoryId,
         uint96 _royaltyBps,
         string calldata _originalAuthor,
-        string calldata _title
+        string calldata _title,
+        address _trueAuthor,
+        uint256 _collectPrice,
+        uint256 _maxCollectSupply,
+        Originality _originality
     ) external whenNotPaused returns (uint256) {
         if (_royaltyBps > 10000) revert RoyaltyTooHigh();
         if (bytes(_originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
@@ -393,14 +477,22 @@ contract BlogHub is
             originalAuthor: _originalAuthor,
             title: _title,
             categoryId: _categoryId,
-            timestamp: uint64(block.timestamp)
+            timestamp: uint64(block.timestamp),
+            trueAuthor: _trueAuthor,
+            collectPrice: _collectPrice,
+            maxCollectSupply: _maxCollectSupply,
+            collectCount: 0,
+            originality: _originality
         });
 
-        // 1. 铸造 NFT (初始归作者所有)
+        // 1. 铸造 NFT (初始归作者所有 - 创世 NFT 1个)
+        articles[newId].collectCount = 1;
         _mint(author, newId, 1, "");
 
-        // 2. 设置独立的 ERC2981 版税 (归作者所有)
-        _setTokenRoyalty(newId, author, _royaltyBps);
+        // 2. 设置独立的 ERC2981 版税 (归作者所有，或者 trueAuthor?)
+        // 版税通常给收款人
+        address royaltyReceiver = _trueAuthor != address(0) ? _trueAuthor : author;
+        _setTokenRoyalty(newId, royaltyReceiver, _royaltyBps);
 
         emit ArticlePublished(
             newId,
@@ -409,18 +501,17 @@ contract BlogHub is
             _arweaveId,
             _originalAuthor,
             _title,
-            block.timestamp
+            block.timestamp,
+            _trueAuthor,
+            _collectPrice,
+            _maxCollectSupply,
+            _originality
         );
         return newId;
     }
 
     /**
-     * @dev 评价文章 (合并了原有的 collect 和 comment)
-     * @param _articleId 文章ID
-     * @param _score 评价分数: 1 (支持), 0 (中立), 2 (反对)
-     * @param _content 评论内容。如果为空，则视为纯评分。
-     * @param _referrer 推荐人地址
-     * @param _parentCommentId 父评论ID (如果是对文章的直接评价，传0)
+     * @dev 评价文章 (Tip/Comment)
      */
     function evaluate(
         uint256 _articleId,
@@ -433,16 +524,18 @@ contract BlogHub is
     }
 
     /**
+     * @dev 收藏文章 (Collect)
+     * 铸造 NFT
+     */
+    function collect(
+        uint256 _articleId,
+        address _referrer
+    ) external payable nonReentrant whenNotPaused {
+        _executeCollect(_msgSender(), _articleId, _referrer, msg.value);
+    }
+
+    /**
      * @dev 对评论点赞
-     * @param _articleId 文章ID
-     * @param _commentId 被点赞的评论ID (链下生成的唯一标识)
-     * @param _commenter 原始评论人地址
-     * @param _referrer 推荐人地址
-     * 
-     * 资金分配逻辑：
-     * 1. 扣除平台费 (platformFeeBps)
-     * 2. 扣除推荐费 (10%, 如有推荐人)
-     * 3. 剩余金额：文章作者和评论人各得一半
      */
     function likeComment(
         uint256 _articleId,
@@ -540,17 +633,6 @@ contract BlogHub is
 
     /**
      * @notice 使用 Session Key 执行评价操作（无感交互）
-     * @dev 由 Relayer 或前端直接调用，使用 Session Key 签名。
-     *      调用者需代付 msg.value，该金额会直接转账给 owner。
-     * @param owner 主账户地址（资金接收者）
-     * @param sessionKey Session Key 地址
-     * @param _articleId 文章ID
-     * @param _score 评价分数
-     * @param _content 评论内容
-     * @param _referrer 推荐人地址
-     * @param _parentCommentId 父评论ID
-     * @param deadline 签名过期时间
-     * @param signature Session Key 签名
      */
     function evaluateWithSessionKey(
         address owner,
@@ -596,16 +678,47 @@ contract BlogHub is
     }
 
     /**
+     * @notice 使用 Session Key 执行收藏操作
+     */
+    function collectWithSessionKey(
+        address owner,
+        address sessionKey,
+        uint256 _articleId,
+        address _referrer,
+        uint256 deadline,
+        bytes calldata signature
+    ) external payable nonReentrant whenNotPaused {
+        if (address(sessionKeyManager) == address(0)) revert SessionKeyManagerNotSet();
+
+        // 构建 callData 用于验证
+        bytes memory callData = abi.encodeWithSelector(
+            this.collect.selector,
+            _articleId,
+            _referrer
+        );
+
+        // 验证 Session Key
+        bool valid = sessionKeyManager.validateAndUseSessionKey(
+            owner,
+            sessionKey,
+            address(this),
+            this.collect.selector,
+            callData,
+            msg.value,
+            deadline,
+            signature
+        );
+
+        if (!valid) revert SessionKeyValidationFailed();
+
+        // 执行收藏操作（以 owner 身份）
+        _executeCollect(owner, _articleId, _referrer, msg.value);
+
+        emit SessionKeyOperationExecuted(owner, sessionKey, this.collect.selector);
+    }
+
+    /**
      * @notice 使用 Session Key 执行评论点赞操作（无感交互）
-     * @dev 调用者需代付 msg.value，该金额会直接转账给 owner。
-     * @param owner 主账户地址（资金接收者）
-     * @param sessionKey Session Key 地址
-     * @param _articleId 文章ID
-     * @param _commentId 评论ID
-     * @param _commenter 评论人地址
-     * @param _referrer 推荐人地址
-     * @param deadline 签名过期时间
-     * @param signature Session Key 签名
      */
     function likeCommentWithSessionKey(
         address owner,
@@ -653,12 +766,6 @@ contract BlogHub is
 
     /**
      * @notice 使用 Session Key 执行关注操作（无感交互）
-     * @param owner 主账户地址
-     * @param sessionKey Session Key 地址
-     * @param _target 关注目标地址
-     * @param _status 关注状态
-     * @param deadline 签名过期时间
-     * @param signature Session Key 签名
      */
     function followWithSessionKey(
         address owner,
@@ -699,42 +806,45 @@ contract BlogHub is
 
     /**
      * @notice 使用 Session Key 发布文章（无感交互）
-     * @dev 允许用户通过 Session Key 发布文章，无需每次签名
-     * @param owner 主账户地址（文章作者）
-     * @param sessionKey Session Key 地址
-     * @param _arweaveId Irys 可变文件夹的 manifest ID
-     * @param _categoryId 分类ID
-     * @param _royaltyBps 版税比例 (basis points)
-     * @param _originalAuthor 真实作者名称
-     * @param _title 文章标题
-     * @param deadline 签名过期时间
-     * @param signature Session Key 签名
-     * @return articleId 新创建的文章ID
+     * @dev 由于参数过多，使用 Struct 避免 Stack Too Deep
      */
+    struct PublishParams {
+        string arweaveId;
+        uint64 categoryId;
+        uint96 royaltyBps;
+        string originalAuthor;
+        string title;
+        address trueAuthor;
+        uint256 collectPrice;
+        uint256 maxCollectSupply;
+        Originality originality;
+    }
+
     function publishWithSessionKey(
         address owner,
         address sessionKey,
-        string calldata _arweaveId,
-        uint64 _categoryId,
-        uint96 _royaltyBps,
-        string calldata _originalAuthor,
-        string calldata _title,
+        PublishParams calldata params,
         uint256 deadline,
         bytes calldata signature
     ) external whenNotPaused returns (uint256) {
         if (address(sessionKeyManager) == address(0)) revert SessionKeyManagerNotSet();
-        if (_royaltyBps > 10000) revert RoyaltyTooHigh();
-        if (bytes(_originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
-        if (bytes(_title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
+        if (params.royaltyBps > 10000) revert RoyaltyTooHigh();
+        if (bytes(params.originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
+        if (bytes(params.title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
 
         // 构建 callData 用于验证
+        // 注意：这里需要确保 ABI 编码与 client 端签名构建一致
         bytes memory callData = abi.encodeWithSelector(
             this.publish.selector,
-            _arweaveId,
-            _categoryId,
-            _royaltyBps,
-            _originalAuthor,
-            _title
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         // 验证 Session Key
@@ -756,28 +866,39 @@ contract BlogHub is
 
         // 存储文章元数据
         articles[newId] = Article({
-            arweaveHash: _arweaveId,
+            arweaveHash: params.arweaveId,
             author: owner,
-            originalAuthor: _originalAuthor,
-            title: _title,
-            categoryId: _categoryId,
-            timestamp: uint64(block.timestamp)
+            originalAuthor: params.originalAuthor,
+            title: params.title,
+            categoryId: params.categoryId,
+            timestamp: uint64(block.timestamp),
+            trueAuthor: params.trueAuthor,
+            collectPrice: params.collectPrice,
+            maxCollectSupply: params.maxCollectSupply,
+            collectCount: 0,
+            originality: params.originality
         });
 
-        // 铸造 NFT (初始归作者所有)
-        _mint(owner, newId, 1, "");
+        if (params.maxCollectSupply > 0) {
+             articles[newId].collectCount = 1;
+             _mint(owner, newId, 1, "");
+        }
 
-        // 设置独立的 ERC2981 版税 (归作者所有)
-        _setTokenRoyalty(newId, owner, _royaltyBps);
+        address royaltyReceiver = params.trueAuthor != address(0) ? params.trueAuthor : owner;
+        _setTokenRoyalty(newId, royaltyReceiver, params.royaltyBps);
 
         emit ArticlePublished(
             newId,
             owner,
-            _categoryId,
-            _arweaveId,
-            _originalAuthor,
-            _title,
-            block.timestamp
+            params.categoryId,
+            params.arweaveId,
+            params.originalAuthor,
+            params.title,
+            block.timestamp,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         emit SessionKeyOperationExecuted(owner, sessionKey, this.publish.selector);

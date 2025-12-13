@@ -31,14 +31,14 @@ export class Article {
     @IntColumn_({nullable: false})
     royaltyBps!: number
 
-    @IntColumn_({nullable: false})
-    likes!: number
-
-    @IntColumn_({nullable: false})
-    dislikes!: number
-
     @BigIntColumn_({nullable: false})
     totalTips!: bigint
+
+    @BigIntColumn_({nullable: false})
+    likeAmount!: bigint
+
+    @BigIntColumn_({nullable: false})
+    dislikeAmount!: bigint
 
     @OneToMany_(() => Comment, e => e.article)
     comments!: Comment[]

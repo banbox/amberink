@@ -14,17 +14,28 @@ type User @entity {
 # 文章实体
 type Article @entity {
   id: ID!                          # articleId
-  arweaveId: String!               # Irys 可变文件夹的 manifest ID（文章内容: index.md，封面图片: coverImage）
-  author: User!                    # 作者地址
-  originalAuthor: String           # 原始作者（代发时记录）
-  title: String!                   # 文章标题（用于列表展示）
+  arweaveId: String!               # Irys 可变文件夹的 manifest ID
+  author: User!                    # 发布者
+  originalAuthor: String           # 原始作者名称（字符串）
+  trueAuthor: String               # 真实作者地址 (address)
+  title: String!                   # 文章标题
   categoryId: BigInt!
-  royaltyBps: Int!
-  likes: Int!
-  dislikes: Int!
+  royaltyBps: Int!                 # 版税 (需额外查询或默认)
+  
+  # New Fields
+  collectPrice: BigInt!            # 收藏价格
+  maxCollectSupply: BigInt!        # 最大收藏数量
+  collectCount: BigInt!            # 当前收藏数量
+  originality: Int!                # 0:Original, 1:SemiOriginal, 2:Reprint
+  
   totalTips: BigInt!               # 累计打赏金额
+  likeAmount: BigInt!
+  dislikeAmount: BigInt!
+  
   comments: [Comment!]! @derivedFrom(field: "article")
   evaluations: [Evaluation!]! @derivedFrom(field: "article")
+  collections: [Collection!]! @derivedFrom(field: "article")
+  
   createdAt: DateTime!
   blockNumber: Int!
   txHash: String!
@@ -67,10 +78,11 @@ type Follow @entity {
 
 # NFT 收藏记录
 type Collection @entity {
-  id: ID!                          # user-articleId
+  id: ID!                          # articleId-tokenId-collector (Unique per collect event really, or just txHash-logIndex)
   user: User!
   article: Article!
   tokenId: BigInt!
   amount: BigInt!
   createdAt: DateTime!
+  txHash: String!
 }

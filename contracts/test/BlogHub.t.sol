@@ -17,7 +17,11 @@ contract BlogHubTest is BaseTest {
         string arweaveId,
         string originalAuthor,
         string title,
-        uint256 timestamp
+        uint256 timestamp,
+        address trueAuthor,
+        uint256 collectPrice,
+        uint256 maxCollectSupply,
+        BlogHub.Originality originality
     );
 
     event ArticleEvaluated(
@@ -72,24 +76,67 @@ contract BlogHubTest is BaseTest {
         uint96 royaltyBps = 500;
         string memory originalAuthor = "";
         string memory title = "Test Article Title";
+        address trueAuthor = address(0);
+        uint256 collectPrice = 0.01 ether;
+        uint256 maxCollectSupply = 100;
+        BlogHub.Originality originality = BlogHub.Originality.Original;
 
         vm.expectEmit(true, true, true, true);
-        emit ArticlePublished(1, user1, categoryId, arweaveHash, originalAuthor, title, block.timestamp);
+        emit ArticlePublished(
+            1,
+            user1,
+            categoryId,
+            arweaveHash,
+            originalAuthor,
+            title,
+            block.timestamp,
+            trueAuthor,
+            collectPrice,
+            maxCollectSupply,
+            originality
+        );
 
         vm.prank(user1);
-        uint256 articleId = blogHub.publish(arweaveHash, categoryId, royaltyBps, originalAuthor, title);
+        uint256 articleId = blogHub.publish(
+            arweaveHash,
+            categoryId,
+            royaltyBps,
+            originalAuthor,
+            title,
+            trueAuthor,
+            collectPrice,
+            maxCollectSupply,
+            originality
+        );
 
         assertEq(articleId, 1);
         assertEq(blogHub.nextArticleId(), 2);
         
         // 验证文章数据
-        (string memory hash, address author, string memory origAuthor, string memory storedTitle, uint64 catId, uint64 timestamp) = blogHub.articles(articleId);
+        (
+            string memory hash,
+            address author,
+            string memory origAuthor,
+            string memory storedTitle,
+            uint64 catId,
+            uint64 timestamp,
+            address storedTrueAuthor,
+            uint256 storedCollectPrice,
+            uint256 storedMaxCollectSupply,
+            uint256 storedCollectCount,
+            BlogHub.Originality storedOriginality
+        ) = blogHub.articles(articleId);
         assertEq(hash, arweaveHash);
         assertEq(author, user1);
         assertEq(origAuthor, originalAuthor);
         assertEq(storedTitle, title);
         assertEq(catId, categoryId);
         assertEq(timestamp, block.timestamp);
+        assertEq(storedTrueAuthor, trueAuthor);
+        assertEq(storedCollectPrice, collectPrice);
+        assertEq(storedMaxCollectSupply, maxCollectSupply);
+        assertEq(storedCollectCount, 1);
+        assertEq(uint256(storedOriginality), uint256(originality));
 
         // 验证 NFT 铸造
         assertEq(blogHub.balanceOf(user1, articleId), 1);
@@ -101,15 +148,41 @@ contract BlogHubTest is BaseTest {
         uint96 royaltyBps = 500;
         string memory originalAuthor = "RealAuthor.eth";
         string memory title = "Another Article";
+        address trueAuthor = address(0);
+        uint256 collectPrice = 0.01 ether;
+        uint256 maxCollectSupply = 100;
+        BlogHub.Originality originality = BlogHub.Originality.Original;
 
         vm.expectEmit(true, true, true, true);
-        emit ArticlePublished(1, user1, categoryId, arweaveHash, originalAuthor, title, block.timestamp);
+        emit ArticlePublished(
+            1,
+            user1,
+            categoryId,
+            arweaveHash,
+            originalAuthor,
+            title,
+            block.timestamp,
+            trueAuthor,
+            collectPrice,
+            maxCollectSupply,
+            originality
+        );
 
         vm.prank(user1);
-        uint256 articleId = blogHub.publish(arweaveHash, categoryId, royaltyBps, originalAuthor, title);
+        uint256 articleId = blogHub.publish(
+            arweaveHash,
+            categoryId,
+            royaltyBps,
+            originalAuthor,
+            title,
+            trueAuthor,
+            collectPrice,
+            maxCollectSupply,
+            originality
+        );
 
         // 验证文章数据
-        (string memory hash, address author, string memory origAuthor, string memory storedTitle, uint64 catId, uint64 timestamp) = blogHub.articles(articleId);
+        (string memory hash, address author, string memory origAuthor, string memory storedTitle, uint64 catId, uint64 timestamp, , , , , ) = blogHub.articles(articleId);
         assertEq(hash, arweaveHash);
         assertEq(author, user1); // 发布者是 user1
         assertEq(origAuthor, originalAuthor); // 真实作者是 RealAuthor.eth
@@ -127,20 +200,40 @@ contract BlogHubTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(BlogHub.OriginalAuthorTooLong.selector);
-        blogHub.publish("hash", 1, 500, string(longAuthor), "Title");
+        blogHub.publish(
+            "hash",
+            1,
+            500,
+            string(longAuthor),
+            "Title",
+            address(0),
+            0,
+            0,
+            BlogHub.Originality.Original
+        );
     }
 
     function test_Publish_RevertRoyaltyTooHigh() public {
         vm.prank(user1);
         vm.expectRevert(BlogHub.RoyaltyTooHigh.selector);
-        blogHub.publish("hash", 1, 10001, "", "Title"); // 超过 100%
+        blogHub.publish(
+            "hash",
+            1,
+            10001,
+            "",
+            "Title",
+            address(0),
+            0,
+            0,
+            BlogHub.Originality.Original
+        ); // 超过 100%
     }
 
     function test_Publish_MultipleArticles() public {
         vm.startPrank(user1);
-        uint256 id1 = blogHub.publish("hash1", 1, 500, "", "Title1");
-        uint256 id2 = blogHub.publish("hash2", 2, 300, "Author2", "Title2");
-        uint256 id3 = blogHub.publish("hash3", 1, 1000, "Author3.eth", "Title3");
+        uint256 id1 = blogHub.publish("hash1", 1, 500, "", "Title1", address(0), 0.01 ether, 100, BlogHub.Originality.Original);
+        uint256 id2 = blogHub.publish("hash2", 2, 300, "Author2", "Title2", address(0), 0.01 ether, 100, BlogHub.Originality.Original);
+        uint256 id3 = blogHub.publish("hash3", 1, 1000, "Author3.eth", "Title3", address(0), 0.01 ether, 100, BlogHub.Originality.Original);
         vm.stopPrank();
 
         assertEq(id1, 1);
@@ -166,7 +259,7 @@ contract BlogHubTest is BaseTest {
         blogHub.evaluate{value: paymentAmount}(articleId, 1, "", address(0), 0);
 
         // 验证 NFT 铸造给评价者
-        assertEq(blogHub.balanceOf(user2, articleId), 1);
+        assertEq(blogHub.balanceOf(user2, articleId), 0);
 
         // 验证资金直接转账 (2.5% 平台费)
         uint256 platformFee = (paymentAmount * 250) / 10000;
@@ -281,7 +374,7 @@ contract BlogHubTest is BaseTest {
         blogHub.likeComment{value: paymentAmount}(articleId, commentId, commenter, address(0));
 
         // 验证 NFT 铸造
-        assertEq(blogHub.balanceOf(user2, articleId), 1);
+        assertEq(blogHub.balanceOf(user2, articleId), 0);
 
         // 验证资金直接转账
         uint256 platformFee = (paymentAmount * 250) / 10000;
@@ -336,7 +429,17 @@ contract BlogHubTest is BaseTest {
     function test_Uri_Success() public {
         string memory arweaveHash = "abc123xyz";
         vm.prank(user1);
-        uint256 articleId = blogHub.publish(arweaveHash, 1, 500, "", "Test Article");
+        uint256 articleId = blogHub.publish(
+            arweaveHash,
+            1,
+            500,
+            "",
+            "Test Article",
+            address(0),
+            0.01 ether,
+            100,
+            BlogHub.Originality.Original
+        );
 
         // URI 现在使用 Irys 可变文件夹格式
         string memory expectedUri = string(abi.encodePacked("https://gateway.irys.xyz/mutable/", arweaveHash, "/index.md"));
@@ -381,7 +484,17 @@ contract BlogHubTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert();
-        blogHub.publish("hash", 1, 500, "", "Title");
+        blogHub.publish(
+            "hash",
+            1,
+            500,
+            "",
+            "Title",
+            address(0),
+            0,
+            0,
+            BlogHub.Originality.Original
+        );
     }
 
     // ============ 管理功能测试 ============

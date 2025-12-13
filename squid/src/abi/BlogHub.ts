@@ -5,7 +5,8 @@ import type { EventParams as EParams, FunctionArguments, FunctionReturn } from '
 export const events = {
     ApprovalForAll: event("0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31", "ApprovalForAll(address,address,bool)", {"account": indexed(p.address), "operator": indexed(p.address), "approved": p.bool}),
     ArticleEvaluated: event("0xa47847c5419013bc5fa344eaa882ed5b33f76d87a7ce6a1a760d5af198afd9e5", "ArticleEvaluated(uint256,address,uint8,uint256,uint256)", {"articleId": indexed(p.uint256), "user": indexed(p.address), "score": p.uint8, "amountPaid": p.uint256, "timestamp": p.uint256}),
-    ArticlePublished: event("0x9d7e6bdc67866fe0e844bfdb006ad0fb77d1b07f740944fc1d18cbd60db9ac12", "ArticlePublished(uint256,address,uint256,string,string,string,uint256)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "timestamp": p.uint256}),
+    ArticlePublished: event("0x596e3673799552097ea0bc75b818086e7a7c177b54ff630efd544c511681d6b1", "ArticlePublished(uint256,address,uint256,string,string,string,uint256,address,uint256,uint256,uint8)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "timestamp": p.uint256, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}),
+    ArticleCollected: event("0x24b54eb81304dfe4e560e2b09d1b8651d3de8efdf8fde769f1dbac6e690d81b5", "ArticleCollected(uint256,address,uint256,uint256,uint256)", {"articleId": indexed(p.uint256), "collector": indexed(p.address), "amount": p.uint256, "tokenId": p.uint256, "timestamp": p.uint256}),
     CommentAdded: event("0x19a5aae49af5681d63d1a8c6ea9dc7b88af86e08d71ade984e2087fada0d4c4a", "CommentAdded(uint256,address,string,uint256,uint8)", {"articleId": indexed(p.uint256), "commenter": indexed(p.address), "content": p.string, "parentCommentId": p.uint256, "score": p.uint8}),
     CommentLiked: event("0x3e2236223f9ef11dd92492a8d35ef88d2ef5bea632e11697c2565e8a55d2b401", "CommentLiked(uint256,uint256,address,address,uint256,uint256)", {"articleId": indexed(p.uint256), "commentId": indexed(p.uint256), "liker": indexed(p.address), "commenter": p.address, "amountPaid": p.uint256, "timestamp": p.uint256}),
     EIP712DomainChanged: event("0x0a6387c9ea3628b88a633bb4f3b151770f70085117a15f9bf3787cda53f13d31", "EIP712DomainChanged()", {}),
@@ -196,6 +197,7 @@ export class Contract extends ContractBase {
 export type ApprovalForAllEventArgs = EParams<typeof events.ApprovalForAll>
 export type ArticleEvaluatedEventArgs = EParams<typeof events.ArticleEvaluated>
 export type ArticlePublishedEventArgs = EParams<typeof events.ArticlePublished>
+export type ArticleCollectedEventArgs = EParams<typeof events.ArticleCollected>
 export type CommentAddedEventArgs = EParams<typeof events.CommentAdded>
 export type CommentLikedEventArgs = EParams<typeof events.CommentLiked>
 export type EIP712DomainChangedEventArgs = EParams<typeof events.EIP712DomainChanged>
@@ -367,4 +369,3 @@ export type UpgradeToAndCallReturn = FunctionReturn<typeof functions.upgradeToAn
 
 export type UriParams = FunctionArguments<typeof functions.uri>
 export type UriReturn = FunctionReturn<typeof functions.uri>
-

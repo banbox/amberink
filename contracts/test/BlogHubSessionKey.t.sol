@@ -26,6 +26,13 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 amountPaid,
         uint256 timestamp
     );
+    event ArticleCollected(
+        uint256 indexed articleId,
+        address indexed collector,
+        uint256 amount,
+        uint256 tokenId,
+        uint256 timestamp
+    );
     event CommentLiked(
         uint256 indexed articleId,
         uint256 indexed commentId,
@@ -125,8 +132,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature
         );
 
-        // 验证 NFT 铸造
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
+        // 验证: Evaluate 不再铸造 NFT
+        assertEq(blogHub.balanceOf(user1, articleId), 0);
     }
 
     function test_EvaluateWithSessionKey_WithComment() public {
@@ -170,9 +177,6 @@ contract BlogHubSessionKeyTest is BaseTest {
             deadline,
             signature
         );
-
-        // 验证 NFT 铸造
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
     }
 
     function test_EvaluateWithSessionKey_ZeroAmount() public {
@@ -203,7 +207,6 @@ contract BlogHubSessionKeyTest is BaseTest {
             deadline
         );
 
-        // 0 金额评价会触发 SpamProtection 错误（当有评论内容时）
         vm.prank(owner);
         vm.expectRevert(BlogHub.SpamProtection.selector);
         blogHub.evaluateWithSessionKey(
@@ -243,6 +246,53 @@ contract BlogHubSessionKeyTest is BaseTest {
             block.timestamp + 1 hours,
             ""
         );
+    }
+
+    // ============ collectWithSessionKey 测试 ============
+
+    function test_CollectWithSessionKey_Success() public {
+        uint256 articleId = _publishTestArticle(user2);
+        uint256 amount = 0.01 ether; // Default collect price
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.collect.selector,
+            articleId,
+            address(0)
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.collect.selector,
+            callData,
+            amount,
+            data.nonce,
+            deadline
+        );
+
+        vm.expectEmit(true, true, false, true);
+        emit ArticleCollected(articleId, user1, amount, articleId, block.timestamp);
+
+        vm.expectEmit(true, true, false, true);
+        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.collect.selector);
+
+        vm.prank(owner);
+        blogHub.collectWithSessionKey{value: amount}(
+            user1,
+            sessionKey,
+            articleId,
+            address(0),
+            deadline,
+            signature
+        );
+
+        // 验证: Collect 应该铸造 NFT
+        assertEq(blogHub.balanceOf(user1, articleId), 1);
     }
 
     // ============ likeCommentWithSessionKey 测试 ============
@@ -294,8 +344,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature
         );
 
-        // 验证 NFT 铸造
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
+        // 验证: Like Comment 不再铸造 NFT
+        assertEq(blogHub.balanceOf(user1, articleId), 0);
     }
 
     function test_LikeCommentWithSessionKey_RevertZeroAmount() public {
@@ -405,6 +455,9 @@ contract BlogHubSessionKeyTest is BaseTest {
         vm.expectEmit(true, true, false, true);
         emit FollowStatusChanged(user1, user2, false);
 
+        vm.expectEmit(true, true, false, true);
+        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.follow.selector);
+
         blogHub.followWithSessionKey(
             user1,
             sessionKey,
@@ -446,24 +499,39 @@ contract BlogHubSessionKeyTest is BaseTest {
         string arweaveId,
         string originalAuthor,
         string title,
-        uint256 timestamp
+        uint256 timestamp,
+        address trueAuthor,
+        uint256 collectPrice,
+        uint256 maxCollectSupply,
+        BlogHub.Originality originality
     );
 
     function test_PublishWithSessionKey_Success() public {
         uint256 deadline = block.timestamp + 1 hours;
-        string memory arweaveId = "test-arweave-hash-session";
-        uint64 categoryId = 1;
-        uint96 royaltyBps = 500;
-        string memory originalAuthor = "";
-        string memory title = "Session Key Published Article";
+        
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-arweave-hash-session",
+            categoryId: 1,
+            royaltyBps: 500,
+            originalAuthor: "",
+            title: "Session Key Published Article",
+            trueAuthor: address(0),
+            collectPrice: 0.01 ether,
+            maxCollectSupply: 100,
+            originality: BlogHub.Originality.Original
+        });
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            arweaveId,
-            categoryId,
-            royaltyBps,
-            originalAuthor,
-            title
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -486,11 +554,15 @@ contract BlogHubSessionKeyTest is BaseTest {
         emit ArticlePublished(
             expectedArticleId,
             user1,
-            categoryId,
-            arweaveId,
-            originalAuthor,
-            title,
-            block.timestamp
+            params.categoryId,
+            params.arweaveId,
+            params.originalAuthor,
+            params.title,
+            block.timestamp,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         vm.expectEmit(true, true, false, true);
@@ -499,11 +571,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 articleId = blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            arweaveId,
-            categoryId,
-            royaltyBps,
-            originalAuthor,
-            title,
+            params,
             deadline,
             signature
         );
@@ -511,7 +579,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         // 验证文章创建
         assertEq(articleId, expectedArticleId);
         
-        // 验证 NFT 铸造给 owner (user1)
+        // 验证 NFT 铸造给 owner (user1) - creator gets 1
         assertEq(blogHub.balanceOf(user1, articleId), 1);
         
         // 验证文章元数据
@@ -521,32 +589,53 @@ contract BlogHubSessionKeyTest is BaseTest {
             string memory storedOriginalAuthor,
             string memory storedTitle,
             uint64 storedCategoryId,
-            uint64 storedTimestamp
+            uint64 storedTimestamp,
+            address storedTrueAuthor,
+            uint256 storedPrice,
+            uint256 storedSupply,
+            uint256 storedCount,
+            BlogHub.Originality storedOriginality
         ) = blogHub.articles(articleId);
         
-        assertEq(storedArweaveHash, arweaveId);
+        assertEq(storedArweaveHash, params.arweaveId);
         assertEq(storedAuthor, user1);
-        assertEq(storedOriginalAuthor, originalAuthor);
-        assertEq(storedTitle, title);
-        assertEq(storedCategoryId, categoryId);
+        assertEq(storedOriginalAuthor, params.originalAuthor);
+        assertEq(storedTitle, params.title);
+        assertEq(storedCategoryId, params.categoryId);
         assertEq(storedTimestamp, uint64(block.timestamp));
+        assertEq(storedTrueAuthor, params.trueAuthor);
+        assertEq(storedPrice, params.collectPrice);
+        assertEq(storedSupply, params.maxCollectSupply);
+        assertEq(storedCount, 1);
+        assertEq(uint(storedOriginality), uint(params.originality));
     }
 
     function test_PublishWithSessionKey_WithOriginalAuthor() public {
         uint256 deadline = block.timestamp + 1 hours;
-        string memory arweaveId = "test-arweave-hash-proxy";
-        uint64 categoryId = 2;
-        uint96 royaltyBps = 1000;
-        string memory originalAuthor = "RealAuthorName";
-        string memory title = "Proxy Published Article";
+
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-arweave-hash-proxy",
+            categoryId: 2,
+            royaltyBps: 1000,
+            originalAuthor: "RealAuthorName",
+            title: "Proxy Published Article",
+            trueAuthor: address(0),
+            collectPrice: 0.01 ether,
+            maxCollectSupply: 100,
+            originality: BlogHub.Originality.SemiOriginal
+        });
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            arweaveId,
-            categoryId,
-            royaltyBps,
-            originalAuthor,
-            title
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -566,73 +655,42 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 articleId = blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            arweaveId,
-            categoryId,
-            royaltyBps,
-            originalAuthor,
-            title,
+            params,
             deadline,
             signature
         );
 
-        // 验证原作者字段
-        (, , string memory storedOriginalAuthor, , , ) = blogHub.articles(articleId);
-        assertEq(storedOriginalAuthor, originalAuthor);
-    }
-
-    function test_PublishWithSessionKey_RevertRoyaltyTooHigh() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint96 invalidRoyaltyBps = 10001; // 超过 100%
-
-        bytes memory callData = abi.encodeWithSelector(
-            BlogHub.publish.selector,
-            "test-hash",
-            uint64(1),
-            invalidRoyaltyBps,
-            "",
-            "Title"
-        );
-
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
-
-        bytes memory signature = _signSessionOperation(
-            sessionKeyPrivateKey,
-            user1,
-            sessionKey,
-            address(blogHub),
-            BlogHub.publish.selector,
-            callData,
-            0,
-            data.nonce,
-            deadline
-        );
-
-        vm.expectRevert(BlogHub.RoyaltyTooHigh.selector);
-        blogHub.publishWithSessionKey(
-            user1,
-            sessionKey,
-            "test-hash",
-            1,
-            invalidRoyaltyBps,
-            "",
-            "Title",
-            deadline,
-            signature
-        );
+        (, , string memory storedOriginalAuthor, , , , , , , , ) = blogHub.articles(articleId);
+        assertEq(storedOriginalAuthor, params.originalAuthor);
     }
 
     function test_PublishWithSessionKey_RevertOriginalAuthorTooLong() public {
         uint256 deadline = block.timestamp + 1 hours;
-        // 创建一个超过 64 字节的原作者名称
         string memory longOriginalAuthor = "This is a very long original author name that exceeds the maximum allowed length of 64 bytes";
+
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-hash",
+            categoryId: 1,
+            royaltyBps: 500,
+            originalAuthor: longOriginalAuthor,
+            title: "Title",
+            trueAuthor: address(0),
+            collectPrice: 0,
+            maxCollectSupply: 0,
+            originality: BlogHub.Originality.Original
+        });
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            "test-hash",
-            uint64(1),
-            uint96(500),
-            longOriginalAuthor,
-            "Title"
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -653,11 +711,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            "test-hash",
-            1,
-            500,
-            longOriginalAuthor,
-            "Title",
+            params,
             deadline,
             signature
         );
@@ -665,16 +719,31 @@ contract BlogHubSessionKeyTest is BaseTest {
 
     function test_PublishWithSessionKey_RevertTitleTooLong() public {
         uint256 deadline = block.timestamp + 1 hours;
-        // 创建一个超过 128 字节的标题
         string memory longTitle = "This is a very long title that exceeds the maximum allowed length of 128 bytes. It keeps going and going until it is definitely too long for the contract to accept.";
+
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-hash",
+            categoryId: 1,
+            royaltyBps: 500,
+            originalAuthor: "",
+            title: longTitle,
+            trueAuthor: address(0),
+            collectPrice: 0,
+            maxCollectSupply: 0,
+            originality: BlogHub.Originality.Original
+        });
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            "test-hash",
-            uint64(1),
-            uint96(500),
-            "",
-            longTitle
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -695,18 +764,13 @@ contract BlogHubSessionKeyTest is BaseTest {
         blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            "test-hash",
-            1,
-            500,
-            "",
-            longTitle,
+            params,
             deadline,
             signature
         );
     }
 
     function test_PublishWithSessionKey_RevertSessionKeyManagerNotSet() public {
-        // 创建一个没有设置 SessionKeyManager 的 BlogHub
         BlogHub newBlogHub = new BlogHub();
         bytes memory initData = abi.encodeWithSelector(
             BlogHub.initialize.selector,
@@ -716,15 +780,23 @@ contract BlogHubSessionKeyTest is BaseTest {
         address proxy = address(new ERC1967Proxy(address(newBlogHub), initData));
         BlogHub blogHubNoManager = BlogHub(payable(proxy));
 
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-hash",
+            categoryId: 1,
+            royaltyBps: 500,
+            originalAuthor: "",
+            title: "Title",
+            trueAuthor: address(0),
+            collectPrice: 0,
+            maxCollectSupply: 0,
+            originality: BlogHub.Originality.Original
+        });
+
         vm.expectRevert(BlogHub.SessionKeyManagerNotSet.selector);
         blogHubNoManager.publishWithSessionKey(
             user1,
             sessionKey,
-            "test-hash",
-            1,
-            500,
-            "",
-            "Title",
+            params,
             block.timestamp + 1 hours,
             ""
         );
@@ -733,18 +805,33 @@ contract BlogHubSessionKeyTest is BaseTest {
     function test_PublishWithSessionKey_RevertInvalidSignature() public {
         uint256 deadline = block.timestamp + 1 hours;
 
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-hash",
+            categoryId: 1,
+            royaltyBps: 500,
+            originalAuthor: "",
+            title: "Title",
+            trueAuthor: address(0),
+            collectPrice: 0,
+            maxCollectSupply: 1,
+            originality: BlogHub.Originality.Original
+        });
+
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            "test-hash",
-            uint64(1),
-            uint96(500),
-            "",
-            "Title"
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
         );
 
-        // 使用错误的私钥签名
         bytes memory invalidSignature = _signSessionOperation(
-            user2PrivateKey, // 错误的私钥
+            user2PrivateKey,
             user1,
             sessionKey,
             address(blogHub),
@@ -759,11 +846,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            "test-hash",
-            1,
-            500,
-            "",
-            "Title",
+            params,
             deadline,
             invalidSignature
         );
@@ -772,14 +855,29 @@ contract BlogHubSessionKeyTest is BaseTest {
     function test_PublishWithSessionKey_MultipleArticles() public {
         uint256 deadline = block.timestamp + 1 hours;
 
-        // 发布第一篇文章
+        BlogHub.PublishParams memory params1 = BlogHub.PublishParams({
+            arweaveId: "arweave-hash-1",
+            categoryId: 1,
+            royaltyBps: 500,
+            originalAuthor: "",
+            title: "First Article",
+            trueAuthor: address(0),
+            collectPrice: 0.01 ether,
+            maxCollectSupply: 100,
+            originality: BlogHub.Originality.Original
+        });
+
         bytes memory callData1 = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            "arweave-hash-1",
-            uint64(1),
-            uint96(500),
-            "",
-            "First Article"
+            params1.arweaveId,
+            params1.categoryId,
+            params1.royaltyBps,
+            params1.originalAuthor,
+            params1.title,
+            params1.trueAuthor,
+            params1.collectPrice,
+            params1.maxCollectSupply,
+            params1.originality
         );
 
         ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -799,23 +897,34 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 articleId1 = blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            "arweave-hash-1",
-            1,
-            500,
-            "",
-            "First Article",
+            params1,
             deadline,
             signature1
         );
 
-        // 发布第二篇文章（nonce 应该已递增）
+        BlogHub.PublishParams memory params2 = BlogHub.PublishParams({
+            arweaveId: "arweave-hash-2",
+            categoryId: 2,
+            royaltyBps: 1000,
+            originalAuthor: "",
+            title: "Second Article",
+            trueAuthor: address(0),
+            collectPrice: 0.01 ether,
+            maxCollectSupply: 100,
+            originality: BlogHub.Originality.Original
+        });
+
         bytes memory callData2 = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            "arweave-hash-2",
-            uint64(2),
-            uint96(1000),
-            "",
-            "Second Article"
+            params2.arweaveId,
+            params2.categoryId,
+            params2.royaltyBps,
+            params2.originalAuthor,
+            params2.title,
+            params2.trueAuthor,
+            params2.collectPrice,
+            params2.maxCollectSupply,
+            params2.originality
         );
 
         ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -836,29 +945,21 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 articleId2 = blogHub.publishWithSessionKey(
             user1,
             sessionKey,
-            "arweave-hash-2",
-            2,
-            1000,
-            "",
-            "Second Article",
+            params2,
             deadline,
             signature2
         );
 
-        // 验证两篇文章都创建成功
         assertEq(articleId2, articleId1 + 1);
         assertEq(blogHub.balanceOf(user1, articleId1), 1);
         assertEq(blogHub.balanceOf(user1, articleId2), 1);
     }
-
-    // ============ 多次操作测试 ============
 
     function test_MultipleSessionKeyOperations() public {
         uint256 articleId = _publishTestArticle(user2);
         uint256 deadline = block.timestamp + 1 hours;
         uint256 amount = 1 ether;
 
-        // 第一次操作：评价
         bytes memory callData1 = abi.encodeWithSelector(
             BlogHub.evaluate.selector,
             articleId,
@@ -895,7 +996,6 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature1
         );
 
-        // 第二次操作：关注
         bytes memory callData2 = abi.encodeWithSelector(
             BlogHub.follow.selector,
             user2,
@@ -927,8 +1027,58 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature2
         );
 
-        // 验证最终状态
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
+        assertEq(blogHub.balanceOf(user1, articleId), 0);
     }
 
+    function test_PublishWithSessionKey_RevertRoyaltyTooHigh() public {
+        uint256 deadline = block.timestamp + 1 hours;
+        
+        BlogHub.PublishParams memory params = BlogHub.PublishParams({
+            arweaveId: "test-hash",
+            categoryId: 1,
+            royaltyBps: 10001, // Invalid
+            originalAuthor: "",
+            title: "Title",
+            trueAuthor: address(0),
+            collectPrice: 0,
+            maxCollectSupply: 0,
+            originality: BlogHub.Originality.Original
+        });
+
+        bytes memory callData = abi.encodeWithSelector(
+            BlogHub.publish.selector,
+            params.arweaveId,
+            params.categoryId,
+            params.royaltyBps,
+            params.originalAuthor,
+            params.title,
+            params.trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
+        );
+
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+
+        bytes memory signature = _signSessionOperation(
+            sessionKeyPrivateKey,
+            user1,
+            sessionKey,
+            address(blogHub),
+            BlogHub.publish.selector,
+            callData,
+            0,
+            data.nonce,
+            deadline
+        );
+
+        vm.expectRevert(BlogHub.RoyaltyTooHigh.selector);
+        blogHub.publishWithSessionKey(
+            user1,
+            sessionKey,
+            params,
+            deadline,
+            signature
+        );
+    }
 }

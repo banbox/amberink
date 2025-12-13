@@ -209,11 +209,12 @@ abstract contract BaseTest is Test {
         address _sessionKey,
         address allowedContract
     ) internal {
-        bytes4[] memory selectors = new bytes4[](4);
+        bytes4[] memory selectors = new bytes4[](5);
         selectors[0] = BlogHub.evaluate.selector;
         selectors[1] = BlogHub.likeComment.selector;
         selectors[2] = BlogHub.follow.selector;
         selectors[3] = BlogHub.publish.selector;
+        selectors[4] = BlogHub.collect.selector;
 
         vm.prank(_owner);
         sessionKeyManager.registerSessionKey(
@@ -231,7 +232,17 @@ abstract contract BaseTest is Test {
      */
     function _publishTestArticle(address author) internal returns (uint256) {
         vm.prank(author);
-        return blogHub.publish("test-arweave-hash", 1, 500, "", "Test Title");
+        return blogHub.publish(
+            "test-arweave-hash", 
+            1, 
+            500, 
+            "", 
+            "Test Title",
+            address(0), 
+            0.01 ether, // Default collect price
+            100, // Default max supply
+            BlogHub.Originality.Original
+        );
     }
 
     /**
@@ -239,7 +250,17 @@ abstract contract BaseTest is Test {
      */
     function _publishTestArticleWithOriginalAuthor(address publisher, string memory originalAuthor) internal returns (uint256) {
         vm.prank(publisher);
-        return blogHub.publish("test-arweave-hash", 1, 500, originalAuthor, "Test Title");
+        return blogHub.publish(
+            "test-arweave-hash", 
+            1, 
+            500, 
+            originalAuthor, 
+            "Test Title",
+            address(0), 
+            0.01 ether,
+            100,
+            BlogHub.Originality.Original
+        );
     }
 
     /**
