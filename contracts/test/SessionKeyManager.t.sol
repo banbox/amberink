@@ -422,7 +422,7 @@ contract SessionKeyManagerTest is BaseTest {
             user1,
             sessionKey,
             address(blogHub),
-            BlogHub.publish.selector, // 未授权的选择器
+            BlogHub.setPlatformFee.selector, // 未授权的选择器
             1 ether
         );
         assertFalse(valid);
@@ -607,10 +607,12 @@ contract SessionKeyManagerTest is BaseTest {
         _registerStandardSessionKey(user1, sessionKey, address(blogHub));
 
         bytes4[] memory selectors = sessionKeyManager.getAllowedSelectors(user1, sessionKey);
-        assertEq(selectors.length, 3);
+        assertEq(selectors.length, 5);
         assertEq(selectors[0], BlogHub.evaluate.selector);
         assertEq(selectors[1], BlogHub.likeComment.selector);
         assertEq(selectors[2], BlogHub.follow.selector);
+        assertEq(selectors[3], BlogHub.publish.selector);
+        assertEq(selectors[4], BlogHub.collect.selector);
     }
 
     function test_DomainSeparator() public view {

@@ -375,7 +375,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
 
         vm.prank(owner);
-        vm.expectRevert(BlogHub.ZeroAmount.selector);
+        vm.expectRevert(BlogHub.SpamProtection.selector);
         blogHub.likeCommentWithSessionKey(
             user1,
             sessionKey,
@@ -559,7 +559,7 @@ contract BlogHubSessionKeyTest is BaseTest {
             params.originalAuthor,
             params.title,
             block.timestamp,
-            params.trueAuthor,
+            user1,
             params.collectPrice,
             params.maxCollectSupply,
             params.originality
@@ -584,26 +584,20 @@ contract BlogHubSessionKeyTest is BaseTest {
         
         // 验证文章元数据
         (
-            string memory storedArweaveHash,
             address storedAuthor,
-            string memory storedOriginalAuthor,
-            string memory storedTitle,
-            uint64 storedCategoryId,
             uint64 storedTimestamp,
-            address storedTrueAuthor,
-            uint256 storedPrice,
-            uint256 storedSupply,
-            uint256 storedCount,
-            BlogHub.Originality storedOriginality
+            uint16 storedCategoryId,
+            uint32 storedSupply,
+            uint32 storedCount,
+            BlogHub.Originality storedOriginality,
+            uint96 storedPrice,
+            string memory storedArweaveHash
         ) = blogHub.articles(articleId);
         
         assertEq(storedArweaveHash, params.arweaveId);
-        assertEq(storedAuthor, user1);
-        assertEq(storedOriginalAuthor, params.originalAuthor);
-        assertEq(storedTitle, params.title);
         assertEq(storedCategoryId, params.categoryId);
         assertEq(storedTimestamp, uint64(block.timestamp));
-        assertEq(storedTrueAuthor, params.trueAuthor);
+        assertEq(storedAuthor, user1);
         assertEq(storedPrice, params.collectPrice);
         assertEq(storedSupply, params.maxCollectSupply);
         assertEq(storedCount, 1);
@@ -660,8 +654,9 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature
         );
 
-        (, , string memory storedOriginalAuthor, , , , , , , , ) = blogHub.articles(articleId);
-        assertEq(storedOriginalAuthor, params.originalAuthor);
+        // originalAuthor 只通过 event 输出，不做链上存储
+        (address storedAuthor, , , , , , , ) = blogHub.articles(articleId);
+        assertEq(storedAuthor, user1);
     }
 
     function test_PublishWithSessionKey_RevertOriginalAuthorTooLong() public {

@@ -9,12 +9,11 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {MulticallUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/MulticallUpgradeable.sol";
-import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ISessionKeyManager} from "./interfaces/ISessionKeyManager.sol";
 
 /**
  * @title BlogHub V2
- * @dev 集成了 UUPS 可升级、EIP-712 签名、权限管理的博客合约。
+ * @dev 集成了 UUPS 可升级、权限管理的博客合约。
  * 支持 ERC-4337 账户抽象，配合 BlogPaymaster 实现完全去中心化的代付功能。
  */
 contract BlogHub is
@@ -25,8 +24,7 @@ contract BlogHub is
     PausableUpgradeable,
     ReentrancyGuard,
     UUPSUpgradeable,
-    MulticallUpgradeable,
-    EIP712Upgradeable
+    MulticallUpgradeable
 {
     // --- Custom Errors (Gas Saving) ---
     error InvalidLength();
@@ -39,7 +37,6 @@ contract BlogHub is
     error TransferFailed();
     error SpamProtection();
     error InvalidCommenter();
-    error ZeroAmount();
     error SessionKeyValidationFailed();
     error SessionKeyManagerNotSet();
     error OriginalAuthorTooLong();
@@ -47,6 +44,9 @@ contract BlogHub is
     error InsufficientPayment();
     error MaxSupplyReached();
     error CollectNotEnabled();
+    error CollectPriceTooHigh();
+    error CategoryIdTooHigh();
+    error MaxCollectSupplyTooHigh();
     
     // 定义常量：最大评论长度（字节）
     // 140单词英文大约 700-1000 字节，中文约 400 汉字 = 1200 字节
@@ -68,18 +68,20 @@ contract BlogHub is
 
     // --- 结构体 ---
     struct Article {
-        string arweaveHash;    // Irys 可变文件夹的 manifest ID
-        address author;
-        string originalAuthor; // 真实作者（用于代发场景，最大64字节）
-        string title;          // 文章标题（最大128字节，用于列表展示）
-        uint64 categoryId;
-        uint64 timestamp;
-        // New Fields
-        address trueAuthor;    // 真实作者钱包地址（用于接收资金）
-        uint256 collectPrice;  // 收藏价格
-        uint256 maxCollectSupply; // 最大收藏数量 (0 表示不可收藏，除非是老数据兼容处理)
-        uint256 collectCount;     // 当前收藏数量
-        Originality originality;  // 原创性声明
+        // --- Slot 0 (31 bytes，剩余1 bytes) ---
+        address author;       // 20 bytes
+        uint64 timestamp;     // 8 bytes
+        uint16 categoryId;    // 2 bytes
+        Originality originality; // enum uint8 (1 byte)
+        
+        // --- Slot 1 (16 bytes，剩余 16 bytes) ---
+        uint96 collectPrice; // 8 bytes
+        uint32 maxCollectSupply;  // 4 bytes
+        uint32 collectCount;  // 4 bytes
+        
+        // --- String Slots ---
+        // string 类型因为长度不固定，通常无法与普通变量打包，会开启新 Slot
+        string arweaveHash;
     }
 
     // 最大原作者名称长度（64字节，足够存储大多数用户名/ENS域名）
@@ -194,7 +196,6 @@ contract BlogHub is
         __AccessControl_init();
         __Pausable_init();
         __Multicall_init();
-        __EIP712_init("BlogHub", "2"); // EIP-712 域名和版本 (升级到 V2)
 
         // 权限设置
         _grantRole(DEFAULT_ADMIN_ROLE, _initialOwner);
@@ -301,11 +302,7 @@ contract BlogHub is
                 address validReferrer = _validateReferrer(_referrer, sender, articleAuthor);
                 uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
                 if (authorShare > 0) {
-                    // 优先转给 trueAuthor
-                    address recipient = article.trueAuthor != address(0)
-                        ? article.trueAuthor
-                        : articleAuthor;
-                    (bool success, ) = payable(recipient).call{value: authorShare}("");
+                    (bool success, ) = payable(articleAuthor).call{value: authorShare}("");
                     if (!success) revert TransferFailed();
                 }
             }
@@ -343,7 +340,6 @@ contract BlogHub is
 
         Article storage article = articles[_articleId];
         address articleAuthor = article.author;
-        address articleTrueAuthor = article.trueAuthor;
 
         uint256 maxSupply = article.maxCollectSupply;
         if (maxSupply == 0) revert CollectNotEnabled();
@@ -367,10 +363,7 @@ contract BlogHub is
         uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
         
         if (authorShare > 0) {
-            address recipient = articleTrueAuthor != address(0)
-                ? articleTrueAuthor
-                : articleAuthor;
-            (bool success, ) = payable(recipient).call{value: authorShare}("");
+            (bool success, ) = payable(articleAuthor).call{value: authorShare}("");
             if (!success) revert TransferFailed();
         }
 
@@ -406,7 +399,6 @@ contract BlogHub is
 
         Article storage article = articles[_articleId];
         address articleAuthor = article.author;
-        address articleTrueAuthor = article.trueAuthor;
 
         // --- 资金分配 ---
         address validReferrer = _validateReferrer(
@@ -423,10 +415,7 @@ contract BlogHub is
 
         if (halfShare > 0) {
             // 作者份额给 trueAuthor
-            address recipient = articleTrueAuthor != address(0)
-                ? articleTrueAuthor
-                : articleAuthor;
-            (bool success1, ) = payable(recipient).call{value: halfShare}("");
+            (bool success1, ) = payable(articleAuthor).call{value: halfShare}("");
             if (!success1) revert TransferFailed();
         }
         if (commenterShare > 0) {
@@ -520,37 +509,39 @@ contract BlogHub is
     ) external whenNotPaused returns (uint256) {
         _validatePublishParams(_royaltyBps, _originalAuthor, _title);
 
-        address author = _msgSender();
+        if (_collectPrice > type(uint96).max) revert CollectPriceTooHigh();
+        if (_categoryId > type(uint16).max) revert CategoryIdTooHigh();
+        if (_maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
+
+        address publisher = _msgSender();
+        address trueAuthor = _trueAuthor != address(0) ? _trueAuthor : publisher;
         uint256 newId = nextArticleId++;
 
         articles[newId] = Article({
             arweaveHash: _arweaveId,
-            author: author,
-            originalAuthor: _originalAuthor,
-            title: _title,
-            categoryId: _categoryId,
+            categoryId: uint16(_categoryId),
             timestamp: uint64(block.timestamp),
-            trueAuthor: _trueAuthor,
-            collectPrice: _collectPrice,
-            maxCollectSupply: _maxCollectSupply,
-            collectCount: 0,
+            author: trueAuthor,
+            collectPrice: uint96(_collectPrice),
+            maxCollectSupply: uint32(_maxCollectSupply),
+            collectCount: 1,
             originality: _originality
         });
 
-        _mint(author, newId, 1, "");
+        _mint(publisher, newId, 1, "");
 
-        address royaltyReceiver = _trueAuthor != address(0) ? _trueAuthor : author;
+        address royaltyReceiver = trueAuthor;
         _setTokenRoyalty(newId, royaltyReceiver, _royaltyBps);
 
         emit ArticlePublished(
             newId,
-            author,
+            publisher,
             _categoryId,
             _arweaveId,
             _originalAuthor,
             _title,
             block.timestamp,
-            _trueAuthor,
+            trueAuthor,
             _collectPrice,
             _maxCollectSupply,
             _originality
@@ -798,7 +789,7 @@ contract BlogHub is
         );
 
         // likeComment 必须有支付金额
-        if (msg.value == 0) revert ZeroAmount();
+        if (msg.value == 0) revert SpamProtection();
 
         // 执行点赞操作（以 owner 身份），资金分配由 _executeLikeComment 内部处理
         _executeLikeComment(owner, _articleId, _commentId, _commenter, _referrer, msg.value);
@@ -885,25 +876,28 @@ contract BlogHub is
             signature
         );
 
+        if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
+        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
+        if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
+
+        address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : owner;
+
         uint256 newId = nextArticleId++;
 
         articles[newId] = Article({
             arweaveHash: params.arweaveId,
-            author: owner,
-            originalAuthor: params.originalAuthor,
-            title: params.title,
-            categoryId: params.categoryId,
+            categoryId: uint16(params.categoryId),
             timestamp: uint64(block.timestamp),
-            trueAuthor: params.trueAuthor,
-            collectPrice: params.collectPrice,
-            maxCollectSupply: params.maxCollectSupply,
-            collectCount: 0,
+            author: trueAuthor,
+            collectPrice: uint96(params.collectPrice),
+            maxCollectSupply: uint32(params.maxCollectSupply),
+            collectCount: 1,
             originality: params.originality
         });
 
         _mint(owner, newId, 1, "");
 
-        address royaltyReceiver = params.trueAuthor != address(0) ? params.trueAuthor : owner;
+        address royaltyReceiver = trueAuthor;
         _setTokenRoyalty(newId, royaltyReceiver, params.royaltyBps);
 
         emit ArticlePublished(
@@ -914,7 +908,7 @@ contract BlogHub is
             params.originalAuthor,
             params.title,
             block.timestamp,
-            params.trueAuthor,
+            trueAuthor,
             params.collectPrice,
             params.maxCollectSupply,
             params.originality

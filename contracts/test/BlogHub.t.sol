@@ -90,7 +90,7 @@ contract BlogHubTest is BaseTest {
             originalAuthor,
             title,
             block.timestamp,
-            trueAuthor,
+            user1,
             collectPrice,
             maxCollectSupply,
             originality
@@ -114,25 +114,19 @@ contract BlogHubTest is BaseTest {
         
         // 验证文章数据
         (
-            string memory hash,
-            address author,
-            string memory origAuthor,
-            string memory storedTitle,
-            uint64 catId,
+            address storedAuthor,
             uint64 timestamp,
-            address storedTrueAuthor,
-            uint256 storedCollectPrice,
-            uint256 storedMaxCollectSupply,
-            uint256 storedCollectCount,
-            BlogHub.Originality storedOriginality
+            uint16 catId,
+            uint32 storedMaxCollectSupply,
+            uint32 storedCollectCount,
+            BlogHub.Originality storedOriginality,
+            uint96 storedCollectPrice,
+            string memory hash
         ) = blogHub.articles(articleId);
         assertEq(hash, arweaveHash);
-        assertEq(author, user1);
-        assertEq(origAuthor, originalAuthor);
-        assertEq(storedTitle, title);
+        assertEq(storedAuthor, trueAuthor == address(0) ? user1 : trueAuthor);
         assertEq(catId, categoryId);
         assertEq(timestamp, block.timestamp);
-        assertEq(storedTrueAuthor, trueAuthor);
         assertEq(storedCollectPrice, collectPrice);
         assertEq(storedMaxCollectSupply, maxCollectSupply);
         assertEq(storedCollectCount, 1);
@@ -162,7 +156,7 @@ contract BlogHubTest is BaseTest {
             originalAuthor,
             title,
             block.timestamp,
-            trueAuthor,
+            user1,
             collectPrice,
             maxCollectSupply,
             originality
@@ -182,11 +176,9 @@ contract BlogHubTest is BaseTest {
         );
 
         // 验证文章数据
-        (string memory hash, address author, string memory origAuthor, string memory storedTitle, uint64 catId, uint64 timestamp, , , , , ) = blogHub.articles(articleId);
+        (address storedAuthor, uint64 timestamp, uint16 catId, , , , , string memory hash) = blogHub.articles(articleId);
         assertEq(hash, arweaveHash);
-        assertEq(author, user1); // 发布者是 user1
-        assertEq(origAuthor, originalAuthor); // 真实作者是 RealAuthor.eth
-        assertEq(storedTitle, title);
+        assertEq(storedAuthor, user1); // 存储的 author 为收款作者（trueAuthor 为空则为发布者）
         assertEq(catId, categoryId);
         assertEq(timestamp, block.timestamp);
     }

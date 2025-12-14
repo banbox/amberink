@@ -710,3 +710,17 @@ GPT: 修改完成
 #### 2025-12-14 10:15  智能合约代码优化
 @BlogHub.sol 当前智能合约进行了很多次修改，当前支持直接触发和通关SessionKey调用业务函数两种方式；目前可能有很多代码冗余；请你作为高级智能合约专家，一方面从方便维护的角度，查找冗余的代码，提取为子函数；另一方面检查是否有gas浪费可优化的地方，帮我改进；最后查看是否有逻辑冗余可删除的（冗余的只做提示）  
 GPT: 提取了一些重复逻辑，移除Article memory大拷贝；冗余的：EIP712并未使用，Multicall业务代码未使用，ZeroAmount和SpamProtection语义重复；更激进的gas优化：把Article的string字段拆到单独map或分为ArticleCore和ArticleText；其他建议：补充Foundry测试，覆盖SessionKey 路径与直接调用路径在支付、referrer、collect 上限等场景
+
+#### 2025-12-14 11:03  EIP712
+@BlogHub.sol 当前合约导入了EIP712，但并未使用验签；请你考虑当前合约的特点，已支持的其他特性， @README.md 从用户体验角度考虑，是否有必要继续实现EIP712，如果有必要，帮我实现，如果没有必要，帮我删除相关逻辑  
+GPT：已在SessionKeyManager中使用EIP712，不用在BlogHub中保留，已删除  
+开发者：手动删除了ZeroAmount
+
+#### 2025-12-14 11:18  Solidity中复杂map的最佳实践
+(附带BlogHub.sol中Article结构体和对应的map)上面这种形式，是否是推荐的最佳实践？从省gas的角度出发，应该每个属性单独维护一个map吗？还是按上面这样维护一个map对应结构体？还是提取一部分字段维护几个map？请你作为高级智能合约专家，帮我分析给出结论   
+Gemini: 不用拆，因为拆了写入时太耗gas，且读取时编译器会优化只读取需要字段；目前是结构体布局未优化，slot浪费严重；应将不同类型的拼到一起凑32bytes减少slot浪费；另外title 和 originalAuthor只做读取，合约中不使用，不应存储，直接event即可；
+
+#### 2025-12-14 11:38  合约优化
+@BlogHub.sol 当前的Article中的title 和 originalAuthor只做读取，合约中不使用，不应存储，直接event即可；我已删除，请帮我修改其他函数中对应的地方。另外帮我检查相关代码，分析Article中的author和trueAuthor这两个字段是否有冗余？我本意是存储真实作者的钱包地址，后续用于转账；目前用两个是否没必要？如果确实没必要，帮我删除一个；最后，对于collectPrice，目前使用uint256存储，这个是否太大了？有没有必要使用更小的？我后续要部署到多链，如OP链，polygon等evm兼容链；请帮我考虑是否需要改；  
+GPT: 已移除存储title/originAuthor，删除冗余trueAuthor，collectPrice改uint96  
+
