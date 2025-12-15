@@ -4,12 +4,11 @@ import type { EventParams as EParams, FunctionArguments, FunctionReturn } from '
 
 export const events = {
     ApprovalForAll: event("0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31", "ApprovalForAll(address,address,bool)", {"account": indexed(p.address), "operator": indexed(p.address), "approved": p.bool}),
+    ArticleCollected: event("0x24b54eb81304dfe4e560e2b09d1b8651d3de8efdf8fde769f1dbac6e690d81b5", "ArticleCollected(uint256,address,uint256,uint256,uint256)", {"articleId": indexed(p.uint256), "collector": indexed(p.address), "amount": p.uint256, "tokenId": p.uint256, "timestamp": p.uint256}),
     ArticleEvaluated: event("0xa47847c5419013bc5fa344eaa882ed5b33f76d87a7ce6a1a760d5af198afd9e5", "ArticleEvaluated(uint256,address,uint8,uint256,uint256)", {"articleId": indexed(p.uint256), "user": indexed(p.address), "score": p.uint8, "amountPaid": p.uint256, "timestamp": p.uint256}),
     ArticlePublished: event("0x596e3673799552097ea0bc75b818086e7a7c177b54ff630efd544c511681d6b1", "ArticlePublished(uint256,address,uint256,string,string,string,uint256,address,uint256,uint256,uint8)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "timestamp": p.uint256, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}),
-    ArticleCollected: event("0x24b54eb81304dfe4e560e2b09d1b8651d3de8efdf8fde769f1dbac6e690d81b5", "ArticleCollected(uint256,address,uint256,uint256,uint256)", {"articleId": indexed(p.uint256), "collector": indexed(p.address), "amount": p.uint256, "tokenId": p.uint256, "timestamp": p.uint256}),
     CommentAdded: event("0x19a5aae49af5681d63d1a8c6ea9dc7b88af86e08d71ade984e2087fada0d4c4a", "CommentAdded(uint256,address,string,uint256,uint8)", {"articleId": indexed(p.uint256), "commenter": indexed(p.address), "content": p.string, "parentCommentId": p.uint256, "score": p.uint8}),
     CommentLiked: event("0x3e2236223f9ef11dd92492a8d35ef88d2ef5bea632e11697c2565e8a55d2b401", "CommentLiked(uint256,uint256,address,address,uint256,uint256)", {"articleId": indexed(p.uint256), "commentId": indexed(p.uint256), "liker": indexed(p.address), "commenter": p.address, "amountPaid": p.uint256, "timestamp": p.uint256}),
-    EIP712DomainChanged: event("0x0a6387c9ea3628b88a633bb4f3b151770f70085117a15f9bf3787cda53f13d31", "EIP712DomainChanged()", {}),
     FollowStatusChanged: event("0x75a1fc5e2239f53dc8407b3712c878c5893431bc3c349ea3561584869670f7f2", "FollowStatusChanged(address,address,bool)", {"follower": indexed(p.address), "target": indexed(p.address), "isFollowing": p.bool}),
     Initialized: event("0xc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d2", "Initialized(uint64)", {"version": p.uint64}),
     MinActionValueUpdated: event("0xfcae2461302da2a86e3604d10afc558dc160d49eb88bc010c4bca093793857ff", "MinActionValueUpdated(uint256)", {"newValue": p.uint256}),
@@ -40,10 +39,11 @@ export const functions = {
     SCORE_NEUTRAL: viewFun("0x473106b2", "SCORE_NEUTRAL()", {}, p.uint8),
     UPGRADER_ROLE: viewFun("0xf72c0d8b", "UPGRADER_ROLE()", {}, p.bytes32),
     UPGRADE_INTERFACE_VERSION: viewFun("0xad3cb1cc", "UPGRADE_INTERFACE_VERSION()", {}, p.string),
-    articles: viewFun("0xedcfafe6", "articles(uint256)", {"_0": p.uint256}, {"author": p.address, "timestamp": p.uint64, "categoryId": p.uint16, "maxCollectSupply": p.uint32, "collectCount": p.uint32, "originality": p.uint8, "collectPrice": p.uint96, "arweaveHash": p.string}),
+    articles: viewFun("0xedcfafe6", "articles(uint256)", {"_0": p.uint256}, {"author": p.address, "timestamp": p.uint64, "categoryId": p.uint16, "originality": p.uint8, "collectPrice": p.uint96, "maxCollectSupply": p.uint32, "collectCount": p.uint32, "arweaveHash": p.string}),
     balanceOf: viewFun("0x00fdd58e", "balanceOf(address,uint256)", {"account": p.address, "id": p.uint256}, p.uint256),
     balanceOfBatch: viewFun("0x4e1273f4", "balanceOfBatch(address[],uint256[])", {"accounts": p.array(p.address), "ids": p.array(p.uint256)}, p.array(p.uint256)),
-    eip712Domain: viewFun("0x84b0196e", "eip712Domain()", {}, {"fields": p.bytes1, "name": p.string, "version": p.string, "chainId": p.uint256, "verifyingContract": p.address, "salt": p.bytes32, "extensions": p.array(p.uint256)}),
+    collect: fun("0x8d3c100a", "collect(uint256,address)", {"_articleId": p.uint256, "_referrer": p.address}, ),
+    collectWithSessionKey: fun("0x795146ef", "collectWithSessionKey(address,address,uint256,address,uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "_articleId": p.uint256, "_referrer": p.address, "deadline": p.uint256, "signature": p.bytes}, ),
     evaluate: fun("0xff1f090a", "evaluate(uint256,uint8,string,address,uint256)", {"_articleId": p.uint256, "_score": p.uint8, "_content": p.string, "_referrer": p.address, "_parentCommentId": p.uint256}, ),
     evaluateWithSessionKey: fun("0x63c4ea4d", "evaluateWithSessionKey(address,address,uint256,uint8,string,address,uint256,uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "_articleId": p.uint256, "_score": p.uint8, "_content": p.string, "_referrer": p.address, "_parentCommentId": p.uint256, "deadline": p.uint256, "signature": p.bytes}, ),
     follow: fun("0x63c3cc16", "follow(address,bool)", {"_target": p.address, "_status": p.bool}, ),
@@ -64,9 +64,7 @@ export const functions = {
     platformTreasury: viewFun("0xe138818c", "platformTreasury()", {}, p.address),
     proxiableUUID: viewFun("0x52d1902d", "proxiableUUID()", {}, p.bytes32),
     publish: fun("0xe7628e4d", "publish(string,uint64,uint96,string,string,address,uint256,uint256,uint8)", {"_arweaveId": p.string, "_categoryId": p.uint64, "_royaltyBps": p.uint96, "_originalAuthor": p.string, "_title": p.string, "_trueAuthor": p.address, "_collectPrice": p.uint256, "_maxCollectSupply": p.uint256, "_originality": p.uint8}, p.uint256),
-    publishWithSessionKey: fun("0x944423f9", "publishWithSessionKey(address,address,(string,uint64,uint96,string,string,address,uint256,uint256,uint8),uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "params": p.struct({"arweaveId": p.string, "categoryId": p.uint64, "royaltyBps": p.uint96, "originalAuthor": p.string, "title": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}), "deadline": p.uint256, "signature": p.bytes}, p.uint256),
-    collect: fun("0x8d3c100a", "collect(uint256,address)", {"_articleId": p.uint256, "_referrer": p.address}, ),
-    collectWithSessionKey: fun("0x8f989968", "collectWithSessionKey(address,address,uint256,address,uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "_articleId": p.uint256, "_referrer": p.address, "deadline": p.uint256, "signature": p.bytes}, ),
+    publishWithSessionKey: fun("0xdf7f942b", "publishWithSessionKey(address,address,(string,uint64,uint96,string,string,address,uint256,uint256,uint8),uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "params": p.struct({"arweaveId": p.string, "categoryId": p.uint64, "royaltyBps": p.uint96, "originalAuthor": p.string, "title": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}), "deadline": p.uint256, "signature": p.bytes}, p.uint256),
     renounceRole: fun("0x36568abe", "renounceRole(bytes32,address)", {"role": p.bytes32, "callerConfirmation": p.address}, ),
     revokeRole: fun("0xd547741f", "revokeRole(bytes32,address)", {"role": p.bytes32, "account": p.address}, ),
     royaltyInfo: viewFun("0x2a55205a", "royaltyInfo(uint256,uint256)", {"tokenId": p.uint256, "salePrice": p.uint256}, {"receiver": p.address, "amount": p.uint256}),
@@ -138,10 +136,6 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.balanceOfBatch, {accounts, ids})
     }
 
-    eip712Domain() {
-        return this.eth_call(functions.eip712Domain, {})
-    }
-
     getRoleAdmin(role: GetRoleAdminParams["role"]) {
         return this.eth_call(functions.getRoleAdmin, {role})
     }
@@ -197,12 +191,11 @@ export class Contract extends ContractBase {
 
 /// Event types
 export type ApprovalForAllEventArgs = EParams<typeof events.ApprovalForAll>
+export type ArticleCollectedEventArgs = EParams<typeof events.ArticleCollected>
 export type ArticleEvaluatedEventArgs = EParams<typeof events.ArticleEvaluated>
 export type ArticlePublishedEventArgs = EParams<typeof events.ArticlePublished>
-export type ArticleCollectedEventArgs = EParams<typeof events.ArticleCollected>
 export type CommentAddedEventArgs = EParams<typeof events.CommentAdded>
 export type CommentLikedEventArgs = EParams<typeof events.CommentLiked>
-export type EIP712DomainChangedEventArgs = EParams<typeof events.EIP712DomainChanged>
 export type FollowStatusChangedEventArgs = EParams<typeof events.FollowStatusChanged>
 export type InitializedEventArgs = EParams<typeof events.Initialized>
 export type MinActionValueUpdatedEventArgs = EParams<typeof events.MinActionValueUpdated>
@@ -261,8 +254,11 @@ export type BalanceOfReturn = FunctionReturn<typeof functions.balanceOf>
 export type BalanceOfBatchParams = FunctionArguments<typeof functions.balanceOfBatch>
 export type BalanceOfBatchReturn = FunctionReturn<typeof functions.balanceOfBatch>
 
-export type Eip712DomainParams = FunctionArguments<typeof functions.eip712Domain>
-export type Eip712DomainReturn = FunctionReturn<typeof functions.eip712Domain>
+export type CollectParams = FunctionArguments<typeof functions.collect>
+export type CollectReturn = FunctionReturn<typeof functions.collect>
+
+export type CollectWithSessionKeyParams = FunctionArguments<typeof functions.collectWithSessionKey>
+export type CollectWithSessionKeyReturn = FunctionReturn<typeof functions.collectWithSessionKey>
 
 export type EvaluateParams = FunctionArguments<typeof functions.evaluate>
 export type EvaluateReturn = FunctionReturn<typeof functions.evaluate>
@@ -327,12 +323,6 @@ export type PublishReturn = FunctionReturn<typeof functions.publish>
 export type PublishWithSessionKeyParams = FunctionArguments<typeof functions.publishWithSessionKey>
 export type PublishWithSessionKeyReturn = FunctionReturn<typeof functions.publishWithSessionKey>
 
-export type CollectParams = FunctionArguments<typeof functions.collect>
-export type CollectReturn = FunctionReturn<typeof functions.collect>
-
-export type CollectWithSessionKeyParams = FunctionArguments<typeof functions.collectWithSessionKey>
-export type CollectWithSessionKeyReturn = FunctionReturn<typeof functions.collectWithSessionKey>
-
 export type RenounceRoleParams = FunctionArguments<typeof functions.renounceRole>
 export type RenounceRoleReturn = FunctionReturn<typeof functions.renounceRole>
 
@@ -377,3 +367,4 @@ export type UpgradeToAndCallReturn = FunctionReturn<typeof functions.upgradeToAn
 
 export type UriParams = FunctionArguments<typeof functions.uri>
 export type UriReturn = FunctionReturn<typeof functions.uri>
+

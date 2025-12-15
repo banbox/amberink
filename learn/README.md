@@ -744,3 +744,39 @@ GPT: 更新完成
 @BlogHub.sol  当前的智能合约进行了一些修改，增删了一些函数；现在最新的函选择器如上，请在整个项目中搜索0xff1f090a，找到所有使用了选择器的地方，帮我进行对应更新  
 GPT: 更新完成，High Reasoning花时间不少。
 
+#### 2025-12-14 16:00  更新SubSquid和前端
+@Developers.md @contracts.md @BlogHub.sol @README.md 当前对智能合约进行了若干更新，请帮我查阅SubSquid和前端的相关代码，根据项目目标，帮我进行适当的兼容性更新，包括合约中新增的函数和特性，修改内容影响的部分更新，以及根据项目要求，所需要的其他功能尚未实现的；请帮我先分析SubSquid中的相关内容并更新，然后更新前端项目中  
+GPT: 花了好久完成
+
+#### 2025-12-15 11:26  发布时错误信息
+@README.md  @AGENTS.md  在当前文件 frontend\src\routes\publish\+page.svelte 的183-204行部分，进行了多处错误检查，但提示的错误信息过于模糊；没有明确规则；请帮我优化；  
+GPT：已解决
+
+#### 2025-12-15 11:36  发布时错误信息
+```log
+ContractFunctionExecutionError: The contract function "publishWithSessionKey" reverted with the following signature:
+0x62db3e42
+Unable to decode signature "0x62db3e42" as it was not found on the provided ABI.
+Make sure you are using the correct ABI and that the error exists on it.
+```
+@contracts.md @README.md @Developers.md 当前发布文章时出现上面错误，请帮我查阅相关代码逻辑并解决  
+GPT：已解决，又出现了两次错误也都解决
+
+#### 2025-12-15 12:36  SubSquid的Processor错误
+```log
+10:30:52 INFO  sqd:processor 7 / 41, rate: 6 blocks/sec, mapping: 53 blocks/sec, 7 items/sec, eta: 6s
+10:30:53 FATAL sqd:processor QueryFailedError: 插入或更新表 "evaluation" 违反外键约束 "FK_677620ead71939863f7450a37a8"
+length: 263
+severity: 错误
+code: 23503
+detail: 键值对(article_id)=(1)没有在表"article"中出现.
+schema: public
+table: evaluation
+constraint: FK_677620ead71939863f7450a37a8
+file: ri_triggers.c
+line: 2539
+routine: ri_ReportViolation
+```
+@Developers.md 我发现在161行执行的SubSquid的processer退出了，出现了上面错误，请帮我分析定位原因并解决  
+GPT: 已解决，删除重建数据库
+

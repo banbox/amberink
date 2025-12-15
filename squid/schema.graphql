@@ -57,6 +57,7 @@ type Evaluation @entity {
 # 评论实体
 type Comment @entity {
   id: ID!                          # articleId-commentId
+  commentId: BigInt!
   article: Article!
   user: User!
   content: String!

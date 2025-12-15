@@ -93,27 +93,9 @@ squid/
 
 ### 1.4 配置数据源
 
-编辑 `squid.yaml`：
+编辑 `squid.yaml`
 
-```yaml
-# squid.yaml
-manifestVersion: subsquid.io/v0.1
-name: squid
-version: 1
-description: DBlog decentralized blog indexer
-
-build:
-
-deploy:
-  addons:
-    postgres:
-  processor:
-    cmd: ["node", "lib/main.js"]
-  api:
-    cmd: ["npx", "squid-graphql-server"]
-```
-
-编辑 `src/processor.ts` 配置
+编辑 `src/processor.ts`
 
 ---
 
@@ -173,7 +155,7 @@ npx squid-typeorm-migration generate
 # 应用数据库迁移
 npx squid-typeorm-migration apply
 
-npm run build 
+npm run build
 
 # 启动 Processor
 node -r dotenv/config lib/main.js

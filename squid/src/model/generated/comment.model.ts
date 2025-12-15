@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, BigIntColumn as BigIntColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, BigIntColumn as BigIntColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
 import {Article} from "./article.model"
 import {User} from "./user.model"
 
@@ -10,6 +10,9 @@ export class Comment {
 
     @PrimaryColumn_()
     id!: string
+
+    @BigIntColumn_({nullable: false})
+    commentId!: bigint
 
     @Index_()
     @ManyToOne_(() => Article, {nullable: true})

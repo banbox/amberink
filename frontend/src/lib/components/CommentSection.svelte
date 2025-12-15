@@ -1,16 +1,23 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import type { CommentData } from '$lib/graphql/queries';
+	import { ContractError, likeComment, likeCommentWithSessionKey } from '$lib/contracts';
+	import type { StoredSessionKey } from '$lib/sessionKey';
+	import { getMinActionValue } from '$lib/config';
 
 	interface Props {
+		articleId: string;
 		comments: CommentData[];
 		walletAddress: string | null;
+		sessionKey: StoredSessionKey | null;
 		hasValidSessionKey: boolean;
 		isCommenting: boolean;
 		onComment: (text: string) => void;
 	}
 
-	let { comments, walletAddress, hasValidSessionKey, isCommenting, onComment }: Props = $props();
+	let { articleId, comments, walletAddress, sessionKey, hasValidSessionKey, isCommenting, onComment }: Props = $props();
+
+	let likingCommentIds = $state<Set<string>>(new Set());
 
 	// Comment input state
 	let commentText = $state('');
@@ -39,6 +46,67 @@
 		onComment(commentText.trim());
 		commentText = '';
 		isInputFocused = false;
+	}
+
+	function getErrorMessage(error: unknown): string {
+		if (error instanceof ContractError) {
+			const errorMessages: Record<string, string> = {
+				user_rejected: m.error_user_rejected({}),
+				insufficient_funds: m.error_insufficient_funds({}),
+				network_error: m.error_network_error({}),
+				contract_reverted: m.error_contract_reverted({}),
+				gas_estimation_failed: m.error_gas_estimation_failed({}),
+				nonce_too_low: m.error_nonce_too_low({}),
+				replacement_underpriced: m.error_replacement_underpriced({}),
+				wallet_not_connected: m.error_wallet_not_connected({}),
+				wrong_network: m.error_wrong_network({}),
+				timeout: m.error_timeout({}),
+				unknown_error: m.error_unknown({})
+			};
+			return errorMessages[error.code] || error.message;
+		}
+		return error instanceof Error ? error.message : String(error);
+	}
+
+	async function handleLikeComment(comment: CommentData) {
+		if (!walletAddress) return;
+		if (likingCommentIds.has(comment.id)) return;
+
+		likingCommentIds = new Set([...likingCommentIds, comment.id]);
+		try {
+			const minValue = getMinActionValue();
+			const aId = BigInt(articleId);
+			const cId = BigInt(comment.commentId);
+			const commenter = comment.user.id as `0x${string}`;
+
+			if (hasValidSessionKey && sessionKey) {
+				await likeCommentWithSessionKey(
+					sessionKey,
+					aId,
+					cId,
+					commenter,
+					'0x0000000000000000000000000000000000000000',
+					minValue
+				);
+			} else {
+				await likeComment(
+					aId,
+					cId,
+					commenter,
+					'0x0000000000000000000000000000000000000000',
+					minValue
+				);
+			}
+
+			comments = comments.map((c) => (c.id === comment.id ? { ...c, likes: c.likes + 1 } : c));
+		} catch (e) {
+			console.error('Failed to like comment:', e);
+			alert(m.interaction_failed({ error: getErrorMessage(e) }));
+		} finally {
+			const next = new Set(likingCommentIds);
+			next.delete(comment.id);
+			likingCommentIds = next;
+		}
 	}
 
 	// Handle cancel
@@ -108,7 +176,12 @@
 
 					<!-- Row 3: Actions - Like (left) + Reply (right) -->
 					<div class="flex items-center justify-between text-sm text-gray-500">
-						<button type="button" class="flex items-center gap-1.5 hover:text-gray-700 transition-colors">
+						<button
+							type="button"
+							class="flex items-center gap-1.5 hover:text-gray-700 transition-colors disabled:opacity-50"
+							onclick={() => handleLikeComment(comment)}
+							disabled={!walletAddress || likingCommentIds.has(comment.id)}
+						>
 							<svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
 							</svg>

@@ -47,6 +47,20 @@ function parseContractError(error: unknown): ContractError {
 	const errorMessage = error instanceof Error ? error.message : String(error);
 	const lowerMessage = errorMessage.toLowerCase();
 
+	if (
+		lowerMessage.includes('sessionkeynotactive') ||
+		lowerMessage.includes('0x62db3e42') ||
+		lowerMessage.includes('session key is not') ||
+		lowerMessage.includes('session key has expired') ||
+		lowerMessage.includes('session key spending limit exceeded')
+	) {
+		return new ContractError(
+			'contract_reverted',
+			errorMessage,
+			error instanceof Error ? error : undefined
+		);
+	}
+
 	// User rejected transaction
 	if (
 		lowerMessage.includes('user rejected') ||
@@ -175,6 +189,11 @@ function parseContractError(error: unknown): ContractError {
 // BlogHub contract ABI
 const BLOGHUB_ABI = [
 	{
+		type: 'error',
+		name: 'SessionKeyNotActive',
+		inputs: []
+	},
+	{
 		name: 'publish',
 		type: 'function',
 		inputs: [
@@ -213,6 +232,28 @@ const BLOGHUB_ABI = [
 		],
 		outputs: [],
 		stateMutability: 'nonpayable'
+	},
+	{
+		name: 'collect',
+		type: 'function',
+		inputs: [
+			{ name: '_articleId', type: 'uint256' },
+			{ name: '_referrer', type: 'address' }
+		],
+		outputs: [],
+		stateMutability: 'payable'
+	},
+	{
+		name: 'likeComment',
+		type: 'function',
+		inputs: [
+			{ name: '_articleId', type: 'uint256' },
+			{ name: '_commentId', type: 'uint256' },
+			{ name: '_commenter', type: 'address' },
+			{ name: '_referrer', type: 'address' }
+		],
+		outputs: [],
+		stateMutability: 'payable'
 	},
 	{
 		name: 'articles',
@@ -285,6 +326,36 @@ const BLOGHUB_ABI = [
 		],
 		outputs: [],
 		stateMutability: 'nonpayable'
+	},
+	{
+		name: 'collectWithSessionKey',
+		type: 'function',
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'sessionKey', type: 'address' },
+			{ name: '_articleId', type: 'uint256' },
+			{ name: '_referrer', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+			{ name: 'signature', type: 'bytes' }
+		],
+		outputs: [],
+		stateMutability: 'payable'
+	},
+	{
+		name: 'likeCommentWithSessionKey',
+		type: 'function',
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'sessionKey', type: 'address' },
+			{ name: '_articleId', type: 'uint256' },
+			{ name: '_commentId', type: 'uint256' },
+			{ name: '_commenter', type: 'address' },
+			{ name: '_referrer', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+			{ name: 'signature', type: 'bytes' }
+		],
+		outputs: [],
+		stateMutability: 'payable'
 	}
 ] as const;
 
@@ -420,7 +491,11 @@ export async function publishToContract(
 	categoryId: bigint,
 	royaltyBps: bigint,
 	originalAuthor: string = '',
-	title: string = ''
+	title: string = '',
+	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	collectPrice: bigint = 0n,
+	maxCollectSupply: bigint = 0n,
+	originality: number = 0
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required');
@@ -444,7 +519,6 @@ export async function publishToContract(
 
 	try {
 		const walletClient = await getWalletClient();
-		const zeroAddress = '0x0000000000000000000000000000000000000000' as const;
 
 		// Call publish function
 		const txHash = await walletClient.writeContract({
@@ -457,10 +531,10 @@ export async function publishToContract(
 				royaltyBps,
 				originalAuthor,
 				title,
-				zeroAddress,
-				0n,
-				0n,
-				0
+				trueAuthor,
+				collectPrice,
+				maxCollectSupply,
+				originality
 			]
 		});
 
@@ -468,6 +542,69 @@ export async function publishToContract(
 		return txHash;
 	} catch (error) {
 		console.error('Error publishing to contract:', error);
+		throw parseContractError(error);
+	}
+}
+
+export async function collectArticle(
+	articleId: bigint,
+	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	amount: bigint
+): Promise<string> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative');
+	}
+
+	try {
+		const walletClient = await getWalletClient();
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'collect',
+			args: [articleId, referrer],
+			value: amount
+		});
+		console.log(`Article collected. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error collecting article:', error);
+		throw parseContractError(error);
+	}
+}
+
+export async function likeComment(
+	articleId: bigint,
+	commentId: bigint,
+	commenter: `0x${string}`,
+	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	amount: bigint
+): Promise<string> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative');
+	}
+	if (commentId < 0n) {
+		throw new Error('Comment ID must be non-negative');
+	}
+	if (!commenter || commenter === '0x0000000000000000000000000000000000000000') {
+		throw new Error('Invalid commenter address');
+	}
+	if (amount <= 0n) {
+		throw new Error('Like amount must be greater than 0');
+	}
+
+	try {
+		const walletClient = await getWalletClient();
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'likeComment',
+			args: [articleId, commentId, commenter, referrer],
+			value: amount
+		});
+		console.log(`Comment liked. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error liking comment:', error);
 		throw parseContractError(error);
 	}
 }
@@ -645,6 +782,56 @@ const SESSION_KEY_MANAGER_ABI = [
 	}
 ] as const;
 
+async function assertSessionKeyActive(
+	owner: `0x${string}`,
+	sessionKeyAddress: `0x${string}`,
+	selector: `0x${string}`,
+	value: bigint
+): Promise<void> {
+	const publicClient = getPublicClient();
+	const sessionKeyManager = getSessionKeyManagerAddress();
+	const blogHub = getBlogHubContractAddress();
+
+	const [data, latestBlock] = await Promise.all([
+		publicClient.readContract({
+			address: sessionKeyManager,
+			abi: SESSION_KEY_MANAGER_ABI,
+			functionName: 'getSessionKeyData',
+			args: [owner, sessionKeyAddress]
+		}),
+		publicClient.getBlock({ blockTag: 'latest' })
+	]);
+
+	const now = Number(latestBlock.timestamp);
+
+	if ((data.sessionKey as string).toLowerCase() === '0x0000000000000000000000000000000000000000') {
+		throw new Error('Session key is not registered on-chain. Please create a new session key and wait for confirmation.');
+	}
+
+	if ((data.allowedContract as string).toLowerCase() !== blogHub.toLowerCase()) {
+		throw new Error(`Session key is registered for a different contract. expected=${blogHub}, got=${data.allowedContract}`);
+	}
+
+	const selectors = (data.allowedSelectors as readonly string[]).map((s) => s.toLowerCase());
+	if (!selectors.includes(selector.toLowerCase())) {
+		throw new Error(`Session key is not authorized for this operation (selector=${selector}). Please re-create the session key.`);
+	}
+
+	if (now < Number(data.validAfter)) {
+		throw new Error(`Session key is not active yet (validAfter=${data.validAfter}, now=${now}). Wait a few seconds and retry.`);
+	}
+
+	if (now > Number(data.validUntil)) {
+		throw new Error('Session key has expired. Please create a new session key.');
+	}
+
+	const spendingLimit = BigInt(data.spendingLimit as unknown as string);
+	const spentAmount = BigInt(data.spentAmount as unknown as string);
+	if (spentAmount + value > spendingLimit) {
+		throw new Error('Session key spending limit exceeded. Please create a new session key.');
+	}
+}
+
 // EIP-712 Domain for SessionKeyManager
 function getSessionKeyManagerDomain() {
 	return {
@@ -757,7 +944,11 @@ export async function publishToContractWithSessionKey(
 	categoryId: bigint,
 	royaltyBps: bigint,
 	originalAuthor: string = '',
-	title: string = ''
+	title: string = '',
+	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	collectPrice: bigint = 0n,
+	maxCollectSupply: bigint = 0n,
+	originality: number = 0
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required');
@@ -797,7 +988,6 @@ export async function publishToContractWithSessionKey(
 
 		// Set deadline to 5 minutes from now
 		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-		const zeroAddress = '0x0000000000000000000000000000000000000000' as const;
 
 		// Encode the publish function call data (this is what gets hashed in the signature)
 		const callData = encodeFunctionData({
@@ -809,10 +999,10 @@ export async function publishToContractWithSessionKey(
 				royaltyBps,
 				originalAuthor,
 				title,
-				zeroAddress,
-				0n,
-				0n,
-				0
+				trueAuthor,
+				collectPrice,
+				maxCollectSupply,
+				originality
 			]
 		});
 
@@ -820,6 +1010,13 @@ export async function publishToContractWithSessionKey(
 		const nonce = await getSessionKeyNonce(
 			sessionKey.owner as `0x${string}`,
 			sessionKey.address as `0x${string}`
+		);
+
+		await assertSessionKeyActive(
+			sessionKey.owner as `0x${string}`,
+			sessionKey.address as `0x${string}`,
+			FUNCTION_SELECTORS.publish,
+			0n
 		);
 
 		// Create EIP-712 signature
@@ -846,10 +1043,10 @@ export async function publishToContractWithSessionKey(
 					royaltyBps,
 					originalAuthor,
 					title,
-					trueAuthor: zeroAddress,
-					collectPrice: 0n,
-					maxCollectSupply: 0n,
-					originality: 0
+					trueAuthor: trueAuthor,
+					collectPrice: collectPrice,
+					maxCollectSupply: maxCollectSupply,
+					originality: originality
 				},
 				deadline,
 				signature
@@ -1038,6 +1235,153 @@ export async function followUserWithSessionKey(
 		return txHash;
 	} catch (error) {
 		console.error('Error following with session key:', error);
+		throw parseContractError(error);
+	}
+}
+
+export async function collectArticleWithSessionKey(
+	sessionKey: StoredSessionKey,
+	articleId: bigint,
+	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	amount: bigint
+): Promise<string> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative');
+	}
+	if (Date.now() / 1000 > sessionKey.validUntil) {
+		throw new Error('Session key has expired');
+	}
+
+	try {
+		const chain = getChainConfig();
+		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
+
+		const walletClient = createWalletClient({
+			account: sessionKeyAccount,
+			chain,
+			transport: http(getRpcUrl())
+		});
+
+		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+		const callData = encodeFunctionData({
+			abi: BLOGHUB_ABI,
+			functionName: 'collect',
+			args: [articleId, referrer]
+		});
+
+		const nonce = await getSessionKeyNonce(
+			sessionKey.owner as `0x${string}`,
+			sessionKey.address as `0x${string}`
+		);
+
+		const signature = await createSessionKeySignature(
+			sessionKey,
+			FUNCTION_SELECTORS.collect,
+			callData,
+			amount,
+			deadline,
+			nonce
+		);
+
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'collectWithSessionKey',
+			args: [
+				sessionKey.owner as `0x${string}`,
+				sessionKey.address as `0x${string}`,
+				articleId,
+				referrer,
+				deadline,
+				signature
+			],
+			value: amount
+		});
+
+		console.log(`Article collected with session key. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error collecting with session key:', error);
+		throw parseContractError(error);
+	}
+}
+
+export async function likeCommentWithSessionKey(
+	sessionKey: StoredSessionKey,
+	articleId: bigint,
+	commentId: bigint,
+	commenter: `0x${string}`,
+	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	amount: bigint
+): Promise<string> {
+	if (articleId < 0n) {
+		throw new Error('Article ID must be non-negative');
+	}
+	if (commentId < 0n) {
+		throw new Error('Comment ID must be non-negative');
+	}
+	if (!commenter || commenter === '0x0000000000000000000000000000000000000000') {
+		throw new Error('Invalid commenter address');
+	}
+	if (amount <= 0n) {
+		throw new Error('Like amount must be greater than 0');
+	}
+	if (Date.now() / 1000 > sessionKey.validUntil) {
+		throw new Error('Session key has expired');
+	}
+
+	try {
+		const chain = getChainConfig();
+		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
+
+		const walletClient = createWalletClient({
+			account: sessionKeyAccount,
+			chain,
+			transport: http(getRpcUrl())
+		});
+
+		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+		const callData = encodeFunctionData({
+			abi: BLOGHUB_ABI,
+			functionName: 'likeComment',
+			args: [articleId, commentId, commenter, referrer]
+		});
+
+		const nonce = await getSessionKeyNonce(
+			sessionKey.owner as `0x${string}`,
+			sessionKey.address as `0x${string}`
+		);
+
+		const signature = await createSessionKeySignature(
+			sessionKey,
+			FUNCTION_SELECTORS.likeComment,
+			callData,
+			amount,
+			deadline,
+			nonce
+		);
+
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'likeCommentWithSessionKey',
+			args: [
+				sessionKey.owner as `0x${string}`,
+				sessionKey.address as `0x${string}`,
+				articleId,
+				commentId,
+				commenter,
+				referrer,
+				deadline,
+				signature
+			],
+			value: amount
+		});
+
+		console.log(`Comment liked with session key. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error liking comment with session key:', error);
 		throw parseContractError(error);
 	}
 }

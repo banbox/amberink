@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, StringColumn as StringColumn_} from "@subsquid/typeorm-store"
 import {User} from "./user.model"
 import {Article} from "./article.model"
 
@@ -27,4 +27,7 @@ export class Collection {
 
     @DateTimeColumn_({nullable: false})
     createdAt!: Date
+
+    @StringColumn_({nullable: false})
+    txHash!: string
 }

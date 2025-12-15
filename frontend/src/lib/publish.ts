@@ -11,6 +11,7 @@ import {
 	createSessionKey,
 	hasSessionKeySufficientBalance,
 	isSessionKeyValidForCurrentWallet,
+	isSessionKeyValidForPublish,
 	type StoredSessionKey
 } from '$lib/sessionKey';
 
@@ -25,12 +26,17 @@ async function getOrCreateValidSessionKey(): Promise<StoredSessionKey> {
 
 	// Validate: exists, not expired, and belongs to current wallet
 	if (sessionKey) {
-		const isValid = await isSessionKeyValidForCurrentWallet();
-		if (isValid) {
-			console.log('Using existing valid Session Key');
-			return sessionKey;
+		const isOwnerValid = await isSessionKeyValidForCurrentWallet();
+		if (isOwnerValid) {
+			const isAuthorized = await isSessionKeyValidForPublish(sessionKey);
+			if (isAuthorized) {
+				console.log('Using existing valid Session Key');
+				return sessionKey;
+			}
+			console.log('Stored Session Key is not authorized for publish, recreating...');
+		} else {
+			console.log('Stored Session Key is invalid or belongs to different wallet');
 		}
-		console.log('Stored Session Key is invalid or belongs to different wallet');
 	}
 
 	// No valid session key - create a new one (requires ONE MetaMask signature)
@@ -50,6 +56,10 @@ export interface PublishArticleParams {
 	categoryId: bigint;
 	royaltyBps: bigint;
 	originalAuthor?: string;
+	trueAuthor?: `0x${string}`;
+	collectPrice?: bigint;
+	maxCollectSupply?: bigint;
+	originality?: number;
 }
 
 export interface PublishArticleResult {
@@ -72,7 +82,11 @@ export async function publishArticle(params: PublishArticleParams): Promise<Publ
 		coverImage,
 		categoryId,
 		royaltyBps,
-		originalAuthor = ''
+		originalAuthor = '',
+		trueAuthor = '0x0000000000000000000000000000000000000000',
+		collectPrice = 0n,
+		maxCollectSupply = 0n,
+		originality = 0
 	} = params;
 
 	// Validation
@@ -124,7 +138,11 @@ async function publishArticleWithSessionKeyInternal(
 		coverImage,
 		categoryId,
 		royaltyBps,
-		originalAuthor = ''
+		originalAuthor = '',
+		trueAuthor = '0x0000000000000000000000000000000000000000',
+		collectPrice = 0n,
+		maxCollectSupply = 0n,
+		originality = 0
 	} = params;
 
 	// Step 0: Check session key has sufficient balance for gas fees
@@ -155,14 +173,41 @@ async function publishArticleWithSessionKeyInternal(
 	// Step 2: Publish to blockchain with session key
 	// 注意：智能合约不再存储 coverImage 字段，封面图片通过 arweaveId/coverImage 路径访问
 	console.log('Step 2: Publishing to blockchain with Session Key...');
-	const txHash = await publishToContractWithSessionKey(
-		sessionKey,
-		arweaveId,
-		categoryId,
-		royaltyBps,
-		originalAuthor,
-		title.trim()
-	);
+	let txHash: string;
+	try {
+		txHash = await publishToContractWithSessionKey(
+			sessionKey,
+			arweaveId,
+			categoryId,
+			royaltyBps,
+			originalAuthor,
+			title.trim(),
+			trueAuthor,
+			collectPrice,
+			maxCollectSupply,
+			originality
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (message.toLowerCase().includes('session key')) {
+			console.warn('Session key failed during publish, recreating and retrying once...');
+			const newSessionKey = await createSessionKey();
+			txHash = await publishToContractWithSessionKey(
+				newSessionKey,
+				arweaveId,
+				categoryId,
+				royaltyBps,
+				originalAuthor,
+				title.trim(),
+				trueAuthor,
+				collectPrice,
+				maxCollectSupply,
+				originality
+			);
+		} else {
+			throw error;
+		}
+	}
 	console.log(`Article published to blockchain: ${txHash}`);
 
 	return {

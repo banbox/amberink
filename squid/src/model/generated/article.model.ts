@@ -2,6 +2,7 @@ import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, S
 import {User} from "./user.model"
 import {Comment} from "./comment.model"
 import {Evaluation} from "./evaluation.model"
+import {Collection} from "./collection.model"
 
 @Entity_()
 export class Article {
@@ -22,6 +23,9 @@ export class Article {
     @StringColumn_({nullable: true})
     originalAuthor!: string | undefined | null
 
+    @StringColumn_({nullable: true})
+    trueAuthor!: string | undefined | null
+
     @StringColumn_({nullable: false})
     title!: string
 
@@ -30,6 +34,18 @@ export class Article {
 
     @IntColumn_({nullable: false})
     royaltyBps!: number
+
+    @BigIntColumn_({nullable: false})
+    collectPrice!: bigint
+
+    @BigIntColumn_({nullable: false})
+    maxCollectSupply!: bigint
+
+    @BigIntColumn_({nullable: false})
+    collectCount!: bigint
+
+    @IntColumn_({nullable: false})
+    originality!: number
 
     @BigIntColumn_({nullable: false})
     totalTips!: bigint
@@ -45,6 +61,9 @@ export class Article {
 
     @OneToMany_(() => Evaluation, e => e.article)
     evaluations!: Evaluation[]
+
+    @OneToMany_(() => Collection, e => e.article)
+    collections!: Collection[]
 
     @DateTimeColumn_({nullable: false})
     createdAt!: Date

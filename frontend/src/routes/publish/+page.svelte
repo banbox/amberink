@@ -4,6 +4,7 @@
 	import { ContractError } from '$lib/contracts';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import SearchSelect, { type SelectOption } from '$lib/components/SearchSelect.svelte';
+	import { parseEther } from 'viem';
 
 	// Category options for SearchSelect
 	let categoryOptions = $derived<SelectOption[]>(
@@ -75,6 +76,10 @@
 	let coverImageFile = $state<File | null>(null);
 	let coverImagePreview = $state<string | null>(null);
 	let royaltyBps = $state<bigint>(500n);
+	let trueAuthor = $state('');
+	let collectPriceEth = $state<string | number>('0');
+	let maxCollectSupply = $state<string | number>('0');
+	let originality = $state<'0' | '1' | '2'>('0');
 
 	// Submit state
 	type SubmitStatus =
@@ -175,6 +180,38 @@
 			submitStatus = 'uploadingArticle';
 			statusMessage = m.uploading_to_arweave();
 
+			const trueAuthorTrimmed = trueAuthor.trim();
+			if (trueAuthorTrimmed && !/^0x[a-fA-F0-9]{40}$/.test(trueAuthorTrimmed)) {
+				throw new Error(
+					`Invalid true author address: expected an EVM address like 0x followed by 40 hex characters (example: 0x1234...abcd). Got: "${trueAuthorTrimmed}"`
+				);
+			}
+
+			let collectPrice = 0n;
+			try {
+				const collectPriceEthTrimmed = String(collectPriceEth ?? '0').trim();
+				collectPrice = parseEther(collectPriceEthTrimmed || '0');
+			} catch {
+				throw new Error(
+					`Invalid collect price: expected a non-negative number string in ETH with up to 18 decimals (example: 0, 0.01, 1.5). Got: "${String(collectPriceEth ?? '').trim()}"`
+				);
+			}
+
+			const maxSupplyTrimmed = String(maxCollectSupply ?? '0').trim();
+			if (!/^(0|[1-9]\d*)$/.test(maxSupplyTrimmed)) {
+				throw new Error(
+					`Invalid max collect supply: expected a non-negative integer (example: 0, 1, 1000). Got: "${maxSupplyTrimmed}"`
+				);
+			}
+			const maxSupply = BigInt(maxSupplyTrimmed);
+
+			const originalityNum = Number.parseInt(originality, 10);
+			if (![0, 1, 2].includes(originalityNum)) {
+				throw new Error(
+					`Invalid originality: expected one of 0, 1, 2. Got: "${originality}"`
+				);
+			}
+
 			// Call publishArticle from lib
 			const result = await publishArticle({
 				title: title.trim(),
@@ -184,7 +221,11 @@
 				coverImage: coverImageFile,
 				categoryId: categoryId,
 				royaltyBps: royaltyBps,
-				originalAuthor: author.trim() || undefined
+				originalAuthor: author.trim() || undefined,
+				trueAuthor: (trueAuthorTrimmed || undefined) as `0x${string}` | undefined,
+				collectPrice,
+				maxCollectSupply: maxSupply,
+				originality: originalityNum
 			});
 
 			// Success
@@ -366,6 +407,68 @@
 					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 					disabled={isSubmitting}
 				></textarea>
+			</div>
+
+			<div class="grid grid-cols-2 gap-4">
+				<div>
+					<label for="trueAuthor" class="mb-2 block text-sm font-medium text-gray-700">
+						True Author (0x...)
+					</label>
+					<input
+						id="trueAuthor"
+						bind:value={trueAuthor}
+						type="text"
+						placeholder="0x0000000000000000000000000000000000000000"
+						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+						disabled={isSubmitting}
+					/>
+				</div>
+				<div>
+					<label for="originality" class="mb-2 block text-sm font-medium text-gray-700">
+						Originality
+					</label>
+					<select
+						id="originality"
+						bind:value={originality}
+						disabled={isSubmitting}
+						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+					>
+						<option value="0">Original</option>
+						<option value="1">SemiOriginal</option>
+						<option value="2">Reprint</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-2 gap-4">
+				<div>
+					<label for="collectPrice" class="mb-2 block text-sm font-medium text-gray-700">
+						Collect Price (ETH)
+					</label>
+					<input
+						id="collectPrice"
+						bind:value={collectPriceEth}
+						type="number"
+						min="0"
+						step="0.000001"
+						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+						disabled={isSubmitting}
+					/>
+				</div>
+				<div>
+					<label for="maxCollectSupply" class="mb-2 block text-sm font-medium text-gray-700">
+						Max Collect Supply (0 = disable)
+					</label>
+					<input
+						id="maxCollectSupply"
+						bind:value={maxCollectSupply}
+						type="number"
+						min="0"
+						step="1"
+						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+						disabled={isSubmitting}
+					/>
+				</div>
 			</div>
 
 			<!-- Status Message -->

@@ -45,8 +45,35 @@ const SESSION_KEY_MANAGER_ABI = [
 		inputs: [{ name: '_sessionKey', type: 'address' }],
 		outputs: [],
 		stateMutability: 'nonpayable'
+	},
+	{
+		name: 'getSessionKeyData',
+		type: 'function',
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'sessionKey', type: 'address' }
+		],
+		outputs: [
+			{
+				name: '',
+				type: 'tuple',
+				components: [
+					{ name: 'sessionKey', type: 'address' },
+					{ name: 'validAfter', type: 'uint48' },
+					{ name: 'validUntil', type: 'uint48' },
+					{ name: 'allowedContract', type: 'address' },
+					{ name: 'allowedSelectors', type: 'bytes4[]' },
+					{ name: 'spendingLimit', type: 'uint256' },
+					{ name: 'spentAmount', type: 'uint256' },
+					{ name: 'nonce', type: 'uint256' }
+				]
+			}
+		],
+		stateMutability: 'view'
 	}
 ] as const;
+
+const PUBLISH_SELECTOR = '0xe7628e4d' as const;
 
 // Allowed function selectors for session key
 // Use: cast sig "functionName(params)" to get selector
@@ -307,14 +334,16 @@ export async function createSessionKey(): Promise<StoredSessionKey> {
 	const privateKey = generatePrivateKey();
 	const sessionKeyAccount = privateKeyToAccount(privateKey);
 
-	// 2. Set validity period
-	const validAfter = Math.floor(Date.now() / 1000);
+	// 2. Set validity period (use chain timestamp to avoid local/chain time drift)
+	const publicClient = getPublicClient();
+	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
+	const validAfter = Number(latestBlock.timestamp);
 	const validUntil = validAfter + SESSION_KEY_DURATION;
 
 	// 3. Get wallet client and register session key on blockchain
 	const walletClient = await getWalletClient();
 
-	await walletClient.writeContract({
+	const txHash = await walletClient.writeContract({
 		address: sessionKeyManager,
 		abi: SESSION_KEY_MANAGER_ABI,
 		functionName: 'registerSessionKey',
@@ -327,6 +356,7 @@ export async function createSessionKey(): Promise<StoredSessionKey> {
 			DEFAULT_SPENDING_LIMIT
 		]
 	});
+	await publicClient.waitForTransactionReceipt({ hash: txHash });
 
 	// 4. Create Irys Balance Approval for the Session Key
 	// This allows the Session Key to upload using the main account's Irys balance
@@ -383,6 +413,38 @@ export async function revokeSessionKey(): Promise<void> {
 export function clearLocalSessionKey(): void {
 	if (browser) {
 		localStorage.removeItem(SESSION_KEY_STORAGE);
+	}
+}
+
+export async function isSessionKeyValidForPublish(sessionKey: StoredSessionKey): Promise<boolean> {
+	try {
+		const publicClient = getPublicClient();
+		const sessionKeyManager = getSessionKeyManagerAddress();
+		const blogHub = getBlogHubContractAddress();
+
+		const [data, latestBlock] = await Promise.all([
+			publicClient.readContract({
+				address: sessionKeyManager,
+				abi: SESSION_KEY_MANAGER_ABI,
+				functionName: 'getSessionKeyData',
+				args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`]
+			}),
+			publicClient.getBlock({ blockTag: 'latest' })
+		]);
+
+		if ((data.sessionKey as string).toLowerCase() === '0x0000000000000000000000000000000000000000') return false;
+		if ((data.allowedContract as string).toLowerCase() !== blogHub.toLowerCase()) return false;
+
+		const selectors = (data.allowedSelectors as readonly string[]).map((s) => s.toLowerCase());
+		if (!selectors.includes(PUBLISH_SELECTOR.toLowerCase())) return false;
+
+		const now = Number(latestBlock.timestamp);
+		if (now < Number(data.validAfter)) return false;
+		if (now > Number(data.validUntil)) return false;
+
+		return true;
+	} catch {
+		return false;
 	}
 }
 

@@ -21,10 +21,15 @@ export const ARTICLES_QUERY = gql`
 				id
 			}
 			originalAuthor
+			trueAuthor
 			title
 			categoryId
-			likes
-			dislikes
+			collectPrice
+			maxCollectSupply
+			collectCount
+			originality
+			likeAmount
+			dislikeAmount
 			totalTips
 			createdAt
 			blockNumber
@@ -46,10 +51,15 @@ export const ALL_ARTICLES_QUERY = gql`
 				id
 			}
 			originalAuthor
+			trueAuthor
 			title
 			categoryId
-			likes
-			dislikes
+			collectPrice
+			maxCollectSupply
+			collectCount
+			originality
+			likeAmount
+			dislikeAmount
 			totalTips
 			createdAt
 			blockNumber
@@ -91,10 +101,15 @@ export interface ArticleData {
 		id: string;
 	};
 	originalAuthor: string | null;
+	trueAuthor: string | null;
 	title: string;
 	categoryId: string;
-	likes: number;
-	dislikes: number;
+	collectPrice: string;
+	maxCollectSupply: string;
+	collectCount: string;
+	originality: number;
+	likeAmount: string;
+	dislikeAmount: string;
 	totalTips: string;
 	createdAt: string;
 	blockNumber: number;
@@ -124,17 +139,23 @@ export const ARTICLE_BY_ID_QUERY = gql`
 				id
 			}
 			originalAuthor
+			trueAuthor
 			title
 			categoryId
 			royaltyBps
-			likes
-			dislikes
+			collectPrice
+			maxCollectSupply
+			collectCount
+			originality
+			likeAmount
+			dislikeAmount
 			totalTips
 			createdAt
 			blockNumber
 			txHash
 			comments(orderBy: createdAt_DESC) {
 				id
+				commentId
 				user {
 					id
 				}
@@ -153,6 +174,7 @@ export const ARTICLE_BY_ID_QUERY = gql`
  */
 export interface CommentData {
 	id: string;
+	commentId: string;
 	user: {
 		id: string;
 	};
@@ -174,11 +196,16 @@ export interface ArticleDetailData {
 		id: string;
 	};
 	originalAuthor: string | null;
+	trueAuthor: string | null;
 	title: string;
 	categoryId: string;
 	royaltyBps: number;
-	likes: number;
-	dislikes: number;
+	collectPrice: string;
+	maxCollectSupply: string;
+	collectCount: string;
+	originality: number;
+	likeAmount: string;
+	dislikeAmount: string;
 	totalTips: string;
 	createdAt: string;
 	blockNumber: number;
