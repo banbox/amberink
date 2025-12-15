@@ -212,7 +212,7 @@
 		</div>
 
 		<!-- Comment Input -->
-		<div class="rounded-lg p-4" style="background-color: #F2F2F2;">
+		<div class="rounded-lg p-3" class:flex={!isInputFocused} class:items-center={!isInputFocused} style="background-color: #F2F2F2;">
 			<textarea
 				bind:this={inputRef}
 				bind:value={commentText}

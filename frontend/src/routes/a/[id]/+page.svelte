@@ -325,10 +325,10 @@
 	const maxCollectSupply = $derived(BigInt(article.maxCollectSupply));
 	const collectAvailable = $derived(maxCollectSupply > 0n && BigInt(localCollectCount) < maxCollectSupply);
 	
-	// Article quality score: round(likeAmount*10/(likeAmount+dislikeAmount), 1)
+	// Article quality score: round(likeAmount*10/(likeAmount+dislikeAmount*2), 1)
 	const qualityScore = $derived(() => {
 		const like = BigInt(article.totalTips);
-		const dislike = BigInt(localDislikeAmount);
+		const dislike = BigInt(localDislikeAmount) * 2n;
 		const total = like + dislike;
 		if (total === 0n) return null;
 		// Calculate score with 1 decimal precision

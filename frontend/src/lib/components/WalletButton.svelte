@@ -1,139 +1,36 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
+	import {
+		getWalletAddress,
+		isWalletConnected,
+		isWalletLoading,
+		connectWallet,
+		disconnectWallet,
+		checkWalletConnection,
+		handleAccountsChanged
+	} from '$lib/stores/wallet.svelte';
 
-	const DISCONNECTED_KEY = 'wallet_disconnected';
-
-	let address = $state<string | undefined>();
-	let isConnected = $state(false);
-	let isLoading = $state(false);
 	let showDropdown = $state(false);
+
+	let address = $derived(getWalletAddress());
+	let isConnected = $derived(isWalletConnected());
+	let isLoading = $derived(isWalletLoading());
 
 	let displayAddress = $derived(
 		address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''
 	);
 
-	function handleAccountsChanged(accounts: unknown) {
-		const accts = accounts as string[];
-		if (accts.length === 0) {
-			address = undefined;
-			isConnected = false;
-		} else if (isConnected) {
-			// Only update address if already connected (user switched accounts in wallet)
-			address = accts[0];
-		}
-		// If not connected, ignore account changes (user explicitly disconnected)
-	}
-
 	function handleChainChanged() {
-		// Reload on chain change to ensure correct state
 		window.location.reload();
 	}
 
-	async function checkConnection() {
-		if (typeof window === 'undefined' || !window.ethereum) return;
-
-		// If user explicitly disconnected, don't auto-connect
-		if (localStorage.getItem(DISCONNECTED_KEY) === 'true') {
-			return;
-		}
-
-		try {
-			const accounts = (await window.ethereum.request({ method: 'eth_accounts' })) as string[];
-			if (accounts.length > 0) {
-				address = accounts[0];
-				isConnected = true;
-			}
-		} catch (error) {
-			console.error('Failed to check connection:', error);
-		}
-	}
-
 	async function handleConnect() {
-		if (typeof window === 'undefined' || !window.ethereum) {
-			alert('Please install MetaMask or another Ethereum wallet');
-			return;
-		}
-
-		isLoading = true;
-		try {
-			// Use wallet_requestPermissions to force account picker popup
-			// This ensures user can select their currently active MetaMask account
-			await window.ethereum.request({
-				method: 'wallet_requestPermissions',
-				params: [{ eth_accounts: {} }]
-			});
-
-			// After permission granted, get the selected accounts
-			const accounts = (await window.ethereum.request({
-				method: 'eth_accounts'
-			})) as string[];
-
-			if (accounts.length > 0) {
-				address = accounts[0];
-				isConnected = true;
-				// Clear disconnected flag on successful connect
-				localStorage.removeItem(DISCONNECTED_KEY);
-			}
-
-			// Try to switch to correct chain
-			await ensureCorrectChain();
-		} catch (error) {
-			console.error('Failed to connect:', error);
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	async function ensureCorrectChain() {
-		if (typeof window === 'undefined' || !window.ethereum) return;
-
-		// Dynamic import to avoid SSR issues with viem
-		const { getChainConfig } = await import('$lib/chain');
-		const chain = getChainConfig();
-		const targetChainId = chain.id;
-		const targetChainIdHex = `0x${targetChainId.toString(16)}`;
-
-		try {
-			const currentChainIdHex = (await window.ethereum.request({
-				method: 'eth_chainId'
-			})) as string;
-			const currentChainId = parseInt(currentChainIdHex, 16);
-
-			if (currentChainId !== targetChainId) {
-				try {
-					await window.ethereum.request({
-						method: 'wallet_switchEthereumChain',
-						params: [{ chainId: targetChainIdHex }]
-					});
-				} catch (switchError: unknown) {
-					// Chain not added, try to add it
-					if ((switchError as { code?: number })?.code === 4902) {
-						await window.ethereum.request({
-							method: 'wallet_addEthereumChain',
-							params: [
-								{
-									chainId: targetChainIdHex,
-									chainName: chain.name,
-									nativeCurrency: chain.nativeCurrency,
-									rpcUrls: [chain.rpcUrls.default.http[0]],
-									blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined
-								}
-							]
-						});
-					}
-				}
-			}
-		} catch (error) {
-			console.error('Failed to switch chain:', error);
-		}
+		await connectWallet();
 	}
 
 	function handleDisconnect() {
-		// Store disconnected state to prevent auto-reconnect
-		localStorage.setItem(DISCONNECTED_KEY, 'true');
-		address = undefined;
-		isConnected = false;
+		disconnectWallet();
 		showDropdown = false;
 	}
 
@@ -149,18 +46,15 @@
 	}
 
 	onMount(() => {
-		checkConnection();
-		// Listen for account changes
+		checkWalletConnection();
 		if (typeof window !== 'undefined' && window.ethereum?.on) {
 			window.ethereum.on('accountsChanged', handleAccountsChanged as (...args: unknown[]) => void);
 			window.ethereum.on('chainChanged', handleChainChanged);
 		}
-		// Listen for clicks outside dropdown
 		document.addEventListener('click', handleClickOutside);
 	});
 
 	onDestroy(() => {
-		// Cleanup listeners - check for browser environment
 		if (typeof window !== 'undefined') {
 			if (window.ethereum?.removeListener) {
 				window.ethereum.removeListener(

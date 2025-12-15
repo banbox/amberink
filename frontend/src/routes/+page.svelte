@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
 	import { client, ARTICLES_QUERY, ALL_ARTICLES_QUERY, type ArticleData } from '$lib/graphql';
-	import ArticleCard from '$lib/components/ArticleCard.svelte';
+	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import CategoryFilter from '$lib/components/CategoryFilter.svelte';
 
 	const PAGE_SIZE = 20;
@@ -109,25 +109,11 @@
 	});
 </script>
 
-<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-	<!-- Hero Section -->
-	<div class="mb-10 text-center">
-		<h1 class="mb-3 text-4xl font-bold text-gray-900 sm:text-5xl">DBlog</h1>
-		<p class="mb-6 text-lg text-gray-600">{m.tagline()}</p>
-		<a
-			href="/publish"
-			class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-blue-700"
-		>
-			{m.publish_article()}
-			<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M13 7l5 5m0 0l-5 5m5-5H6"
-				/>
-			</svg>
-		</a>
+<div class="mx-auto max-w-3xl px-6 py-8">
+	<!-- Page Header -->
+	<div class="mb-8">
+		<h1 class="text-2xl font-bold text-gray-900">{m.nav_home()}</h1>
+		<p class="mt-1 text-gray-600">{m.tagline()}</p>
 	</div>
 
 	<!-- Category Filter -->
@@ -147,11 +133,11 @@
 		</div>
 	{/if}
 
-	<!-- Articles Grid -->
+	<!-- Articles List (vertical, one per row) -->
 	{#if articles.length > 0}
-		<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+		<div class="divide-y divide-gray-100">
 			{#each articles as article (article.id)}
-				<ArticleCard {article} />
+				<ArticleListItem {article} />
 			{/each}
 		</div>
 	{:else if !loading}

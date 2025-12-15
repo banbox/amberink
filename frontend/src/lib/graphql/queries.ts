@@ -241,3 +241,308 @@ export interface ArticleDetailData {
 	comments: CommentData[];
 	collections: CollectionData[];
 }
+
+// ============================================================
+//                  User & Following Queries
+// ============================================================
+
+/**
+ * Get user profile by address
+ */
+export const USER_BY_ID_QUERY = gql`
+	query UserById($id: String!) {
+		userById(id: $id) {
+			id
+			totalArticles
+			totalFollowers
+			totalFollowing
+			createdAt
+		}
+	}
+`;
+
+/**
+ * Get articles by author with pagination
+ */
+export const ARTICLES_BY_AUTHOR_QUERY = gql`
+	query ArticlesByAuthor($authorId: String!, $limit: Int!, $offset: Int!) {
+		articles(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { author: { id_eq: $authorId } }
+		) {
+			id
+			arweaveId
+			author {
+				id
+			}
+			originalAuthor
+			trueAuthor
+			title
+			categoryId
+			collectPrice
+			maxCollectSupply
+			collectCount
+			originality
+			likeAmount
+			dislikeAmount
+			totalTips
+			createdAt
+			blockNumber
+			txHash
+		}
+	}
+`;
+
+/**
+ * Get users that the current user is following
+ */
+export const USER_FOLLOWING_QUERY = gql`
+	query UserFollowing($userId: String!, $limit: Int!, $offset: Int!) {
+		follows(
+			orderBy: updatedAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { follower: { id_eq: $userId }, isActive_eq: true }
+		) {
+			id
+			following {
+				id
+				totalArticles
+				totalFollowers
+			}
+			createdAt
+			updatedAt
+		}
+	}
+`;
+
+/**
+ * Get followers of a user
+ */
+export const USER_FOLLOWERS_QUERY = gql`
+	query UserFollowers($userId: String!, $limit: Int!, $offset: Int!) {
+		follows(
+			orderBy: updatedAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { following: { id_eq: $userId }, isActive_eq: true }
+		) {
+			id
+			follower {
+				id
+				totalArticles
+				totalFollowers
+			}
+			createdAt
+			updatedAt
+		}
+	}
+`;
+
+/**
+ * Check if current user follows a target user
+ */
+export const CHECK_FOLLOW_STATUS_QUERY = gql`
+	query CheckFollowStatus($followerId: String!, $followingId: String!) {
+		follows(
+			where: { 
+				follower: { id_eq: $followerId }, 
+				following: { id_eq: $followingId },
+				isActive_eq: true
+			}
+			limit: 1
+		) {
+			id
+			isActive
+		}
+	}
+`;
+
+// ============================================================
+//                  Library Queries (Evaluations)
+// ============================================================
+
+/**
+ * Get user's liked articles (score = 1)
+ */
+export const USER_LIKED_ARTICLES_QUERY = gql`
+	query UserLikedArticles($userId: String!, $limit: Int!, $offset: Int!) {
+		evaluations(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { user: { id_eq: $userId }, score_eq: 1 }
+		) {
+			id
+			article {
+				id
+				arweaveId
+				author {
+					id
+				}
+				originalAuthor
+				title
+				categoryId
+				likeAmount
+				dislikeAmount
+				totalTips
+				createdAt
+			}
+			amount
+			createdAt
+		}
+	}
+`;
+
+/**
+ * Get user's disliked articles (score = 2)
+ */
+export const USER_DISLIKED_ARTICLES_QUERY = gql`
+	query UserDislikedArticles($userId: String!, $limit: Int!, $offset: Int!) {
+		evaluations(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { user: { id_eq: $userId }, score_eq: 2 }
+		) {
+			id
+			article {
+				id
+				arweaveId
+				author {
+					id
+				}
+				originalAuthor
+				title
+				categoryId
+				likeAmount
+				dislikeAmount
+				totalTips
+				createdAt
+			}
+			amount
+			createdAt
+		}
+	}
+`;
+
+/**
+ * Get user's collected articles (NFT collections)
+ */
+export const USER_COLLECTED_ARTICLES_QUERY = gql`
+	query UserCollectedArticles($userId: String!, $limit: Int!, $offset: Int!) {
+		collections(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { user: { id_eq: $userId } }
+		) {
+			id
+			article {
+				id
+				arweaveId
+				author {
+					id
+				}
+				originalAuthor
+				title
+				categoryId
+				likeAmount
+				dislikeAmount
+				totalTips
+				createdAt
+			}
+			tokenId
+			amount
+			createdAt
+		}
+	}
+`;
+
+/**
+ * Get user's commented articles
+ */
+export const USER_COMMENTED_ARTICLES_QUERY = gql`
+	query UserCommentedArticles($userId: String!, $limit: Int!, $offset: Int!) {
+		comments(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { user: { id_eq: $userId } }
+		) {
+			id
+			commentId
+			content
+			article {
+				id
+				arweaveId
+				author {
+					id
+				}
+				originalAuthor
+				title
+				categoryId
+				likeAmount
+				dislikeAmount
+				totalTips
+				createdAt
+			}
+			likes
+			createdAt
+		}
+	}
+`;
+
+// ============================================================
+//                  Type Definitions
+// ============================================================
+
+export interface UserData {
+	id: string;
+	totalArticles: number;
+	totalFollowers: number;
+	totalFollowing: number;
+	createdAt: string;
+}
+
+export interface FollowData {
+	id: string;
+	following?: {
+		id: string;
+		totalArticles: number;
+		totalFollowers: number;
+	};
+	follower?: {
+		id: string;
+		totalArticles: number;
+		totalFollowers: number;
+	};
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface EvaluationWithArticle {
+	id: string;
+	article: ArticleData;
+	amount: string;
+	createdAt: string;
+}
+
+export interface CollectionWithArticle {
+	id: string;
+	article: ArticleData;
+	tokenId: string;
+	amount: string;
+	createdAt: string;
+}
+
+export interface CommentWithArticle {
+	id: string;
+	commentId: string;
+	content: string;
+	article: ArticleData;
+	likes: number;
+	createdAt: string;
+}
