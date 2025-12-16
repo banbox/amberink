@@ -38,6 +38,17 @@ export function getImageUrl(arweaveId: string): string {
 }
 
 /**
+ * 获取头像 URL（支持 Arweave ID 或完整 URL）
+ * @param avatar - 头像字符串（可能是 Arweave ID 或完整 URL）
+ * @returns 头像 URL，如果输入为空则返回 null
+ */
+export function getAvatarUrl(avatar: string | null | undefined): string | null {
+	if (!avatar) return null;
+	const gateways = getArweaveGateways();
+	return `${gateways[0]}/${avatar}`;
+}
+
+/**
  * 获取 Arweave 内容 URL
  * @param arweaveId - Arweave 交易 ID
  * @param gateway - 指定网关（可选）

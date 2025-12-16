@@ -80,6 +80,7 @@ export {
 	fetchTextContent,
 	getImageUrl,
 	getArweaveUrl,
+	getAvatarUrl,
 	checkContentExists,
 	// 文章文件夹获取功能
 	fetchFromFolder,

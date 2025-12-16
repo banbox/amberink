@@ -236,5 +236,12 @@
 	"gas_multiplier": "Default Gas Fee Multiplier (min: 10)",
 	"gas_multiplier_min_error": "Gas fee multiplier must be at least {min}",
 	"mainnet": "Mainnet",
-	"devnet": "Devnet"
+	"devnet": "Devnet",
+	"crop_image": "Crop Image",
+	"confirm_crop": "Confirm",
+	"change_image": "Change",
+	"aspect_ratio": "Aspect Ratio",
+	"max_size": "Max {size}",
+	"image_too_small": "Image must be at least {width}×{height} pixels",
+	"image_process_error": "Failed to process image"
 }

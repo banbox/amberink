@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
-	import { getCoverImageUrl } from '$lib/arweave';
+	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
 	import { getArticleWithCache } from '$lib/arweave/cache';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
@@ -413,8 +413,8 @@
 		<div class="flex items-center gap-3">
 			<!-- Avatar -->
 			<a href={`/u/${authorAddress}`} class="shrink-0">
-				{#if article.author.avatar}
-					<img src={article.author.avatar} alt="" class="h-11 w-11 rounded-full object-cover" />
+				{#if getAvatarUrl(article.author.avatar)}
+					<img src={getAvatarUrl(article.author.avatar)} alt="" class="h-11 w-11 rounded-full object-cover" />
 				{:else}
 					<div
 						class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-sm font-medium text-white"

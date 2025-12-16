@@ -12,7 +12,7 @@
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import { followUser } from '$lib/contracts';
-	import { getArweaveUrl } from '$lib/arweave';
+	import { getAvatarUrl } from '$lib/arweave';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 
 	const PAGE_SIZE = 20;
@@ -41,14 +41,6 @@
 			month: 'long',
 			day: 'numeric'
 		});
-	}
-
-	function getAvatarUrl(avatar: string | null | undefined): string | null {
-		if (!avatar) return null;
-		if (/^[a-zA-Z0-9_-]{43}$/.test(avatar)) {
-			return getArweaveUrl(avatar);
-		}
-		return avatar;
 	}
 
 	async function fetchAuthorProfile() {

@@ -4,6 +4,7 @@
 	import { ContractError } from '$lib/contracts';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import SearchSelect, { type SelectOption } from '$lib/components/SearchSelect.svelte';
+	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 	import { parseEther } from 'viem';
 
 	// Category options for SearchSelect
@@ -74,7 +75,6 @@
 	let content = $state('');
 	let postscript = $state('');
 	let coverImageFile = $state<File | null>(null);
-	let coverImagePreview = $state<string | null>(null);
 	let royaltyBps = $state<bigint>(500n);
 	let collectPriceEth = $state<string | number>('0');
 	let maxCollectSupply = $state<string | number>('0');
@@ -93,41 +93,19 @@
 	let submitStatus = $state<SubmitStatus>('idle');
 	let statusMessage = $state('');
 
-	// Handle cover image selection
-	function handleCoverImageChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (!file) return;
-
-		// Validate file type
-		if (!file.type.startsWith('image/')) {
-			statusMessage = m.invalid_image();
-			submitStatus = 'error';
-			return;
-		}
-
-		// Validate file size (10MB max)
-		if (file.size > 10 * 1024 * 1024) {
-			statusMessage = m.image_too_large();
-			submitStatus = 'error';
-			return;
-		}
-
+	// Handle cover image processed
+	function handleCoverImageProcessed(file: File) {
 		coverImageFile = file;
-		coverImagePreview = URL.createObjectURL(file);
 		submitStatus = 'idle';
 	}
 
-	// Remove cover image
-	function removeCoverImage() {
-		if (coverImagePreview) {
-			URL.revokeObjectURL(coverImagePreview);
-		}
+	// Handle cover image removed
+	function handleCoverImageRemoved() {
 		coverImageFile = null;
-		coverImagePreview = null;
 	}
 
 	// Reset form
+	let resetImageKey = $state(0);
 	function resetForm() {
 		title = '';
 		summary = '';
@@ -135,7 +113,8 @@
 		author = '';
 		content = '';
 		postscript = '';
-		removeCoverImage();
+		coverImageFile = null;
+		resetImageKey++; // Force ImageProcessor to reset
 		isSubmitting = false;
 		submitStatus = 'idle';
 		statusMessage = '';
@@ -320,55 +299,18 @@
 			</div>
 
 			<!-- Cover Image -->
-			<div>
-				<label for="cover-image" class="mb-3 block text-sm font-medium text-gray-700">
-					{m.cover()}
-				</label>
-				{#if coverImagePreview}
-					<div class="space-y-3">
-						<div class="relative overflow-hidden rounded-lg bg-gray-100">
-							<img src={coverImagePreview} alt="Cover preview" class="h-64 w-full object-cover" />
-						</div>
-						<button
-							type="button"
-							class="text-sm text-gray-600 underline hover:text-gray-900"
-							disabled={isSubmitting}
-							onclick={removeCoverImage}
-						>
-							{m.remove()}
-						</button>
-					</div>
-				{:else}
-					<label
-						for="cover-image"
-						class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 px-6 py-10 transition-colors hover:border-gray-300"
-					>
-						<svg
-							class="mb-2 h-8 w-8 text-gray-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M12 4v16m8-8H4"
-							/>
-						</svg>
-						<p class="text-sm font-medium text-gray-700">{m.upload()}</p>
-						<p class="text-xs text-gray-500">{m.image_format_help()}</p>
-						<input
-							id="cover-image"
-							type="file"
-							accept="image/*"
-							class="hidden"
-							disabled={isSubmitting}
-							onchange={handleCoverImageChange}
-						/>
-					</label>
-				{/if}
-			</div>
+			{#key resetImageKey}
+				<ImageProcessor
+					label={m.cover()}
+					aspectRatio={16 / 9}
+					maxFileSize={100 * 1024}
+					maxOutputWidth={1200}
+					maxOutputHeight={675}
+					disabled={isSubmitting}
+					onImageProcessed={handleCoverImageProcessed}
+					onImageRemoved={handleCoverImageRemoved}
+				/>
+			{/key}
 
 			<!-- Content -->
 			<div>

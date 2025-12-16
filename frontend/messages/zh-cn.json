@@ -236,5 +236,12 @@
 	"gas_multiplier": "默认 Gas 费用倍数（最小：10）",
 	"gas_multiplier_min_error": "Gas 费用倍数最小为 {min}",
 	"mainnet": "主网",
-	"devnet": "测试网"
+	"devnet": "测试网",
+	"crop_image": "裁剪图片",
+	"confirm_crop": "确认",
+	"change_image": "更换",
+	"aspect_ratio": "宽高比",
+	"max_size": "最大 {size}",
+	"image_too_small": "图片尺寸至少需要 {width}×{height} 像素",
+	"image_process_error": "图片处理失败"
 }

@@ -14,7 +14,9 @@
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import { updateProfile } from '$lib/contracts';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
-	import { getArweaveUrl } from '$lib/arweave';
+	import { getAvatarUrl, uploadImage } from '$lib/arweave';
+	import { getIrysNetwork } from '$lib/config';
+	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 
 	type TabType = 'articles' | 'followers' | 'following' | 'about';
 
@@ -33,6 +35,8 @@
 	let editingProfile = $state(false);
 	let nicknameInput = $state('');
 	let avatarInput = $state('');
+	let avatarFile = $state<File | null>(null);
+	let avatarPreviewUrl = $state<string | null>(null);
 	let bioInput = $state('');
 	let savingProfile = $state(false);
 	let profileError = $state('');
@@ -193,9 +197,24 @@
 	function startEditProfile() {
 		nicknameInput = user?.nickname || '';
 		avatarInput = user?.avatar || '';
+		avatarFile = null;
+		avatarPreviewUrl = getAvatarUrl(user?.avatar) || null;
 		bioInput = user?.bio || '';
 		profileError = '';
 		editingProfile = true;
+	}
+
+	function handleAvatarProcessed(file: File, previewUrl: string) {
+		avatarFile = file;
+		avatarPreviewUrl = previewUrl;
+		// Clear text input since we're using file upload
+		avatarInput = '';
+	}
+
+	function handleAvatarRemoved() {
+		avatarFile = null;
+		avatarPreviewUrl = null;
+		avatarInput = '';
 	}
 
 	async function saveProfile() {
@@ -204,12 +223,22 @@
 		profileError = '';
 
 		try {
-			await updateProfile(nicknameInput, avatarInput, bioInput);
+			let finalAvatarId = avatarInput;
+
+			// If there's a new avatar file, upload it to Arweave first
+			if (avatarFile) {
+				const network = getIrysNetwork();
+				finalAvatarId = await uploadImage(avatarFile, network);
+			}
+
+			await updateProfile(nicknameInput, finalAvatarId, bioInput);
 			// Wait a bit for SubSquid to index the event
 			await new Promise(resolve => setTimeout(resolve, 2000));
 			// Refresh user data
 			await fetchUserProfile();
 			editingProfile = false;
+			avatarFile = null;
+			avatarPreviewUrl = null;
 		} catch (e) {
 			console.error('Failed to update profile:', e);
 			profileError = e instanceof Error ? e.message : 'Failed to update profile';
@@ -223,15 +252,6 @@
 		profileError = '';
 	}
 
-	function getAvatarUrl(avatar: string | null | undefined): string | null {
-		if (!avatar) return null;
-		// If it looks like an Arweave ID (43 chars base64), convert to URL
-		if (/^[a-zA-Z0-9_-]{43}$/.test(avatar)) {
-			return getArweaveUrl(avatar);
-		}
-		// Otherwise assume it's already a URL
-		return avatar;
-	}
 
 	$effect(() => {
 		const addr = walletAddress;
@@ -354,8 +374,8 @@
 								href="/author/{follower.id}"
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
-								{#if follower.avatar}
-									<img src={follower.avatar} alt="" class="h-12 w-12 rounded-full object-cover" />
+								{#if getAvatarUrl(follower.avatar)}
+									<img src={getAvatarUrl(follower.avatar)} alt="" class="h-12 w-12 rounded-full object-cover" />
 								{:else}
 									<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
 										{follower.nickname ? follower.nickname.slice(0, 2).toUpperCase() : follower.id.slice(2, 4).toUpperCase()}
@@ -384,8 +404,8 @@
 								href="/author/{followingUser.id}"
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
-								{#if followingUser.avatar}
-									<img src={followingUser.avatar} alt="" class="h-12 w-12 rounded-full object-cover" />
+								{#if getAvatarUrl(followingUser.avatar)}
+									<img src={getAvatarUrl(followingUser.avatar)} alt="" class="h-12 w-12 rounded-full object-cover" />
 								{:else}
 									<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
 										{followingUser.nickname ? followingUser.nickname.slice(0, 2).toUpperCase() : followingUser.id.slice(2, 4).toUpperCase()}
@@ -437,20 +457,21 @@
 							<p class="mt-1 text-xs text-gray-400">{m.max_chars({ count: 64 })}</p>
 						</div>
 
-						<!-- Avatar URL -->
+						<!-- Avatar Upload -->
 						<div>
-							<label for="avatar" class="mb-1 block text-sm font-medium text-gray-700">
-								{m.avatar()}
-							</label>
-							<input
-								id="avatar"
-								type="text"
-								bind:value={avatarInput}
-								class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-								placeholder={m.avatar_placeholder()}
-								maxlength="128"
+							<ImageProcessor
+								label={m.avatar()}
+								aspectRatio={1}
+								maxFileSize={100 * 1024}
+								maxOutputWidth={400}
+								maxOutputHeight={400}
+								circular={true}
+								previewHeightClass="h-32 w-32"
+								initialPreviewUrl={avatarPreviewUrl ?? undefined}
+								disabled={savingProfile}
+								onImageProcessed={handleAvatarProcessed}
+								onImageRemoved={handleAvatarRemoved}
 							/>
-							<p class="mt-1 text-xs text-gray-400">{m.avatar_hint()}</p>
 						</div>
 
 						<!-- Bio -->

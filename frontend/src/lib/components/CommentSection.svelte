@@ -4,6 +4,7 @@
 	import { ContractError, likeComment, likeCommentWithSessionKey } from '$lib/contracts';
 	import { ensureSessionKeyBalance, type StoredSessionKey } from '$lib/sessionKey';
 	import { getMinActionValue } from '$lib/config';
+	import { getAvatarUrl } from '$lib/arweave';
 
 	interface Props {
 		articleId: string;
@@ -176,8 +177,8 @@
 					<!-- Row 1: Avatar + Nickname + Date -->
 					<div class="flex items-center gap-3">
 						<a href={`/u/${comment.user.id}`} class="shrink-0">
-							{#if comment.user.avatar}
-								<img src={comment.user.avatar} alt="" class="h-10 w-10 rounded-full object-cover" />
+							{#if getAvatarUrl(comment.user.avatar)}
+								<img src={getAvatarUrl(comment.user.avatar)} alt="" class="h-10 w-10 rounded-full object-cover" />
 							{:else}
 								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gray-600 to-gray-800 text-sm font-medium text-white">
 									{getUserInitials(comment.user)}
