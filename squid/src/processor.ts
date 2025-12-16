@@ -58,6 +58,7 @@ export const processor = new EvmBatchProcessor()
             blogHub.events.CommentLiked.topic,
             blogHub.events.FollowStatusChanged.topic,
             blogHub.events.ArticleCollected.topic,
+            blogHub.events.UserProfileUpdated.topic,
         ],
     })
 

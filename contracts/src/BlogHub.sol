@@ -88,6 +88,10 @@ contract BlogHub is
     uint256 public constant MAX_ORIGINAL_AUTHOR_LENGTH = 64;
     // 最大标题长度（128字节，约40个中文字符或128个英文字符）
     uint256 public constant MAX_TITLE_LENGTH = 128;
+    // 用户资料字段最大长度
+    uint256 public constant MAX_NICKNAME_LENGTH = 64;
+    uint256 public constant MAX_BIO_LENGTH = 256;
+    uint256 public constant MAX_AVATAR_LENGTH = 128;
 
     // --- 状态变量 ---
     uint256 public nextArticleId;
@@ -115,7 +119,6 @@ contract BlogHub is
         string arweaveId,       // Irys 可变文件夹的 manifest ID
         string originalAuthor,
         string title,
-        uint256 timestamp,
         address trueAuthor,
         uint256 collectPrice,
         uint256 maxCollectSupply,
@@ -127,8 +130,7 @@ contract BlogHub is
         uint256 indexed articleId,
         address indexed user,
         uint8 score, // 1: Like, 0: Neutral, 2: Dislike
-        uint256 amountPaid,
-        uint256 timestamp
+        uint256 amountPaid
     );
 
     // 收藏事件
@@ -136,8 +138,7 @@ contract BlogHub is
         uint256 indexed articleId,
         address indexed collector,
         uint256 amount,
-        uint256 tokenId,
-        uint256 timestamp
+        uint256 tokenId
     );
 
     // 评论事件：只在 content 不为空时触发
@@ -163,8 +164,7 @@ contract BlogHub is
         uint256 indexed commentId,
         address indexed liker,
         address commenter,
-        uint256 amountPaid,
-        uint256 timestamp
+        uint256 amountPaid
     );
 
     event PlatformFeeUpdated(uint96 newFeeBps);
@@ -176,6 +176,14 @@ contract BlogHub is
         bytes4 selector
     );
     event MinActionValueUpdated(uint256 newValue);
+
+    // 用户资料更新事件
+    event UserProfileUpdated(
+        address indexed user,
+        string nickname,
+        string avatar,
+        string bio
+    );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -311,8 +319,7 @@ contract BlogHub is
                 _articleId,
                 sender,
                 _score,
-                amount,
-                block.timestamp
+                amount
             );
         }
 
@@ -371,8 +378,7 @@ contract BlogHub is
             _articleId,
             sender,
             amount,
-            _articleId, // TokenID = ArticleID
-            block.timestamp
+            _articleId // TokenID = ArticleID
         );
     }
 
@@ -428,8 +434,7 @@ contract BlogHub is
             _commentId,
             sender,
             _commenter,
-            amount,
-            block.timestamp
+            amount
         );
     }
 
@@ -540,7 +545,6 @@ contract BlogHub is
             _arweaveId,
             _originalAuthor,
             _title,
-            block.timestamp,
             trueAuthor,
             _collectPrice,
             _maxCollectSupply,
@@ -907,7 +911,6 @@ contract BlogHub is
             params.arweaveId,
             params.originalAuthor,
             params.title,
-            block.timestamp,
             trueAuthor,
             params.collectPrice,
             params.maxCollectSupply,
@@ -959,6 +962,33 @@ contract BlogHub is
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
+    }
+
+    // =============================================================
+    //                      用户资料（Event-based）
+    // =============================================================
+
+    /**
+     * @notice 更新用户资料（仅通过事件存储，不占用合约 storage）
+     * @param _nickname 昵称（最大 64 字节）
+     * @param _avatar 头像 URL/IPFS/Arweave ID（最大 128 字节）
+     * @param _bio 个人简介（最大 256 字节）
+     */
+    function updateProfile(
+        string calldata _nickname,
+        string calldata _avatar,
+        string calldata _bio
+    ) external whenNotPaused {
+        if (bytes(_nickname).length > MAX_NICKNAME_LENGTH) revert InvalidLength();
+        if (bytes(_avatar).length > MAX_AVATAR_LENGTH) revert InvalidLength();
+        if (bytes(_bio).length > MAX_BIO_LENGTH) revert InvalidLength();
+
+        emit UserProfileUpdated(
+            _msgSender(),
+            _nickname,
+            _avatar,
+            _bio
+        );
     }
 
     /**

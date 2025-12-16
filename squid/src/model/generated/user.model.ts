@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, OneToMany as OneToMany_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, OneToMany as OneToMany_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
 import {Article} from "./article.model"
 import {Comment} from "./comment.model"
 import {Follow} from "./follow.model"
@@ -11,6 +11,15 @@ export class User {
 
     @PrimaryColumn_()
     id!: string
+
+    @StringColumn_({nullable: true})
+    nickname!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    avatar!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    bio!: string | undefined | null
 
     @OneToMany_(() => Article, e => e.author)
     articles!: Article[]
@@ -35,4 +44,7 @@ export class User {
 
     @DateTimeColumn_({nullable: false})
     createdAt!: Date
+
+    @DateTimeColumn_({nullable: true})
+    profileUpdatedAt!: Date | undefined | null
 }

@@ -356,6 +356,17 @@ const BLOGHUB_ABI = [
 		],
 		outputs: [],
 		stateMutability: 'payable'
+	},
+	{
+		name: 'updateProfile',
+		type: 'function',
+		inputs: [
+			{ name: '_nickname', type: 'string' },
+			{ name: '_avatar', type: 'string' },
+			{ name: '_bio', type: 'string' }
+		],
+		outputs: [],
+		stateMutability: 'nonpayable'
 	}
 ] as const;
 
@@ -1382,6 +1393,52 @@ export async function likeCommentWithSessionKey(
 		return txHash;
 	} catch (error) {
 		console.error('Error liking comment with session key:', error);
+		throw parseContractError(error);
+	}
+}
+
+// ============================================================
+//                  User Profile Functions
+// ============================================================
+
+/**
+ * Update user profile (nickname, avatar, bio)
+ * Profile data is stored via events and indexed by SubSquid
+ * @param nickname - User nickname (max 64 bytes)
+ * @param avatar - Avatar URL/IPFS/Arweave ID (max 128 bytes)
+ * @param bio - User bio/description (max 256 bytes)
+ * @returns Transaction hash
+ */
+export async function updateProfile(
+	nickname: string,
+	avatar: string,
+	bio: string
+): Promise<string> {
+	// Validate lengths
+	if (new TextEncoder().encode(nickname).length > 64) {
+		throw new Error('Nickname is too long (max 64 bytes)');
+	}
+	if (new TextEncoder().encode(avatar).length > 128) {
+		throw new Error('Avatar URL is too long (max 128 bytes)');
+	}
+	if (new TextEncoder().encode(bio).length > 256) {
+		throw new Error('Bio is too long (max 256 bytes)');
+	}
+
+	try {
+		const walletClient = await getWalletClient();
+
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: BLOGHUB_ABI,
+			functionName: 'updateProfile',
+			args: [nickname, avatar, bio]
+		});
+
+		console.log(`Profile updated. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error('Error updating profile:', error);
 		throw parseContractError(error);
 	}
 }

@@ -19,6 +19,8 @@ export const ARTICLES_QUERY = gql`
 			arweaveId
 			author {
 				id
+				nickname
+				avatar
 			}
 			originalAuthor
 			trueAuthor
@@ -49,6 +51,8 @@ export const ALL_ARTICLES_QUERY = gql`
 			arweaveId
 			author {
 				id
+				nickname
+				avatar
 			}
 			originalAuthor
 			trueAuthor
@@ -99,6 +103,8 @@ export interface ArticleData {
 	arweaveId: string;  // Irys mutable folder manifest ID
 	author: {
 		id: string;
+		nickname?: string | null;
+		avatar?: string | null;
 	};
 	originalAuthor: string | null;
 	trueAuthor: string | null;
@@ -137,6 +143,8 @@ export const ARTICLE_BY_ID_QUERY = gql`
 			arweaveId
 			author {
 				id
+				nickname
+				avatar
 			}
 			originalAuthor
 			trueAuthor
@@ -158,6 +166,8 @@ export const ARTICLE_BY_ID_QUERY = gql`
 				commentId
 				user {
 					id
+					nickname
+					avatar
 				}
 				content
 				parentCommentId
@@ -169,6 +179,8 @@ export const ARTICLE_BY_ID_QUERY = gql`
 				id
 				user {
 					id
+					nickname
+					avatar
 				}
 				tokenId
 				amount
@@ -187,6 +199,8 @@ export interface CommentData {
 	commentId: string;
 	user: {
 		id: string;
+		nickname?: string | null;
+		avatar?: string | null;
 	};
 	content: string;
 	parentCommentId: string | null;
@@ -206,6 +220,8 @@ export interface CollectionData {
 	id: string;
 	user: {
 		id: string;
+		nickname?: string | null;
+		avatar?: string | null;
 	};
 	tokenId: string;
 	amount: string;
@@ -222,6 +238,8 @@ export interface ArticleDetailData {
 	arweaveId: string;  // Irys mutable folder manifest ID
 	author: {
 		id: string;
+		nickname?: string | null;
+		avatar?: string | null;
 	};
 	originalAuthor: string | null;
 	trueAuthor: string | null;
@@ -253,10 +271,14 @@ export const USER_BY_ID_QUERY = gql`
 	query UserById($id: String!) {
 		userById(id: $id) {
 			id
+			nickname
+			avatar
+			bio
 			totalArticles
 			totalFollowers
 			totalFollowing
 			createdAt
+			profileUpdatedAt
 		}
 	}
 `;
@@ -276,6 +298,8 @@ export const ARTICLES_BY_AUTHOR_QUERY = gql`
 			arweaveId
 			author {
 				id
+				nickname
+				avatar
 			}
 			originalAuthor
 			trueAuthor
@@ -309,6 +333,8 @@ export const USER_FOLLOWING_QUERY = gql`
 			id
 			following {
 				id
+				nickname
+				avatar
 				totalArticles
 				totalFollowers
 			}
@@ -332,6 +358,8 @@ export const USER_FOLLOWERS_QUERY = gql`
 			id
 			follower {
 				id
+				nickname
+				avatar
 				totalArticles
 				totalFollowers
 			}
@@ -381,6 +409,8 @@ export const USER_LIKED_ARTICLES_QUERY = gql`
 				arweaveId
 				author {
 					id
+					nickname
+					avatar
 				}
 				originalAuthor
 				title
@@ -413,6 +443,8 @@ export const USER_DISLIKED_ARTICLES_QUERY = gql`
 				arweaveId
 				author {
 					id
+					nickname
+					avatar
 				}
 				originalAuthor
 				title
@@ -445,6 +477,8 @@ export const USER_COLLECTED_ARTICLES_QUERY = gql`
 				arweaveId
 				author {
 					id
+					nickname
+					avatar
 				}
 				originalAuthor
 				title
@@ -480,6 +514,8 @@ export const USER_COMMENTED_ARTICLES_QUERY = gql`
 				arweaveId
 				author {
 					id
+					nickname
+					avatar
 				}
 				originalAuthor
 				title
@@ -501,21 +537,29 @@ export const USER_COMMENTED_ARTICLES_QUERY = gql`
 
 export interface UserData {
 	id: string;
+	nickname: string | null;
+	avatar: string | null;
+	bio: string | null;
 	totalArticles: number;
 	totalFollowers: number;
 	totalFollowing: number;
 	createdAt: string;
+	profileUpdatedAt: string | null;
 }
 
 export interface FollowData {
 	id: string;
 	following?: {
 		id: string;
+		nickname?: string | null;
+		avatar?: string | null;
 		totalArticles: number;
 		totalFollowers: number;
 	};
 	follower?: {
 		id: string;
+		nickname?: string | null;
+		avatar?: string | null;
 		totalArticles: number;
 		totalFollowers: number;
 	};

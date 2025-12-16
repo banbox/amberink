@@ -12,6 +12,7 @@
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import { followUser } from '$lib/contracts';
+	import { getArweaveUrl } from '$lib/arweave';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 
 	const PAGE_SIZE = 20;
@@ -40,6 +41,14 @@
 			month: 'long',
 			day: 'numeric'
 		});
+	}
+
+	function getAvatarUrl(avatar: string | null | undefined): string | null {
+		if (!avatar) return null;
+		if (/^[a-zA-Z0-9_-]{43}$/.test(avatar)) {
+			return getArweaveUrl(avatar);
+		}
+		return avatar;
 	}
 
 	async function fetchAuthorProfile() {
@@ -156,13 +165,17 @@
 	<div class="mb-8">
 		<div class="flex items-start gap-4">
 			<!-- Avatar -->
-			<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white">
-				{authorId.slice(2, 4).toUpperCase()}
-			</div>
+			{#if getAvatarUrl(user?.avatar)}
+				<img src={getAvatarUrl(user?.avatar)} alt="Avatar" class="h-20 w-20 rounded-full object-cover" />
+			{:else}
+				<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white">
+					{authorId.slice(2, 4).toUpperCase()}
+				</div>
+			{/if}
 
 			<div class="flex-1">
 				<div class="flex items-center gap-4">
-					<h1 class="text-2xl font-bold text-gray-900">{shortAddress(authorId)}</h1>
+					<h1 class="text-2xl font-bold text-gray-900">{user?.nickname || shortAddress(authorId)}</h1>
 					{#if connected && !isOwnProfile}
 						<button
 							type="button"
@@ -187,6 +200,10 @@
 					{/if}
 				</div>
 
+				{#if user?.nickname}
+					<p class="text-sm text-gray-500">{shortAddress(authorId)}</p>
+				{/if}
+
 				{#if user}
 					<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
 						<span>{user.totalArticles} {m.profile_articles().toLowerCase()}</span>
@@ -196,6 +213,9 @@
 					<p class="mt-1 text-sm text-gray-400">
 						{m.profile_member_since()} {formatDate(user.createdAt)}
 					</p>
+					{#if user.bio}
+						<p class="mt-3 whitespace-pre-wrap text-gray-600">{user.bio}</p>
+					{/if}
 				{/if}
 			</div>
 		</div>

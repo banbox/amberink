@@ -307,11 +307,21 @@
 
 	const coverUrl = $derived(getCoverUrl(article.arweaveId));
 	const categoryName = $derived(getCategoryName(article.categoryId));
-	// Display trueAuthor if available, otherwise author
+	// Display author name: prefer nickname > originalAuthor > short address
 	const displayAuthor = $derived(
-		article.trueAuthor && article.trueAuthor !== '0x0000000000000000000000000000000000000000'
+		article.author.nickname ||
+		article.originalAuthor ||
+		(article.trueAuthor && article.trueAuthor !== '0x0000000000000000000000000000000000000000'
 			? shortAddress(article.trueAuthor)
-			: (article.originalAuthor || shortAddress(article.author.id))
+			: shortAddress(article.author.id))
+	);
+	// Get author avatar initials
+	const authorInitials = $derived(
+		article.author.nickname
+			? article.author.nickname.slice(0, 2).toUpperCase()
+			: (article.originalAuthor
+				? article.originalAuthor.slice(0, 2).toUpperCase()
+				: shortAddress(article.author.id).slice(0, 2).toUpperCase())
 	);
 	// Check if article is published on behalf of trueAuthor by author
 	const isProxyPublish = $derived(
@@ -388,11 +398,15 @@
 		<div class="flex items-center gap-3">
 			<!-- Avatar -->
 			<a href={`/u/${authorAddress}`} class="shrink-0">
-				<div
-					class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-sm font-medium text-white"
-				>
-					{displayAuthor.slice(0, 2).toUpperCase()}
-				</div>
+				{#if article.author.avatar}
+					<img src={article.author.avatar} alt="" class="h-11 w-11 rounded-full object-cover" />
+				{:else}
+					<div
+						class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-sm font-medium text-white"
+					>
+						{authorInitials}
+					</div>
+				{/if}
 			</a>
 
 			<div class="flex flex-1 flex-col">
@@ -786,7 +800,7 @@
 									<tr class="hover:bg-gray-50">
 										<td class="px-3 py-2">
 											<a href={`/u/${collection.user.id}`} class="text-blue-600 hover:underline">
-												{shortAddress(collection.user.id)}
+												{collection.user.nickname || shortAddress(collection.user.id)}
 											</a>
 										</td>
 										<td class="px-3 py-2 text-right font-medium text-emerald-600">

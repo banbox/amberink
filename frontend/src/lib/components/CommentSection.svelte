@@ -138,6 +138,19 @@
 	// Get user display name
 	const userDisplay = $derived(walletAddress ? shortAddress(walletAddress) : '');
 	const userInitials = $derived(walletAddress ? shortAddress(walletAddress).slice(0, 2).toUpperCase() : '?');
+
+	// Get display name for a comment user
+	function getUserDisplay(user: CommentData['user']): string {
+		return user.nickname || shortAddress(user.id);
+	}
+
+	// Get initials for avatar
+	function getUserInitials(user: CommentData['user']): string {
+		if (user.nickname) {
+			return user.nickname.slice(0, 2).toUpperCase();
+		}
+		return shortAddress(user.id).slice(0, 2).toUpperCase();
+	}
 </script>
 
 <section class="mt-8" id="comments">
@@ -152,13 +165,17 @@
 					<!-- Row 1: Avatar + Nickname + Date -->
 					<div class="flex items-center gap-3">
 						<a href={`/u/${comment.user.id}`} class="shrink-0">
-							<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gray-600 to-gray-800 text-sm font-medium text-white">
-								{shortAddress(comment.user.id).slice(0, 2).toUpperCase()}
-							</div>
+							{#if comment.user.avatar}
+								<img src={comment.user.avatar} alt="" class="h-10 w-10 rounded-full object-cover" />
+							{:else}
+								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gray-600 to-gray-800 text-sm font-medium text-white">
+									{getUserInitials(comment.user)}
+								</div>
+							{/if}
 						</a>
 						<div class="flex flex-col">
 							<a href={`/u/${comment.user.id}`} class="text-sm font-medium text-gray-900 hover:underline">
-								{shortAddress(comment.user.id)}
+								{getUserDisplay(comment.user)}
 							</a>
 							<time class="text-xs text-gray-500" datetime={comment.createdAt}>
 								{formatDate(comment.createdAt)}

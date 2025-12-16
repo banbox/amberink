@@ -12,7 +12,9 @@
 		type FollowData
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
+	import { updateProfile } from '$lib/contracts';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
+	import { getArweaveUrl } from '$lib/arweave';
 
 	type TabType = 'articles' | 'followers' | 'following' | 'about';
 
@@ -27,11 +29,13 @@
 	let hasMore = $state(true);
 	let offset = $state(0);
 
-	// Profile bio (stored in localStorage for now, could be on Arweave)
-	let bio = $state('');
-	let editingBio = $state(false);
+	// Profile editing state (now stored on-chain via events)
+	let editingProfile = $state(false);
+	let nicknameInput = $state('');
+	let avatarInput = $state('');
 	let bioInput = $state('');
-	let savingBio = $state(false);
+	let savingProfile = $state(false);
+	let profileError = $state('');
 
 	let walletAddress = $derived(getWalletAddress());
 	let connected = $derived(isWalletConnected());
@@ -186,32 +190,47 @@
 		}
 	}
 
-	function loadBio() {
-		if (walletAddress) {
-			const stored = localStorage.getItem(`profile_bio_${walletAddress.toLowerCase()}`);
-			bio = stored || '';
+	function startEditProfile() {
+		nicknameInput = user?.nickname || '';
+		avatarInput = user?.avatar || '';
+		bioInput = user?.bio || '';
+		profileError = '';
+		editingProfile = true;
+	}
+
+	async function saveProfile() {
+		if (!walletAddress) return;
+		savingProfile = true;
+		profileError = '';
+
+		try {
+			await updateProfile(nicknameInput, avatarInput, bioInput);
+			// Wait a bit for SubSquid to index the event
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			// Refresh user data
+			await fetchUserProfile();
+			editingProfile = false;
+		} catch (e) {
+			console.error('Failed to update profile:', e);
+			profileError = e instanceof Error ? e.message : 'Failed to update profile';
+		} finally {
+			savingProfile = false;
 		}
 	}
 
-	function startEditBio() {
-		bioInput = bio;
-		editingBio = true;
+	function cancelEditProfile() {
+		editingProfile = false;
+		profileError = '';
 	}
 
-	async function saveBio() {
-		if (!walletAddress) return;
-		savingBio = true;
-
-		// For now, save to localStorage. In production, upload to Arweave with IPFS CID
-		localStorage.setItem(`profile_bio_${walletAddress.toLowerCase()}`, bioInput);
-		bio = bioInput;
-		editingBio = false;
-		savingBio = false;
-	}
-
-	function cancelEditBio() {
-		editingBio = false;
-		bioInput = '';
+	function getAvatarUrl(avatar: string | null | undefined): string | null {
+		if (!avatar) return null;
+		// If it looks like an Arweave ID (43 chars base64), convert to URL
+		if (/^[a-zA-Z0-9_-]{43}$/.test(avatar)) {
+			return getArweaveUrl(avatar);
+		}
+		// Otherwise assume it's already a URL
+		return avatar;
 	}
 
 	$effect(() => {
@@ -219,7 +238,6 @@
 		untrack(() => {
 			if (addr) {
 				fetchUserProfile();
-				loadBio();
 				fetchArticles(true);
 			} else {
 				user = null;
@@ -263,12 +281,21 @@
 		<div class="mb-8">
 			<div class="flex items-start gap-4">
 				<!-- Avatar -->
-				<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white">
-					{walletAddress?.slice(2, 4).toUpperCase()}
-				</div>
+				{#if getAvatarUrl(user?.avatar)}
+					<img src={getAvatarUrl(user?.avatar)} alt="Avatar" class="h-20 w-20 rounded-full object-cover" />
+				{:else}
+					<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white">
+						{walletAddress?.slice(2, 4).toUpperCase()}
+					</div>
+				{/if}
 
 				<div class="flex-1">
-					<h1 class="text-2xl font-bold text-gray-900">{shortAddress(walletAddress || '')}</h1>
+					<h1 class="text-2xl font-bold text-gray-900">
+						{user?.nickname || shortAddress(walletAddress || '')}
+					</h1>
+					{#if user?.nickname}
+						<p class="text-sm text-gray-500">{shortAddress(walletAddress || '')}</p>
+					{/if}
 					{#if user}
 						<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
 							<span>{user.totalArticles} {m.profile_articles().toLowerCase()}</span>
@@ -327,11 +354,15 @@
 								href="/author/{follower.id}"
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
-								<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
-									{follower.id.slice(2, 4).toUpperCase()}
-								</div>
+								{#if follower.avatar}
+									<img src={follower.avatar} alt="" class="h-12 w-12 rounded-full object-cover" />
+								{:else}
+									<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
+										{follower.nickname ? follower.nickname.slice(0, 2).toUpperCase() : follower.id.slice(2, 4).toUpperCase()}
+									</div>
+								{/if}
 								<div class="flex-1">
-									<p class="font-medium text-gray-900">{shortAddress(follower.id)}</p>
+									<p class="font-medium text-gray-900">{follower.nickname || shortAddress(follower.id)}</p>
 									<p class="text-sm text-gray-500">{follower.totalArticles} {m.profile_articles().toLowerCase()}</p>
 								</div>
 							</a>
@@ -353,11 +384,15 @@
 								href="/author/{followingUser.id}"
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
-								<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
-									{followingUser.id.slice(2, 4).toUpperCase()}
-								</div>
+								{#if followingUser.avatar}
+									<img src={followingUser.avatar} alt="" class="h-12 w-12 rounded-full object-cover" />
+								{:else}
+									<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
+										{followingUser.nickname ? followingUser.nickname.slice(0, 2).toUpperCase() : followingUser.id.slice(2, 4).toUpperCase()}
+									</div>
+								{/if}
 								<div class="flex-1">
-									<p class="font-medium text-gray-900">{shortAddress(followingUser.id)}</p>
+									<p class="font-medium text-gray-900">{followingUser.nickname || shortAddress(followingUser.id)}</p>
 									<p class="text-sm text-gray-500">{followingUser.totalArticles} {m.profile_articles().toLowerCase()}</p>
 								</div>
 							</a>
@@ -371,12 +406,12 @@
 			{/if}
 		{:else if activeTab === 'about'}
 			<div class="py-4">
-				<div class="mb-4 flex items-center justify-between">
-					<h3 class="font-medium text-gray-900">{m.profile_bio()}</h3>
-					{#if !editingBio}
+				<div class="mb-6 flex items-center justify-between">
+					<h3 class="text-lg font-medium text-gray-900">{m.profile_about()}</h3>
+					{#if !editingProfile}
 						<button
 							type="button"
-							onclick={startEditBio}
+							onclick={startEditProfile}
 							class="text-sm text-blue-600 hover:text-blue-700"
 						>
 							{m.profile_edit()}
@@ -384,36 +419,107 @@
 					{/if}
 				</div>
 
-				{#if editingBio}
+				{#if editingProfile}
 					<div class="space-y-4">
-						<textarea
-							bind:value={bioInput}
-							class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-							rows="4"
-							placeholder={m.profile_bio_placeholder()}
-						></textarea>
+						<!-- Nickname -->
+						<div>
+							<label for="nickname" class="mb-1 block text-sm font-medium text-gray-700">
+								{m.profile_nickname()}
+							</label>
+							<input
+								id="nickname"
+								type="text"
+								bind:value={nicknameInput}
+								class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+								placeholder={m.profile_nickname_placeholder()}
+								maxlength="64"
+							/>
+							<p class="mt-1 text-xs text-gray-400">{m.profile_max_chars({ count: 64 })}</p>
+						</div>
+
+						<!-- Avatar URL -->
+						<div>
+							<label for="avatar" class="mb-1 block text-sm font-medium text-gray-700">
+								{m.profile_avatar()}
+							</label>
+							<input
+								id="avatar"
+								type="text"
+								bind:value={avatarInput}
+								class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+								placeholder={m.profile_avatar_placeholder()}
+								maxlength="128"
+							/>
+							<p class="mt-1 text-xs text-gray-400">{m.profile_avatar_hint()}</p>
+						</div>
+
+						<!-- Bio -->
+						<div>
+							<label for="bio" class="mb-1 block text-sm font-medium text-gray-700">
+								{m.profile_bio()}
+							</label>
+							<textarea
+								id="bio"
+								bind:value={bioInput}
+								class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+								rows="4"
+								placeholder={m.profile_bio_placeholder()}
+								maxlength="256"
+							></textarea>
+							<p class="mt-1 text-xs text-gray-400">{m.profile_max_chars({ count: 256 })}</p>
+						</div>
+
+						<!-- Error message -->
+						{#if profileError}
+							<p class="text-sm text-red-600">{profileError}</p>
+						{/if}
+
+						<!-- Buttons -->
 						<div class="flex gap-2">
 							<button
 								type="button"
-								onclick={saveBio}
-								disabled={savingBio}
+								onclick={saveProfile}
+								disabled={savingProfile}
 								class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 							>
-								{savingBio ? m.profile_saving() : m.profile_save()}
+								{savingProfile ? m.profile_saving() : m.profile_save()}
 							</button>
 							<button
 								type="button"
-								onclick={cancelEditBio}
-								class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+								onclick={cancelEditProfile}
+								disabled={savingProfile}
+								class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
 							>
 								{m.cancel()}
 							</button>
 						</div>
 					</div>
 				{:else}
-					<p class="text-gray-600">
-						{bio || m.profile_no_bio()}
-					</p>
+					<!-- Display profile info -->
+					<div class="space-y-4">
+						<!-- Nickname -->
+						<div>
+							<p class="text-sm font-medium text-gray-500">{m.profile_nickname()}</p>
+							<p class="mt-1 text-gray-900">{user?.nickname || m.profile_not_set()}</p>
+						</div>
+
+						<!-- Avatar -->
+						{#if user?.avatar}
+							{@const avatarUrl = getAvatarUrl(user.avatar)}
+							{#if avatarUrl}
+								<div>
+									<p class="text-sm font-medium text-gray-500">{m.profile_avatar()}</p>
+									<img src={avatarUrl} alt="Avatar" class="mt-2 h-24 w-24 rounded-full object-cover" />
+								</div>
+							{/if}
+						{/if}
+
+						<!-- Bio -->
+						<div>
+							<p class="text-sm font-medium text-gray-500">{m.profile_bio()}</p>
+							<p class="mt-1 whitespace-pre-wrap text-gray-900">{user?.bio || m.profile_no_bio()}</p>
+						</div>
+					</div>
 				{/if}
 			</div>
 		{/if}

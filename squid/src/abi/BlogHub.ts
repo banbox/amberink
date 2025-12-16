@@ -4,11 +4,11 @@ import type { EventParams as EParams, FunctionArguments, FunctionReturn } from '
 
 export const events = {
     ApprovalForAll: event("0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31", "ApprovalForAll(address,address,bool)", {"account": indexed(p.address), "operator": indexed(p.address), "approved": p.bool}),
-    ArticleCollected: event("0x24b54eb81304dfe4e560e2b09d1b8651d3de8efdf8fde769f1dbac6e690d81b5", "ArticleCollected(uint256,address,uint256,uint256,uint256)", {"articleId": indexed(p.uint256), "collector": indexed(p.address), "amount": p.uint256, "tokenId": p.uint256, "timestamp": p.uint256}),
-    ArticleEvaluated: event("0xa47847c5419013bc5fa344eaa882ed5b33f76d87a7ce6a1a760d5af198afd9e5", "ArticleEvaluated(uint256,address,uint8,uint256,uint256)", {"articleId": indexed(p.uint256), "user": indexed(p.address), "score": p.uint8, "amountPaid": p.uint256, "timestamp": p.uint256}),
-    ArticlePublished: event("0x596e3673799552097ea0bc75b818086e7a7c177b54ff630efd544c511681d6b1", "ArticlePublished(uint256,address,uint256,string,string,string,uint256,address,uint256,uint256,uint8)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "timestamp": p.uint256, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}),
+    ArticleCollected: event("0xf6447f421186fdb05672b6b81ee863f6266ccf87f727fc67ed367774af860065", "ArticleCollected(uint256,address,uint256,uint256)", {"articleId": indexed(p.uint256), "collector": indexed(p.address), "amount": p.uint256, "tokenId": p.uint256}),
+    ArticleEvaluated: event("0xc199635a11ffccf62419a83e03370cef9ba2a2c0a33d65c2fe60542bd560a0a9", "ArticleEvaluated(uint256,address,uint8,uint256)", {"articleId": indexed(p.uint256), "user": indexed(p.address), "score": p.uint8, "amountPaid": p.uint256}),
+    ArticlePublished: event("0x20f06ccd8e783fa38422d2d4d0de66669fed0f0b45f372d88ff723d8063eb4ab", "ArticlePublished(uint256,address,uint256,string,string,string,address,uint256,uint256,uint8)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}),
     CommentAdded: event("0x19a5aae49af5681d63d1a8c6ea9dc7b88af86e08d71ade984e2087fada0d4c4a", "CommentAdded(uint256,address,string,uint256,uint8)", {"articleId": indexed(p.uint256), "commenter": indexed(p.address), "content": p.string, "parentCommentId": p.uint256, "score": p.uint8}),
-    CommentLiked: event("0x3e2236223f9ef11dd92492a8d35ef88d2ef5bea632e11697c2565e8a55d2b401", "CommentLiked(uint256,uint256,address,address,uint256,uint256)", {"articleId": indexed(p.uint256), "commentId": indexed(p.uint256), "liker": indexed(p.address), "commenter": p.address, "amountPaid": p.uint256, "timestamp": p.uint256}),
+    CommentLiked: event("0x37d3451d72bbbc5dc39c5c55aacb3b768d87ef17ab36990c4c60e96e6a0cf145", "CommentLiked(uint256,uint256,address,address,uint256)", {"articleId": indexed(p.uint256), "commentId": indexed(p.uint256), "liker": indexed(p.address), "commenter": p.address, "amountPaid": p.uint256}),
     FollowStatusChanged: event("0x75a1fc5e2239f53dc8407b3712c878c5893431bc3c349ea3561584869670f7f2", "FollowStatusChanged(address,address,bool)", {"follower": indexed(p.address), "target": indexed(p.address), "isFollowing": p.bool}),
     Initialized: event("0xc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d2", "Initialized(uint64)", {"version": p.uint64}),
     MinActionValueUpdated: event("0xfcae2461302da2a86e3604d10afc558dc160d49eb88bc010c4bca093793857ff", "MinActionValueUpdated(uint256)", {"newValue": p.uint256}),
@@ -26,11 +26,15 @@ export const events = {
     URI: event("0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b", "URI(string,uint256)", {"value": p.string, "id": indexed(p.uint256)}),
     Unpaused: event("0x5db9ee0a495bf2e6ff9c91a7834c1ba4fdd244a5e8aa4e537bd38aeae4b073aa", "Unpaused(address)", {"account": p.address}),
     Upgraded: event("0xbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b", "Upgraded(address)", {"implementation": indexed(p.address)}),
+    UserProfileUpdated: event("0x198eb8de772c5a42c31d10ea779636d74f5a7cd2633012f88632697fae910db4", "UserProfileUpdated(address,string,string,string)", {"user": indexed(p.address), "nickname": p.string, "avatar": p.string, "bio": p.string}),
 }
 
 export const functions = {
     DEFAULT_ADMIN_ROLE: viewFun("0xa217fddf", "DEFAULT_ADMIN_ROLE()", {}, p.bytes32),
+    MAX_AVATAR_LENGTH: viewFun("0x1fe9d578", "MAX_AVATAR_LENGTH()", {}, p.uint256),
+    MAX_BIO_LENGTH: viewFun("0xc477d7f7", "MAX_BIO_LENGTH()", {}, p.uint256),
     MAX_COMMENT_LENGTH: viewFun("0x5856e4fa", "MAX_COMMENT_LENGTH()", {}, p.uint256),
+    MAX_NICKNAME_LENGTH: viewFun("0xe8f100bf", "MAX_NICKNAME_LENGTH()", {}, p.uint256),
     MAX_ORIGINAL_AUTHOR_LENGTH: viewFun("0x19e94a6e", "MAX_ORIGINAL_AUTHOR_LENGTH()", {}, p.uint256),
     MAX_TITLE_LENGTH: viewFun("0x2ef9a160", "MAX_TITLE_LENGTH()", {}, p.uint256),
     PAUSER_ROLE: viewFun("0xe63ab1e9", "PAUSER_ROLE()", {}, p.bytes32),
@@ -78,6 +82,7 @@ export const functions = {
     setSessionKeyManager: fun("0x837fa3fd", "setSessionKeyManager(address)", {"_sessionKeyManager": p.address}, ),
     supportsInterface: viewFun("0x01ffc9a7", "supportsInterface(bytes4)", {"interfaceId": p.bytes4}, p.bool),
     unpause: fun("0x3f4ba83a", "unpause()", {}, ),
+    updateProfile: fun("0x1105a5eb", "updateProfile(string,string,string)", {"_nickname": p.string, "_avatar": p.string, "_bio": p.string}, ),
     upgradeToAndCall: fun("0x4f1ef286", "upgradeToAndCall(address,bytes)", {"newImplementation": p.address, "data": p.bytes}, ),
     uri: viewFun("0x0e89341c", "uri(uint256)", {"_id": p.uint256}, p.string),
 }
@@ -88,8 +93,20 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.DEFAULT_ADMIN_ROLE, {})
     }
 
+    MAX_AVATAR_LENGTH() {
+        return this.eth_call(functions.MAX_AVATAR_LENGTH, {})
+    }
+
+    MAX_BIO_LENGTH() {
+        return this.eth_call(functions.MAX_BIO_LENGTH, {})
+    }
+
     MAX_COMMENT_LENGTH() {
         return this.eth_call(functions.MAX_COMMENT_LENGTH, {})
+    }
+
+    MAX_NICKNAME_LENGTH() {
+        return this.eth_call(functions.MAX_NICKNAME_LENGTH, {})
     }
 
     MAX_ORIGINAL_AUTHOR_LENGTH() {
@@ -213,13 +230,23 @@ export type TreasuryUpdatedEventArgs = EParams<typeof events.TreasuryUpdated>
 export type URIEventArgs = EParams<typeof events.URI>
 export type UnpausedEventArgs = EParams<typeof events.Unpaused>
 export type UpgradedEventArgs = EParams<typeof events.Upgraded>
+export type UserProfileUpdatedEventArgs = EParams<typeof events.UserProfileUpdated>
 
 /// Function types
 export type DEFAULT_ADMIN_ROLEParams = FunctionArguments<typeof functions.DEFAULT_ADMIN_ROLE>
 export type DEFAULT_ADMIN_ROLEReturn = FunctionReturn<typeof functions.DEFAULT_ADMIN_ROLE>
 
+export type MAX_AVATAR_LENGTHParams = FunctionArguments<typeof functions.MAX_AVATAR_LENGTH>
+export type MAX_AVATAR_LENGTHReturn = FunctionReturn<typeof functions.MAX_AVATAR_LENGTH>
+
+export type MAX_BIO_LENGTHParams = FunctionArguments<typeof functions.MAX_BIO_LENGTH>
+export type MAX_BIO_LENGTHReturn = FunctionReturn<typeof functions.MAX_BIO_LENGTH>
+
 export type MAX_COMMENT_LENGTHParams = FunctionArguments<typeof functions.MAX_COMMENT_LENGTH>
 export type MAX_COMMENT_LENGTHReturn = FunctionReturn<typeof functions.MAX_COMMENT_LENGTH>
+
+export type MAX_NICKNAME_LENGTHParams = FunctionArguments<typeof functions.MAX_NICKNAME_LENGTH>
+export type MAX_NICKNAME_LENGTHReturn = FunctionReturn<typeof functions.MAX_NICKNAME_LENGTH>
 
 export type MAX_ORIGINAL_AUTHOR_LENGTHParams = FunctionArguments<typeof functions.MAX_ORIGINAL_AUTHOR_LENGTH>
 export type MAX_ORIGINAL_AUTHOR_LENGTHReturn = FunctionReturn<typeof functions.MAX_ORIGINAL_AUTHOR_LENGTH>
@@ -361,6 +388,9 @@ export type SupportsInterfaceReturn = FunctionReturn<typeof functions.supportsIn
 
 export type UnpauseParams = FunctionArguments<typeof functions.unpause>
 export type UnpauseReturn = FunctionReturn<typeof functions.unpause>
+
+export type UpdateProfileParams = FunctionArguments<typeof functions.updateProfile>
+export type UpdateProfileReturn = FunctionReturn<typeof functions.updateProfile>
 
 export type UpgradeToAndCallParams = FunctionArguments<typeof functions.upgradeToAndCall>
 export type UpgradeToAndCallReturn = FunctionReturn<typeof functions.upgradeToAndCall>

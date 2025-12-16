@@ -10,6 +10,7 @@ const COMMENT_ADDED = blogHub.events.CommentAdded.topic
 const COMMENT_LIKED = blogHub.events.CommentLiked.topic
 const FOLLOW_STATUS_CHANGED = blogHub.events.FollowStatusChanged.topic
 const ARTICLE_COLLECTED = blogHub.events.ArticleCollected.topic
+const USER_PROFILE_UPDATED = blogHub.events.UserProfileUpdated.topic
 
 processor.run(new TypeormDatabase(), async (ctx) => {
     const articles: Article[] = []
@@ -390,6 +391,34 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article.collectCount = (article.collectCount ?? 0n) + 1n
                     articlesToUpdate.set(articleId, article)
                 }
+            }
+
+            // 处理用户资料更新事件
+            if (log.topics[0] === USER_PROFILE_UPDATED) {
+                const event = blogHub.events.UserProfileUpdated.decode(log)
+                
+                const userId = event.user.toLowerCase()
+                let user = usersToUpdate.get(userId)
+                if (!user) {
+                    user = await ctx.store.get(User, userId)
+                }
+                if (!user) {
+                    user = new User({
+                        id: userId,
+                        totalArticles: 0,
+                        totalFollowers: 0,
+                        totalFollowing: 0,
+                        createdAt: new Date(block.header.timestamp)
+                    })
+                }
+                
+                // 更新用户资料字段
+                user.nickname = event.nickname || null
+                user.avatar = event.avatar || null
+                user.bio = event.bio || null
+                user.profileUpdatedAt = new Date(block.header.timestamp)
+                
+                usersToUpdate.set(user.id, user)
             }
         }
     }

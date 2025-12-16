@@ -45,7 +45,10 @@
 
 	const coverUrl = $derived(getCoverUrl(article.arweaveId));
 	const categoryName = $derived(getCategoryName(article.categoryId));
-	const authorDisplay = $derived(article.originalAuthor || shortAddress(article.author.id));
+	// Priority: originalAuthor (for reposts) > author nickname > short address
+	const authorDisplay = $derived(
+		article.originalAuthor || article.author.nickname || shortAddress(article.author.id)
+	);
 </script>
 
 <a

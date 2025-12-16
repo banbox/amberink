@@ -1,6 +1,9 @@
 # 用户实体
 type User @entity {
   id: ID!                          # 钱包地址
+  nickname: String                 # 昵称
+  avatar: String                   # 头像 URL/IPFS/Arweave ID
+  bio: String                      # 个人简介
   articles: [Article!]! @derivedFrom(field: "author")
   comments: [Comment!]! @derivedFrom(field: "user")
   followers: [Follow!]! @derivedFrom(field: "following")
@@ -9,6 +12,7 @@ type User @entity {
   totalFollowers: Int!
   totalFollowing: Int!
   createdAt: DateTime!
+  profileUpdatedAt: DateTime       # 资料最后更新时间
 }
 
 # 文章实体
