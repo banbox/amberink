@@ -855,9 +855,10 @@ Claude：已完成
 #### 2025-12-16 20:50  列表和详情头像显示
 @Developers.md @contracts.md @README.md @README.md  在当前的 frontend\src\lib\components\ArticleListItem.svelte 我发现文章对应的作者信息是空的，并未正确显示，目前显示的nickname是空，id也是空的；但是在打开文章详情页 frontend\src\routes\a\[id]\+page.svelte 后，正确显示了作者信息1s，然后页变成了空的；请帮我查阅squid中的相关配置，帮我分析原因；我希望在文章列表和详情页等位置，应该显示的始终是作者的最新的信息，昵称和头像，请帮我检查当前逻辑是否正确，有问题的地方帮我纠正  
 
-
 #### 2025-12-16 21:40  发布错误解决
 @Developers.md @contracts.md @README.md  我发布文章时遇到了上面错误，请帮我查阅相关代码，分析定位问题原因并解决
 错误：合约回滚
 Claude：两轮交互执行些命令检查后确认是BlogHub 合约中的 sessionKeyManager 地址被设置为错误的值，已修复
 
+#### 2025-12-16 22:10  评论组件的用户信息更新
+@Developers.md @README.md 参考 frontend\src\lib\components\Sidebar.svelte 中的用户头像和昵称实现方式，帮我对 frontend\src\lib\components\CommentSection.svelte 中的用户头像和昵称显示等进行同步更新；  

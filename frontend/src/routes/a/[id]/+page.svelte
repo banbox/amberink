@@ -41,6 +41,9 @@
 
 	// Author data (fetched separately because SubSquid relation resolution has issues)
 	let authorData = $state<UserData | null>(null);
+	
+	// Current user data (for comment section)
+	let currentUserData = $state<UserData | null>(null);
 
 	// Wallet & Session Key state
 	let walletAddress = $state<string | null>(null);
@@ -222,9 +225,26 @@
 				walletAddress = accounts[0];
 				sessionKey = getStoredSessionKey();
 				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+				// Fetch current user data
+				fetchCurrentUserData(accounts[0]);
 			}
 		} catch (e) {
 			console.error('Failed to check wallet:', e);
+		}
+	}
+	
+	// Fetch current user data for comment section
+	async function fetchCurrentUserData(address: string) {
+		if (!address) return;
+		try {
+			const result = await client
+				.query(USER_BY_ID_QUERY, { id: address.toLowerCase() }, { requestPolicy: 'cache-first' })
+				.toPromise();
+			if (result.data?.userById) {
+				currentUserData = result.data.userById;
+			}
+		} catch (e) {
+			console.error('Failed to fetch current user data:', e);
 		}
 	}
 
@@ -418,9 +438,11 @@
 			if (walletAddress) {
 				sessionKey = getStoredSessionKey();
 				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+				fetchCurrentUserData(walletAddress);
 			} else {
 				sessionKey = null;
 				hasValidSessionKey = false;
+				currentUserData = null;
 			}
 		});
 		try {
@@ -675,6 +697,8 @@
 		articleId={article.articleId}
 		comments={article.comments || []}
 		{walletAddress}
+		currentUserAvatar={currentUserData?.avatar}
+		currentUserNickname={currentUserData?.nickname}
 		{sessionKey}
 		{hasValidSessionKey}
 		{isCommenting}

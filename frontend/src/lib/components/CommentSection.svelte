@@ -10,13 +10,15 @@
 		articleId: string;
 		comments: CommentData[];
 		walletAddress: string | null;
+		currentUserAvatar?: string | null;
+		currentUserNickname?: string | null;
 		sessionKey: StoredSessionKey | null;
 		hasValidSessionKey: boolean;
 		isCommenting: boolean;
 		onComment: (text: string) => void;
 	}
 
-	let { articleId, comments, walletAddress, sessionKey, hasValidSessionKey, isCommenting, onComment }: Props = $props();
+	let { articleId, comments, walletAddress, currentUserAvatar = null, currentUserNickname = null, sessionKey, hasValidSessionKey, isCommenting, onComment }: Props = $props();
 
 	let likingCommentIds = $state<Set<string>>(new Set());
 
@@ -148,20 +150,18 @@
 	}
 
 	// Get user display name
-	const userDisplay = $derived(walletAddress ? shortAddress(walletAddress) : '');
-	const userInitials = $derived(walletAddress ? shortAddress(walletAddress).slice(0, 2).toUpperCase() : '?');
+	const userDisplay = $derived(currentUserNickname || (walletAddress ? shortAddress(walletAddress) : ''));
+	const userInitials = $derived(walletAddress ? walletAddress.slice(2, 4).toUpperCase() : '?');
+	const userAvatarUrl = $derived(getAvatarUrl(currentUserAvatar));
 
 	// Get display name for a comment user
 	function getUserDisplay(user: CommentData['user']): string {
 		return user.nickname || shortAddress(user.id);
 	}
 
-	// Get initials for avatar
+	// Get initials for avatar (use wallet address, skip 0x prefix)
 	function getUserInitials(user: CommentData['user']): string {
-		if (user.nickname) {
-			return user.nickname.slice(0, 2).toUpperCase();
-		}
-		return shortAddress(user.id).slice(0, 2).toUpperCase();
+		return user.id.slice(2, 4).toUpperCase();
 	}
 </script>
 
@@ -180,7 +180,7 @@
 							{#if getAvatarUrl(comment.user.avatar)}
 								<img src={getAvatarUrl(comment.user.avatar)} alt="" class="h-10 w-10 rounded-full object-cover" />
 							{:else}
-								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gray-600 to-gray-800 text-sm font-medium text-white">
+								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
 									{getUserInitials(comment.user)}
 								</div>
 							{/if}
@@ -232,9 +232,13 @@
 	<div class="border-t border-gray-100 pt-6">
 		<!-- User Info Row -->
 		<div class="flex items-center gap-3 mb-3">
-			<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-xs font-medium text-white">
-				{userInitials}
-			</div>
+			{#if userAvatarUrl}
+				<img src={userAvatarUrl} alt="" class="h-8 w-8 rounded-full object-cover" />
+			{:else}
+				<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white">
+					{userInitials}
+				</div>
+			{/if}
 			<span class="text-sm font-medium text-gray-900">
 				{userDisplay || m.anonymous({})}
 			</span>
