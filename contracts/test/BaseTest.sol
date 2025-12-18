@@ -233,15 +233,19 @@ abstract contract BaseTest is Test {
     function _publishTestArticle(address author) internal returns (uint256) {
         vm.prank(author);
         return blogHub.publish(
-            "test-arweave-hash", 
-            1, 
-            500, 
-            "", 
-            "Test Title",
-            address(0), 
-            0.01 ether, // Default collect price
-            100, // Default max supply
-            BlogHub.Originality.Original
+            BlogHub.PublishParams({
+                arweaveId: "test-arweave-hash",
+                categoryId: 1,
+                royaltyBps: 500,
+                originalAuthor: "",
+                title: "Test Title",
+                summary: "",
+                keywords: "",
+                trueAuthor: address(0),
+                collectPrice: 0.01 ether,
+                maxCollectSupply: 100,
+                originality: BlogHub.Originality.Original
+            })
         );
     }
 
@@ -251,15 +255,19 @@ abstract contract BaseTest is Test {
     function _publishTestArticleWithOriginalAuthor(address publisher, string memory originalAuthor) internal returns (uint256) {
         vm.prank(publisher);
         return blogHub.publish(
-            "test-arweave-hash", 
-            1, 
-            500, 
-            originalAuthor, 
-            "Test Title",
-            address(0), 
-            0.01 ether,
-            100,
-            BlogHub.Originality.Original
+            BlogHub.PublishParams({
+                arweaveId: "test-arweave-hash",
+                categoryId: 1,
+                royaltyBps: 500,
+                originalAuthor: originalAuthor,
+                title: "Test Title",
+                summary: "",
+                keywords: "",
+                trueAuthor: address(0),
+                collectPrice: 0.01 ether,
+                maxCollectSupply: 100,
+                originality: BlogHub.Originality.Original
+            })
         );
     }
 

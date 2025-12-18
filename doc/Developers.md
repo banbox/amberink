@@ -101,22 +101,7 @@ squid/
 
 ## 2. Schema 定义与实体映射
 
-### 2.1 定义 GraphQL Schema
-
-编辑 `schema.graphql`
-
-### 2.2 生成 TypeORM 实体
-
-```bash
-# 根据 schema.graphql 生成实体类
-npx squid-typeorm-codegen
-
-# 编译 TypeScript 代码
-npx tsc
-
-```
-
-### 2.3 复制合约 ABI
+### 2.1 复制合约 ABI
 
 ```bash
 # 从 contracts 目录复制 ABI
@@ -125,6 +110,21 @@ cp ../contracts/out/BlogHub.sol/BlogHub.json src/abi/
 
 # 生成类型安全的事件解码器
 npx squid-evm-typegen src/abi src/abi/BlogHub.json
+```
+
+### 2.2 定义 GraphQL Schema
+
+编辑 `schema.graphql`
+
+### 2.3 生成 TypeORM 实体
+
+```bash
+# 根据 schema.graphql 生成实体类
+npx squid-typeorm-codegen
+
+# 编译 TypeScript 代码
+npx tsc
+
 ```
 
 ---

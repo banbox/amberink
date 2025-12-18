@@ -75,6 +75,8 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 originalAuthor: null,
                 trueAuthor: null,
                 title: '',
+                summary: null,
+                keywords: null,
                 categoryId: 0n,
                 royaltyBps: 0,
                 collectPrice: 0n,
@@ -157,6 +159,8 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         author: user,
                         originalAuthor: event.originalAuthor || null,
                         title: event.title,
+                        summary: event.summary || null,
+                        keywords: event.keywords || null,
                         trueAuthor: event.trueAuthor.toLowerCase(),
                         categoryId: event.categoryId,
                         collectPrice: event.collectPrice,
@@ -178,6 +182,8 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article.author = user
                     article.originalAuthor = event.originalAuthor || null
                     article.title = event.title
+                    article.summary = event.summary || null
+                    article.keywords = event.keywords || null
                     article.trueAuthor = event.trueAuthor.toLowerCase()
                     article.categoryId = event.categoryId
                     article.collectPrice = event.collectPrice
@@ -511,47 +517,55 @@ processor.run(new TypeormDatabase(), async (ctx) => {
             }
 
             // 处理文章编辑事件
+            // ArticleEdited 事件不再包含 arweaveId/author/originality（这些不可修改）
             if (log.topics[0] === ARTICLE_EDITED) {
                 const event = blogHub.events.ArticleEdited.decode(log)
                 
-                const arweaveId = event.arweaveId
                 const articleIdStr = event.articleId.toString()
 
-                // 建立 articleId -> arweaveId 的映射（保证后续可以通过链上 articleId 找到文章）
-                articleIdToArweaveId.set(articleIdStr, arweaveId)
+                // 通过 articleId 查找对应的 arweaveId
+                let arweaveId = articleIdToArweaveId.get(articleIdStr)
                 
                 // 查找已有文章
-                let article = articles.find(a => a.id === arweaveId) 
-                    || articlesToUpdate.get(arweaveId)
-                    || arweaveIdCache.get(arweaveId)
+                let article: Article | undefined
+                if (arweaveId) {
+                    article = articles.find(a => a.id === arweaveId) 
+                        || articlesToUpdate.get(arweaveId)
+                        || arweaveIdCache.get(arweaveId)
+                }
                 
                 if (!article) {
+                    // 通过 articleId 从数据库查找
                     article = await ctx.store.findOne(Article, {
-                        where: { id: arweaveId } as any,
+                        where: { articleId: event.articleId } as any,
                         relations: { author: true }
                     }) ?? undefined
+                    
+                    if (article) {
+                        arweaveId = article.id
+                        articleIdToArweaveId.set(articleIdStr, arweaveId)
+                    }
                 }
                 
                 if (!article) {
-                    // 如果文章尚未被 ArticlePublished 索引到（或历史数据缺失），仍然允许 edit 事件创建/补全实体
-                    article = await ensureArticleByArweaveId(arweaveId, block, log)
-
-                    // 尝试补全 articleId 与作者信息
-                    article.articleId = event.articleId
-                    if ((article.author as any)?.id?.toLowerCase() === UNKNOWN_USER_ID) {
-                        article.author = await ensureUser(event.author.toLowerCase(), block)
-                    }
+                    // 如果文章尚未被 ArticlePublished 索引到，跳过此编辑事件
+                    ctx.log.warn(`ArticleEdited: article not found for articleId ${articleIdStr}`)
+                    continue
                 }
 
-                // 更新文章信息
+                // 更新文章信息（只更新可修改的字段）
                 article.title = event.title
+                article.summary = event.summary || null
+                article.keywords = event.keywords || null
                 article.originalAuthor = event.originalAuthor || null
                 article.categoryId = event.categoryId
-                article.originality = Number(event.originality)
+                // originality 不在 ArticleEdited 事件中，保持原值
                 article.editedAt = new Date(block.header.timestamp)
 
-                articlesToUpdate.set(arweaveId, article)
-                arweaveIdCache.set(arweaveId, article)
+                if (arweaveId) {
+                    articlesToUpdate.set(arweaveId, article)
+                    arweaveIdCache.set(arweaveId, article)
+                }
             }
         }
     }

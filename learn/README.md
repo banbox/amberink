@@ -916,3 +916,36 @@ Claude：已添加调试日志
 开发者：附带浏览器console日志  
 Claude：修复完成 
 
+#### 2025-12-17 15:30  搜索功能
+@Developers.md @contracts.md @README.md 帮我给Article增加keywords字段，然后把keywords, summary都在区块链中进行记录，不保存到storage，像title那样发出event事件；然后支持在SubSquid中保存；也支持前端发布和编辑文章时对这两个字段的更新；最后实现搜索功能，在SubSquid中，从title，summary，keywords中进行筛选；支持评分，类别等筛选；  
+Claude：已完成
+
+#### 2025-12-17 16:50  智能合约错误解决
+编辑文章时的author  arweaveId  originality这三个是不可修改的，请帮我在相关逻辑中移除冗余的代码；后续这些event回用于SubSquid的更新，如果确认不影响SubSquid，则可从event中删除冗余字段  
+Claude：已删除冗余字段  
+开发者：@contracts.md 当前智能合约编译出现“堆栈太深（Stack Too Deep）”
+常见原因：
+局部变量过多： 函数里定义了太多的变量
+函数参数/返回值过多： 输入参数和返回参数也占用堆栈空间。
+复杂的表达式： 一行代码中进行了大量的算术运算或逻辑判断，产生了许多临时变量。
+结构体未解构： 直接传递大型结构体有时会占用多个堆栈槽位。
+
+方法 A：使用大括号限制变量作用域
+方法 B：将多个局部变量合并为结构体
+方法 C：拆分大型函数
+
+上面是几种解决方法，目前主要是修改了_executeEditArticle editArticle publish publishWithSessionKey editArticleWithSessionKey ，增加了summary和keywords参数；请帮我考虑如何解决这个错误；  
+Claude: 修改了几个地方依旧  
+开发者：把foundry.toml中新增的[profile.default.optimizer_details]部分删除即可
+
+#### 2025-12-17 17:40  智能合约测试代码
+@contracts.md @BlogHub.sol 我对智能合约进行了若干修改，现在测试代码中有不少是过时和错误的，请根据下面信息，帮我修改测试代码，确保兼容  
+Claude: 修改完成
+
+#### 2025-12-17 18:20  subsquid错误修复
+@Developers.md @contracts.md 我对智能合约进行了修改，给文章新增了summary和keywords字段；现在更新squid中的相关内容，执行Developers中的115行npx tsc出现下面错误，请帮我解决  
+Claude: 安装type-graphql解决
+
+#### 2025-12-17 18:50  搜索功能完善
+@README.md @Developers.md 当前已经给项目的智能合约、SubSquid、前端，都增加了搜索功能，但是我启动前端运行后，并没有看到搜索入口，并且直接访问/search也报错：TypeError: process.cwd is not a function
+我希望搜索作为一个组件，可以在home，Library，profile，等凡是显示文章列表的地方，都集成搜索功能；点击即可搜索，按条件筛选；请根据当前项目现状，以及给定需求，帮我实现  

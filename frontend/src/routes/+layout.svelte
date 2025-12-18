@@ -3,6 +3,8 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import WalletButton from '$lib/components/WalletButton.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import SearchButton from '$lib/components/SearchButton.svelte';
+	import ArticleSearch from '$lib/components/ArticleSearch.svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import { locales, getLocale, localizeHref } from '$lib/paraglide/runtime';
@@ -11,6 +13,9 @@
 	let { children } = $props();
 
 	let walletAddress = $derived(getWalletAddress());
+
+	// Search modal state (for header button)
+	let searchOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -26,8 +31,11 @@
 		<!-- Header -->
 		<header class="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
 			<div class="flex h-16 items-center justify-end px-6">
-				<!-- Right side: Language switcher + Settings + Wallet -->
+				<!-- Right side: Search + Language switcher + Settings + Wallet -->
 				<div class="flex items-center gap-4">
+					<!-- Search Button (icon only in header) -->
+					<SearchButton onclick={() => (searchOpen = true)} variant="icon" />
+
 					<!-- Language Switcher -->
 					<div class="relative">
 						<div class="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
@@ -116,3 +124,6 @@
 		</footer>
 	</div>
 </div>
+
+<!-- Search Modal (for header button) -->
+<ArticleSearch bind:open={searchOpen} onClose={() => (searchOpen = false)} />

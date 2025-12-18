@@ -41,6 +41,8 @@ contract BlogHub is
     error SessionKeyManagerNotSet();
     error OriginalAuthorTooLong();
     error TitleTooLong();
+    error SummaryTooLong();
+    error KeywordsTooLong();
     error InsufficientPayment();
     error MaxSupplyReached();
     error CollectNotEnabled();
@@ -67,6 +69,30 @@ contract BlogHub is
         Reprint         // 转载
     }
 
+    // --- 参数结构体（避免 Stack Too Deep）---
+    struct PublishParams {
+        string arweaveId;
+        uint64 categoryId;
+        uint96 royaltyBps;
+        string originalAuthor;
+        string title;
+        string summary;
+        string keywords;
+        address trueAuthor;
+        uint256 collectPrice;
+        uint256 maxCollectSupply;
+        Originality originality;
+    }
+
+    struct EditArticleParams {
+        uint256 articleId;
+        string originalAuthor;
+        string title;
+        string summary;
+        string keywords;
+        uint64 categoryId;
+    }
+
     // --- 结构体 ---
     struct Article {
         // --- Slot 0 (31 bytes，剩余1 bytes) ---
@@ -89,6 +115,10 @@ contract BlogHub is
     uint256 public constant MAX_ORIGINAL_AUTHOR_LENGTH = 64;
     // 最大标题长度（128字节，约40个中文字符或128个英文字符）
     uint256 public constant MAX_TITLE_LENGTH = 128;
+    // 最大摘要长度（512字节，约170个中文字符）
+    uint256 public constant MAX_SUMMARY_LENGTH = 512;
+    // 最大关键词长度（256字节，多个关键词用逗号分隔）
+    uint256 public constant MAX_KEYWORDS_LENGTH = 256;
     // 用户资料字段最大长度
     uint256 public constant MAX_NICKNAME_LENGTH = 64;
     uint256 public constant MAX_BIO_LENGTH = 256;
@@ -123,6 +153,8 @@ contract BlogHub is
         string arweaveId,       // Irys 可变文件夹的 manifest ID
         string originalAuthor,
         string title,
+        string summary,
+        string keywords,
         address trueAuthor,
         uint256 collectPrice,
         uint256 maxCollectSupply,
@@ -181,15 +213,14 @@ contract BlogHub is
     );
     event MinActionValueUpdated(uint256 newValue);
 
-    // 文章编辑事件
+    // 文章编辑事件 (author/arweaveId/originality 不可修改，SubSquid可从 ArticlePublished 获取)
     event ArticleEdited(
         uint256 indexed articleId,
-        address indexed author,
-        string arweaveId,
         string originalAuthor,
         string title,
-        uint64 categoryId,
-        Originality originality
+        string summary,
+        string keywords,
+        uint64 categoryId
     );
 
     // 用户资料更新事件
@@ -268,11 +299,15 @@ contract BlogHub is
     function _validatePublishParams(
         uint96 royaltyBps,
         string calldata originalAuthor,
-        string calldata title
+        string calldata title,
+        string calldata summary,
+        string calldata keywords
     ) internal pure {
         if (royaltyBps > 10000) revert RoyaltyTooHigh();
         if (bytes(originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
         if (bytes(title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
+        if (bytes(summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
+        if (bytes(keywords).length > MAX_KEYWORDS_LENGTH) revert KeywordsTooLong();
     }
 
     function _executeFollow(address follower, address target, bool status) internal {
@@ -280,46 +315,63 @@ contract BlogHub is
     }
 
     /**
+     * @dev 发出 ArticlePublished 事件（独立函数避免 Stack Too Deep）
+     */
+    function _emitArticlePublished(
+        uint256 articleId,
+        address publisher,
+        PublishParams calldata params,
+        address trueAuthor
+    ) internal {
+        emit ArticlePublished(
+            articleId,
+            publisher,
+            params.categoryId,
+            params.arweaveId,
+            params.originalAuthor,
+            params.title,
+            params.summary,
+            params.keywords,
+            trueAuthor,
+            params.collectPrice,
+            params.maxCollectSupply,
+            params.originality
+        );
+    }
+
+    /**
      * @dev 执行文章编辑的核心逻辑（内部函数）
      * @param sender 操作发起人
-     * @param _articleId 文章ID
-     * @param _originalAuthor 原作者名称
-     * @param _title 文章标题
-     * @param _categoryId 分类ID
-     * @param _originality 原创性
+     * @param params 编辑参数结构体
      */
     function _executeEditArticle(
         address sender,
-        uint256 _articleId,
-        string calldata _originalAuthor,
-        string calldata _title,
-        uint64 _categoryId,
-        Originality _originality
+        EditArticleParams calldata params
     ) internal {
-        if (_articleId == 0 || _articleId >= nextArticleId) revert ArticleNotFound();
+        if (params.articleId == 0 || params.articleId >= nextArticleId) revert ArticleNotFound();
         
-        Article storage article = articles[_articleId];
+        Article storage article = articles[params.articleId];
         
         // 只有文章作者可以编辑
         if (article.author != sender) revert NotArticleAuthor();
         
         // 验证参数
-        if (bytes(_originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
-        if (bytes(_title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
-        if (_categoryId > type(uint16).max) revert CategoryIdTooHigh();
+        if (bytes(params.originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
+        if (bytes(params.title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
+        if (bytes(params.summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
+        if (bytes(params.keywords).length > MAX_KEYWORDS_LENGTH) revert KeywordsTooLong();
+        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
         
         // 更新文章信息
-        article.categoryId = uint16(_categoryId);
-        article.originality = _originality;
+        article.categoryId = uint16(params.categoryId);
         
         emit ArticleEdited(
-            _articleId,
-            sender,
-            article.arweaveHash,
-            _originalAuthor,
-            _title,
-            _categoryId,
-            _originality
+            params.articleId,
+            params.originalAuthor,
+            params.title,
+            params.summary,
+            params.keywords,
+            params.categoryId
         );
     }
 
@@ -559,59 +611,41 @@ contract BlogHub is
     /**
      * @dev 发布文章 (铸造 NFT)
      * 支持 meta-transactions (使用 _msgSender())
+     * @param params 发布参数结构体（避免 Stack Too Deep）
      */
     function publish(
-        string calldata _arweaveId,
-        uint64 _categoryId,
-        uint96 _royaltyBps,
-        string calldata _originalAuthor,
-        string calldata _title,
-        address _trueAuthor,
-        uint256 _collectPrice,
-        uint256 _maxCollectSupply,
-        Originality _originality
+        PublishParams calldata params
     ) external whenNotPaused returns (uint256) {
-        _validatePublishParams(_royaltyBps, _originalAuthor, _title);
+        _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary, params.keywords);
 
-        if (_collectPrice > type(uint96).max) revert CollectPriceTooHigh();
-        if (_categoryId > type(uint16).max) revert CategoryIdTooHigh();
-        if (_maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
+        if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
+        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
+        if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
 
         address publisher = _msgSender();
-        address trueAuthor = _trueAuthor != address(0) ? _trueAuthor : publisher;
+        address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : publisher;
         uint256 newId = nextArticleId++;
 
         articles[newId] = Article({
-            arweaveHash: _arweaveId,
-            categoryId: uint16(_categoryId),
+            arweaveHash: params.arweaveId,
+            categoryId: uint16(params.categoryId),
             timestamp: uint64(block.timestamp),
             author: trueAuthor,
-            collectPrice: uint96(_collectPrice),
-            maxCollectSupply: uint32(_maxCollectSupply),
+            collectPrice: uint96(params.collectPrice),
+            maxCollectSupply: uint32(params.maxCollectSupply),
             collectCount: 1,
-            originality: _originality
+            originality: params.originality
         });
         
         // 建立 ArweaveID 到 ArticleID 的映射
-        arweaveIdToArticleId[_arweaveId] = newId;
+        arweaveIdToArticleId[params.arweaveId] = newId;
 
         _mint(publisher, newId, 1, "");
 
         address royaltyReceiver = trueAuthor;
-        _setTokenRoyalty(newId, royaltyReceiver, _royaltyBps);
+        _setTokenRoyalty(newId, royaltyReceiver, params.royaltyBps);
 
-        emit ArticlePublished(
-            newId,
-            publisher,
-            _categoryId,
-            _arweaveId,
-            _originalAuthor,
-            _title,
-            trueAuthor,
-            _collectPrice,
-            _maxCollectSupply,
-            _originality
-        );
+        _emitArticlePublished(newId, publisher, params, trueAuthor);
         return newId;
     }
 
@@ -660,20 +694,12 @@ contract BlogHub is
 
     /**
      * @dev 编辑文章信息（仅作者可调用）
-     * @param _articleId 文章ID
-     * @param _originalAuthor 原作者名称
-     * @param _title 文章标题
-     * @param _categoryId 分类ID
-     * @param _originality 原创性
+     * @param params 编辑参数结构体（避免 Stack Too Deep）
      */
     function editArticle(
-        uint256 _articleId,
-        string calldata _originalAuthor,
-        string calldata _title,
-        uint64 _categoryId,
-        Originality _originality
+        EditArticleParams calldata params
     ) external whenNotPaused {
-        _executeEditArticle(_msgSender(), _articleId, _originalAuthor, _title, _categoryId, _originality);
+        _executeEditArticle(_msgSender(), params);
     }
 
     // =============================================================
@@ -768,34 +794,14 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external payable nonReentrant whenNotPaused {
-        ISessionKeyManager manager = _requireSessionKeyManager();
-        bytes4 selector = BlogHub.evaluate.selector;
-
-        // 构建 callData 用于验证
-        bytes memory callData = abi.encodeWithSelector(
-            selector,
-            _articleId,
-            _score,
-            _content,
-            _referrer,
-            _parentCommentId
-        );
-
-        _validateAndUseSessionKey(
-            manager,
-            owner,
-            sessionKey,
-            selector,
-            callData,
-            msg.value,
-            deadline,
-            signature
-        );
-
-        // 执行评价操作（以 owner 身份），资金分配由 _executeEvaluate 内部处理
+        {
+            ISessionKeyManager manager = _requireSessionKeyManager();
+            bytes4 selector = BlogHub.evaluate.selector;
+            bytes memory callData = abi.encodeWithSelector(selector, _articleId, _score, _content, _referrer, _parentCommentId);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, msg.value, deadline, signature);
+        }
         _executeEvaluate(owner, _articleId, _score, _content, _referrer, _parentCommentId, msg.value);
-
-        emit SessionKeyOperationExecuted(owner, sessionKey, selector);
+        emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.evaluate.selector);
     }
 
     /**
@@ -809,31 +815,14 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external payable nonReentrant whenNotPaused {
-        ISessionKeyManager manager = _requireSessionKeyManager();
-        bytes4 selector = BlogHub.collect.selector;
-
-        // 构建 callData 用于验证
-        bytes memory callData = abi.encodeWithSelector(
-            selector,
-            _articleId,
-            _referrer
-        );
-
-        _validateAndUseSessionKey(
-            manager,
-            owner,
-            sessionKey,
-            selector,
-            callData,
-            msg.value,
-            deadline,
-            signature
-        );
-
-        // 执行收藏操作（以 owner 身份）
+        {
+            ISessionKeyManager manager = _requireSessionKeyManager();
+            bytes4 selector = BlogHub.collect.selector;
+            bytes memory callData = abi.encodeWithSelector(selector, _articleId, _referrer);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, msg.value, deadline, signature);
+        }
         _executeCollect(owner, _articleId, _referrer, msg.value);
-
-        emit SessionKeyOperationExecuted(owner, sessionKey, selector);
+        emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.collect.selector);
     }
 
     /**
@@ -849,36 +838,15 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external payable nonReentrant whenNotPaused {
-        ISessionKeyManager manager = _requireSessionKeyManager();
-        bytes4 selector = BlogHub.likeComment.selector;
-
-        // 构建 callData 用于验证
-        bytes memory callData = abi.encodeWithSelector(
-            selector,
-            _articleId,
-            _commentId,
-            _commenter,
-            _referrer
-        );
-
-        _validateAndUseSessionKey(
-            manager,
-            owner,
-            sessionKey,
-            selector,
-            callData,
-            msg.value,
-            deadline,
-            signature
-        );
-
-        // likeComment 必须有支付金额
+        {
+            ISessionKeyManager manager = _requireSessionKeyManager();
+            bytes4 selector = BlogHub.likeComment.selector;
+            bytes memory callData = abi.encodeWithSelector(selector, _articleId, _commentId, _commenter, _referrer);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, msg.value, deadline, signature);
+        }
         if (msg.value == 0) revert SpamProtection();
-
-        // 执行点赞操作（以 owner 身份），资金分配由 _executeLikeComment 内部处理
         _executeLikeComment(owner, _articleId, _commentId, _commenter, _referrer, msg.value);
-
-        emit SessionKeyOperationExecuted(owner, sessionKey, selector);
+        emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.likeComment.selector);
     }
 
     /**
@@ -892,31 +860,14 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external whenNotPaused {
-        ISessionKeyManager manager = _requireSessionKeyManager();
-        bytes4 selector = BlogHub.follow.selector;
-
-        // 构建 callData 用于验证
-        bytes memory callData = abi.encodeWithSelector(
-            selector,
-            _target,
-            _status
-        );
-
-        _validateAndUseSessionKey(
-            manager,
-            owner,
-            sessionKey,
-            selector,
-            callData,
-            0,
-            deadline,
-            signature
-        );
-
-        // 执行关注操作
+        {
+            ISessionKeyManager manager = _requireSessionKeyManager();
+            bytes4 selector = BlogHub.follow.selector;
+            bytes memory callData = abi.encodeWithSelector(selector, _target, _status);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
+        }
         _executeFollow(owner, _target, _status);
-
-        emit SessionKeyOperationExecuted(owner, sessionKey, selector);
+        emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.follow.selector);
     }
 
     /**
@@ -925,60 +876,31 @@ contract BlogHub is
     function editArticleWithSessionKey(
         address owner,
         address sessionKey,
-        uint256 _articleId,
-        string calldata _originalAuthor,
-        string calldata _title,
-        uint64 _categoryId,
-        Originality _originality,
+        EditArticleParams calldata params,
         uint256 deadline,
         bytes calldata signature
     ) external whenNotPaused {
-        ISessionKeyManager manager = _requireSessionKeyManager();
-        bytes4 selector = BlogHub.editArticle.selector;
+        // Scope block to limit stack usage for session key validation
+        {
+            ISessionKeyManager manager = _requireSessionKeyManager();
+            bytes4 selector = BlogHub.editArticle.selector;
+            bytes memory callData = _encodeEditArticleCallData(params);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
+        }
 
-        // 构建 callData 用于验证
-        bytes memory callData = abi.encodeWithSelector(
-            selector,
-            _articleId,
-            _originalAuthor,
-            _title,
-            _categoryId,
-            _originality
-        );
+        _executeEditArticle(owner, params);
+        emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.editArticle.selector);
+    }
 
-        _validateAndUseSessionKey(
-            manager,
-            owner,
-            sessionKey,
-            selector,
-            callData,
-            0,
-            deadline,
-            signature
-        );
-
-        // 执行编辑操作
-        _executeEditArticle(owner, _articleId, _originalAuthor, _title, _categoryId, _originality);
-
-        emit SessionKeyOperationExecuted(owner, sessionKey, selector);
+    function _encodeEditArticleCallData(
+        EditArticleParams calldata params
+    ) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(BlogHub.editArticle.selector, params);
     }
 
     /**
      * @notice 使用 Session Key 发布文章（无感交互）
-     * @dev 由于参数过多，使用 Struct 避免 Stack Too Deep
      */
-    struct PublishParams {
-        string arweaveId;
-        uint64 categoryId;
-        uint96 royaltyBps;
-        string originalAuthor;
-        string title;
-        address trueAuthor;
-        uint256 collectPrice;
-        uint256 maxCollectSupply;
-        Originality originality;
-    }
-
     function publishWithSessionKey(
         address owner,
         address sessionKey,
@@ -986,30 +908,20 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external whenNotPaused returns (uint256) {
-        ISessionKeyManager manager = _requireSessionKeyManager();
-        _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title);
-        bytes4 selector = BlogHub.publish.selector;
-
-        bytes memory callData = _encodePublishCallData(params);
-
-        // 验证 Session Key
-        _validateAndUseSessionKey(
-            manager,
-            owner,
-            sessionKey,
-            selector,
-            callData,
-            0,
-            deadline,
-            signature
-        );
+        // Scope block to limit stack usage for session key validation
+        {
+            ISessionKeyManager manager = _requireSessionKeyManager();
+            _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary, params.keywords);
+            bytes4 selector = BlogHub.publish.selector;
+            bytes memory callData = _encodePublishCallData(params);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
+        }
 
         if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
         if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
         if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
 
         address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : owner;
-
         uint256 newId = nextArticleId++;
 
         articles[newId] = Article({
@@ -1022,29 +934,12 @@ contract BlogHub is
             collectCount: 1,
             originality: params.originality
         });
-        
-        // 建立 ArweaveID 到 ArticleID 的映射
         arweaveIdToArticleId[params.arweaveId] = newId;
 
         _mint(owner, newId, 1, "");
-
-        address royaltyReceiver = trueAuthor;
-        _setTokenRoyalty(newId, royaltyReceiver, params.royaltyBps);
-
-        emit ArticlePublished(
-            newId,
-            owner,
-            params.categoryId,
-            params.arweaveId,
-            params.originalAuthor,
-            params.title,
-            trueAuthor,
-            params.collectPrice,
-            params.maxCollectSupply,
-            params.originality
-        );
-
-        emit SessionKeyOperationExecuted(owner, sessionKey, selector);
+        _setTokenRoyalty(newId, trueAuthor, params.royaltyBps);
+        _emitArticlePublished(newId, owner, params, trueAuthor);
+        emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.publish.selector);
 
         return newId;
     }
@@ -1052,19 +947,7 @@ contract BlogHub is
     function _encodePublishCallData(
         PublishParams calldata params
     ) internal pure returns (bytes memory) {
-        return
-            abi.encodeWithSelector(
-                BlogHub.publish.selector,
-                params.arweaveId,
-                params.categoryId,
-                params.royaltyBps,
-                params.originalAuthor,
-                params.title,
-                params.trueAuthor,
-                params.collectPrice,
-                params.maxCollectSupply,
-                params.originality
-            );
+        return abi.encodeWithSelector(BlogHub.publish.selector, params);
     }
 
     // =============================================================

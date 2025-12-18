@@ -4,12 +4,33 @@
 	import { client, USER_FOLLOWING_QUERY, type FollowData } from '$lib/graphql';
 	import { getAvatarUrl } from '$lib/arweave';
 	import { untrack } from 'svelte';
+	import SearchButton from './SearchButton.svelte';
+	import ArticleSearch from './ArticleSearch.svelte';
 
 	interface Props {
 		walletAddress?: string | null;
 	}
 
 	let { walletAddress = null }: Props = $props();
+
+	// Search modal state
+	let searchOpen = $state(false);
+
+	function openSearch() {
+		searchOpen = true;
+	}
+
+	function closeSearch() {
+		searchOpen = false;
+	}
+
+	// Keyboard shortcut for search (Cmd/Ctrl + K)
+	function handleGlobalKeydown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+			e.preventDefault();
+			searchOpen = true;
+		}
+	}
 
 	let followingUsers = $state<FollowData[]>([]);
 	let loadingFollowing = $state(false);
@@ -81,6 +102,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 <aside class="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-gray-200 bg-white">
 	<!-- Logo -->
 	<div class="flex h-16 items-center border-b border-gray-100 px-6">
@@ -101,6 +124,10 @@
 
 	<!-- Navigation Section -->
 	<nav class="flex-1 overflow-y-auto px-3 py-4">
+		<!-- Search Button -->
+		<div class="mb-4 px-3">
+			<SearchButton onclick={openSearch} />
+		</div>
 		<ul class="space-y-1">
 			{#each navItems as item}
 				<li>
@@ -193,3 +220,6 @@
 		</div>
 	</nav>
 </aside>
+
+<!-- Search Modal -->
+<ArticleSearch bind:open={searchOpen} onClose={closeSearch} />

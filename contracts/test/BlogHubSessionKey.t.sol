@@ -23,23 +23,20 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 indexed articleId,
         address indexed user,
         uint8 score,
-        uint256 amountPaid,
-        uint256 timestamp
+        uint256 amountPaid
     );
     event ArticleCollected(
         uint256 indexed articleId,
         address indexed collector,
         uint256 amount,
-        uint256 tokenId,
-        uint256 timestamp
+        uint256 tokenId
     );
     event CommentLiked(
         uint256 indexed articleId,
         uint256 indexed commentId,
         address indexed liker,
         address commenter,
-        uint256 amountPaid,
-        uint256 timestamp
+        uint256 amountPaid
     );
     event ReferralPaid(address indexed referrer, uint256 amount);
     event FollowStatusChanged(
@@ -114,7 +111,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
 
         vm.expectEmit(true, true, false, true);
-        emit ArticleEvaluated(articleId, user1, 1, amount, block.timestamp);
+        emit ArticleEvaluated(articleId, user1, 1, amount);
 
         vm.expectEmit(true, true, false, true);
         emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.evaluate.selector);
@@ -277,7 +274,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
 
         vm.expectEmit(true, true, false, true);
-        emit ArticleCollected(articleId, user1, amount, articleId, block.timestamp);
+        emit ArticleCollected(articleId, user1, amount, articleId);
 
         vm.expectEmit(true, true, false, true);
         emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.collect.selector);
@@ -328,7 +325,7 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit CommentLiked(articleId, commentId, user1, commenter, amount, block.timestamp);
+        emit CommentLiked(articleId, commentId, user1, commenter, amount);
 
         vm.expectEmit(true, true, false, true);
         emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.likeComment.selector);
@@ -500,7 +497,6 @@ contract BlogHubSessionKeyTest is BaseTest {
         string arweaveId,
         string originalAuthor,
         string title,
-        uint256 timestamp,
         address trueAuthor,
         uint256 collectPrice,
         uint256 maxCollectSupply,
@@ -516,6 +512,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 500,
             originalAuthor: "",
             title: "Session Key Published Article",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0.01 ether,
             maxCollectSupply: 100,
@@ -524,15 +522,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params.arweaveId,
-            params.categoryId,
-            params.royaltyBps,
-            params.originalAuthor,
-            params.title,
-            params.trueAuthor,
-            params.collectPrice,
-            params.maxCollectSupply,
-            params.originality
+            params
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -559,7 +549,6 @@ contract BlogHubSessionKeyTest is BaseTest {
             params.arweaveId,
             params.originalAuthor,
             params.title,
-            block.timestamp,
             user1,
             params.collectPrice,
             params.maxCollectSupply,
@@ -614,6 +603,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 1000,
             originalAuthor: "RealAuthorName",
             title: "Proxy Published Article",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0.01 ether,
             maxCollectSupply: 100,
@@ -622,15 +613,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params.arweaveId,
-            params.categoryId,
-            params.royaltyBps,
-            params.originalAuthor,
-            params.title,
-            params.trueAuthor,
-            params.collectPrice,
-            params.maxCollectSupply,
-            params.originality
+            params
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -670,6 +653,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 500,
             originalAuthor: longOriginalAuthor,
             title: "Title",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0,
             maxCollectSupply: 0,
@@ -678,15 +663,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params.arweaveId,
-            params.categoryId,
-            params.royaltyBps,
-            params.originalAuthor,
-            params.title,
-            params.trueAuthor,
-            params.collectPrice,
-            params.maxCollectSupply,
-            params.originality
+            params
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -723,6 +700,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 500,
             originalAuthor: "",
             title: longTitle,
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0,
             maxCollectSupply: 0,
@@ -731,15 +710,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params.arweaveId,
-            params.categoryId,
-            params.royaltyBps,
-            params.originalAuthor,
-            params.title,
-            params.trueAuthor,
-            params.collectPrice,
-            params.maxCollectSupply,
-            params.originality
+            params
         );
 
         ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -782,6 +753,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 500,
             originalAuthor: "",
             title: "Title",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0,
             maxCollectSupply: 0,
@@ -807,6 +780,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 500,
             originalAuthor: "",
             title: "Title",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0,
             maxCollectSupply: 1,
@@ -815,15 +790,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params.arweaveId,
-            params.categoryId,
-            params.royaltyBps,
-            params.originalAuthor,
-            params.title,
-            params.trueAuthor,
-            params.collectPrice,
-            params.maxCollectSupply,
-            params.originality
+            params
         );
 
         bytes memory invalidSignature = _signSessionOperation(
@@ -857,6 +824,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 500,
             originalAuthor: "",
             title: "First Article",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0.01 ether,
             maxCollectSupply: 100,
@@ -865,15 +834,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData1 = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params1.arweaveId,
-            params1.categoryId,
-            params1.royaltyBps,
-            params1.originalAuthor,
-            params1.title,
-            params1.trueAuthor,
-            params1.collectPrice,
-            params1.maxCollectSupply,
-            params1.originality
+            params1
         );
 
         ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -904,6 +865,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 1000,
             originalAuthor: "",
             title: "Second Article",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0.01 ether,
             maxCollectSupply: 100,
@@ -912,15 +875,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         bytes memory callData2 = abi.encodeWithSelector(
             BlogHub.publish.selector,
-            params2.arweaveId,
-            params2.categoryId,
-            params2.royaltyBps,
-            params2.originalAuthor,
-            params2.title,
-            params2.trueAuthor,
-            params2.collectPrice,
-            params2.maxCollectSupply,
-            params2.originality
+            params2
         );
 
         ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
@@ -1256,15 +1211,19 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         vm.prank(user2);
         uint256 articleId = blogHub.publish(
-            "test-arweave-hash",
-            1,
-            500,
-            "",
-            "Test Title",
-            address(0),
-            amount,
-            2,
-            BlogHub.Originality.Original
+            BlogHub.PublishParams({
+                arweaveId: "test-arweave-hash",
+                categoryId: 1,
+                royaltyBps: 500,
+                originalAuthor: "",
+                title: "Test Title",
+                summary: "",
+                keywords: "",
+                trueAuthor: address(0),
+                collectPrice: amount,
+                maxCollectSupply: 2,
+                originality: BlogHub.Originality.Original
+            })
         );
 
         uint256 snap = vm.snapshot();
@@ -1417,6 +1376,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             royaltyBps: 10001, // Invalid
             originalAuthor: "",
             title: "Title",
+            summary: "",
+            keywords: "",
             trueAuthor: address(0),
             collectPrice: 0,
             maxCollectSupply: 0,
@@ -1430,6 +1391,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params.royaltyBps,
             params.originalAuthor,
             params.title,
+            params.summary,
+            params.keywords,
             params.trueAuthor,
             params.collectPrice,
             params.maxCollectSupply,

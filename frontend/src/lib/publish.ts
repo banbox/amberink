@@ -50,6 +50,7 @@ async function getOrCreateValidSessionKey(): Promise<StoredSessionKey> {
 export interface PublishArticleParams {
 	title: string;
 	summary: string;
+	keywords: string;
 	content: string;
 	tags: string[];
 	coverImage: File | null;
@@ -77,6 +78,7 @@ export async function publishArticle(params: PublishArticleParams): Promise<Publ
 	const {
 		title,
 		summary,
+		keywords,
 		content,
 		tags,
 		coverImage,
@@ -133,6 +135,7 @@ async function publishArticleWithSessionKeyInternal(
 	const {
 		title,
 		summary,
+		keywords,
 		content,
 		tags,
 		coverImage,
@@ -182,6 +185,8 @@ async function publishArticleWithSessionKeyInternal(
 			royaltyBps,
 			originalAuthor,
 			title.trim(),
+			summary.trim(),
+			keywords.trim(),
 			trueAuthor,
 			collectPrice,
 			maxCollectSupply,
@@ -199,6 +204,8 @@ async function publishArticleWithSessionKeyInternal(
 				royaltyBps,
 				originalAuthor,
 				title.trim(),
+				summary.trim(),
+				keywords.trim(),
 				trueAuthor,
 				collectPrice,
 				maxCollectSupply,

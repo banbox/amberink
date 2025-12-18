@@ -44,5 +44,3 @@ Web3交互：viem + @wagmi/core
 数据查询：@urql/svelte
 其他：prettier，eslint，tailwindcss，vitest，playwright，@inlang/paraglide-sveltekit
 
-## TODO
-* 搜索功能

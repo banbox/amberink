@@ -9,4 +9,4 @@ deploy:
   processor:
     cmd: ["node", "lib/main.js"]
   api:
-    cmd: ["npx", "squid-graphql-server"]
+    cmd: ["npx", "squid-graphql-server", "--extensions", "lib/server-extension/index.js"]
