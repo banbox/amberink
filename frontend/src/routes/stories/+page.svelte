@@ -3,6 +3,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { client, ARTICLES_BY_AUTHOR_QUERY, type ArticleData } from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
+	import { formatDate } from '$lib/utils';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 
 	type TabType = 'drafts' | 'published';
@@ -34,14 +35,6 @@
 		{ key: 'drafts', label: () => m.drafts() },
 		{ key: 'published', label: () => m.published() }
 	];
-
-	function formatDate(dateStr: string): string {
-		return new Date(dateStr).toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	}
 
 	function loadDrafts() {
 		if (!walletAddress) {

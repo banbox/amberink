@@ -13,6 +13,7 @@
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import { followUser } from '$lib/contracts';
 	import { getAvatarUrl } from '$lib/arweave';
+	import { shortAddress, formatDate } from '$lib/utils';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 
 	const PAGE_SIZE = 20;
@@ -29,19 +30,6 @@
 	let walletAddress = $derived(getWalletAddress());
 	let connected = $derived(isWalletConnected());
 	let isOwnProfile = $derived(walletAddress?.toLowerCase() === authorId);
-
-	function shortAddress(address: string): string {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
-
-	function formatDate(dateStr: string): string {
-		return new Date(dateStr).toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric'
-		});
-	}
 
 	async function fetchAuthorProfile() {
 		if (!authorId) return;

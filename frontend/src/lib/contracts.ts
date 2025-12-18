@@ -3,10 +3,12 @@
  * Handles publishing articles to BlogHub contract
  */
 
-import { createWalletClient, createPublicClient, custom, http, encodeFunctionData, keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { createWalletClient, createPublicClient, http, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getBlogHubContractAddress, getSessionKeyManagerAddress, getRpcUrl, getChainId } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
+import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
+import { ZERO_ADDRESS } from '$lib/utils';
 import type { StoredSessionKey } from '$lib/sessionKey';
 
 /**
@@ -494,31 +496,6 @@ const BLOGHUB_ABI = [
 	}
 ] as const;
 
-/**
- * Get public client for read-only contract calls
- */
-function getPublicClient() {
-	const chain = getChainConfig();
-	return createPublicClient({
-		chain,
-		transport: http(getRpcUrl())
-	});
-}
-
-/**
- * Get Ethereum account from wallet
- */
-async function getEthereumAccount(): Promise<`0x${string}`> {
-	if (typeof window === 'undefined' || !window.ethereum) {
-		throw new Error('Ethereum provider not found. Please install MetaMask or another wallet.');
-	}
-	const accounts = (await window.ethereum.request({ method: 'eth_requestAccounts' })) as `0x${string}`[];
-	const account = accounts?.[0];
-	if (!account) {
-		throw new Error('No accounts found. Please connect your wallet.');
-	}
-	return account;
-}
 
 /**
  * Ensure wallet is connected to the correct chain, switch if necessary
@@ -592,24 +569,11 @@ async function ensureCorrectChain(): Promise<void> {
 }
 
 /**
- * Get wallet client for contract interaction
+ * Get wallet client with chain validation
  */
-async function getWalletClient() {
-	if (typeof window === 'undefined' || !window.ethereum) {
-		throw new Error('Ethereum provider not found. Please install MetaMask or another wallet.');
-	}
-
-	// Ensure we're on the correct chain before creating client
+async function getWalletClientWithChainCheck() {
 	await ensureCorrectChain();
-
-	const account = await getEthereumAccount();
-	const chain = getChainConfig();
-
-	return createWalletClient({
-		account,
-		chain,
-		transport: custom(window.ethereum)
-	});
+	return getWalletClient();
 }
 
 /**
@@ -659,7 +623,7 @@ export async function publishToContract(
 	}
 
 	try {
-		const walletClient = await getWalletClient();
+		const walletClient = await getWalletClientWithChainCheck();
 
 		// Call publish function
 		const txHash = await walletClient.writeContract({
@@ -698,7 +662,7 @@ export async function collectArticle(
 	}
 
 	try {
-		const walletClient = await getWalletClient();
+		const walletClient = await getWalletClientWithChainCheck();
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
@@ -735,7 +699,7 @@ export async function likeComment(
 	}
 
 	try {
-		const walletClient = await getWalletClient();
+		const walletClient = await getWalletClientWithChainCheck();
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
@@ -787,7 +751,7 @@ export async function evaluateArticle(
 	}
 
 	try {
-		const walletClient = await getWalletClient();
+		const walletClient = await getWalletClientWithChainCheck();
 
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
@@ -817,7 +781,7 @@ export async function followUser(targetAddress: `0x${string}`, isFollow: boolean
 	}
 
 	try {
-		const walletClient = await getWalletClient();
+		const walletClient = await getWalletClientWithChainCheck();
 
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
@@ -1230,17 +1194,29 @@ export async function publishToContractWithSessionKey(
 	}
 }
 
-/**
- * Evaluate article using Session Key (like/dislike/tip/comment without MetaMask popup)
- * @param sessionKey - Stored session key data
- * @param articleId - Article ID to evaluate
- * @param score - 0=neutral, 1=like, 2=dislike
- * @param comment - Comment text
- * @param referrer - Referrer address (optional)
- * @param parentCommentId - Parent comment ID for replies (optional)
- * @param tipAmount - Tip amount in wei (optional)
- * @returns Transaction hash
- */
+/** 创建 Session Key 钱包客户端 */
+function createSessionKeyWalletClient(sessionKey: StoredSessionKey) {
+	if (Date.now() / 1000 > sessionKey.validUntil) {
+		throw new Error('Session key has expired');
+	}
+	const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
+	return createWalletClient({
+		account: sessionKeyAccount,
+		chain: getChainConfig(),
+		transport: http(getRpcUrl())
+	});
+}
+
+/** 获取 Session Key 签名所需的通用参数 */
+async function getSessionKeySignParams(sessionKey: StoredSessionKey) {
+	const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+	const nonce = await getSessionKeyNonce(
+		sessionKey.owner as `0x${string}`,
+		sessionKey.address as `0x${string}`
+	);
+	return { deadline, nonce };
+}
+
 export async function evaluateArticleWithSessionKey(
 	sessionKey: StoredSessionKey,
 	articleId: bigint,
@@ -1250,75 +1226,26 @@ export async function evaluateArticleWithSessionKey(
 	parentCommentId: bigint = 0n,
 	tipAmount: bigint = 0n
 ): Promise<string> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
-
-	if (score < 0 || score > 2) {
-		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
-	}
-
-	// Check session key validity
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired');
-	}
+	if (articleId < 0n) throw new Error('Article ID must be non-negative');
+	if (score < 0 || score > 2) throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
 
 	try {
-		const chain = getChainConfig();
-		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-		
-		// Create wallet client with session key
-		const walletClient = createWalletClient({
-			account: sessionKeyAccount,
-			chain,
-			transport: http(getRpcUrl())
-		});
-
-		// Set deadline to 5 minutes from now
-		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-
-		// Encode the evaluate function call data
+		const walletClient = createSessionKeyWalletClient(sessionKey);
+		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
 		const callData = encodeFunctionData({
 			abi: BLOGHUB_ABI,
 			functionName: 'evaluate',
 			args: [articleId, score, comment, referrer, parentCommentId]
 		});
+		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.evaluate, callData, tipAmount, deadline, nonce);
 
-		// Get current nonce from SessionKeyManager
-		const nonce = await getSessionKeyNonce(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`
-		);
-
-		// Create EIP-712 signature
-		const signature = await createSessionKeySignature(
-			sessionKey,
-			FUNCTION_SELECTORS.evaluate,
-			callData,
-			tipAmount,
-			deadline,
-			nonce
-		);
-
-		// Call evaluateWithSessionKey
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'evaluateWithSessionKey',
-			args: [
-				sessionKey.owner as `0x${string}`,
-				sessionKey.address as `0x${string}`,
-				articleId,
-				score,
-				comment,
-				referrer,
-				parentCommentId,
-				deadline,
-				signature
-			],
+			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, score, comment, referrer, parentCommentId, deadline, signature],
 			value: tipAmount
 		});
-
 		console.log(`Article evaluated with session key. Tx: ${txHash}`);
 		return txHash;
 	} catch (error) {
@@ -1327,13 +1254,6 @@ export async function evaluateArticleWithSessionKey(
 	}
 }
 
-/**
- * Follow/unfollow user using Session Key (without MetaMask popup)
- * @param sessionKey - Stored session key data
- * @param targetAddress - Address to follow/unfollow
- * @param isFollow - true to follow, false to unfollow
- * @returns Transaction hash
- */
 export async function followUserWithSessionKey(
 	sessionKey: StoredSessionKey,
 	targetAddress: `0x${string}`,
@@ -1343,63 +1263,18 @@ export async function followUserWithSessionKey(
 		throw new Error('Invalid target address');
 	}
 
-	// Check session key validity
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired');
-	}
-
 	try {
-		const chain = getChainConfig();
-		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-		
-		// Create wallet client with session key
-		const walletClient = createWalletClient({
-			account: sessionKeyAccount,
-			chain,
-			transport: http(getRpcUrl())
-		});
+		const walletClient = createSessionKeyWalletClient(sessionKey);
+		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
+		const callData = encodeFunctionData({ abi: BLOGHUB_ABI, functionName: 'follow', args: [targetAddress, isFollow] });
+		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.follow, callData, 0n, deadline, nonce);
 
-		// Set deadline to 5 minutes from now
-		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-
-		// Encode the follow function call data
-		const callData = encodeFunctionData({
-			abi: BLOGHUB_ABI,
-			functionName: 'follow',
-			args: [targetAddress, isFollow]
-		});
-
-		// Get current nonce from SessionKeyManager
-		const nonce = await getSessionKeyNonce(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`
-		);
-
-		// Create EIP-712 signature
-		const signature = await createSessionKeySignature(
-			sessionKey,
-			FUNCTION_SELECTORS.follow,
-			callData,
-			0n,
-			deadline,
-			nonce
-		);
-
-		// Call followWithSessionKey
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'followWithSessionKey',
-			args: [
-				sessionKey.owner as `0x${string}`,
-				sessionKey.address as `0x${string}`,
-				targetAddress,
-				isFollow,
-				deadline,
-				signature
-			]
+			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, targetAddress, isFollow, deadline, signature]
 		});
-
 		console.log(`Follow status updated with session key. Tx: ${txHash}`);
 		return txHash;
 	} catch (error) {
@@ -1414,59 +1289,21 @@ export async function collectArticleWithSessionKey(
 	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
 	amount: bigint
 ): Promise<string> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired');
-	}
+	if (articleId < 0n) throw new Error('Article ID must be non-negative');
 
 	try {
-		const chain = getChainConfig();
-		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-
-		const walletClient = createWalletClient({
-			account: sessionKeyAccount,
-			chain,
-			transport: http(getRpcUrl())
-		});
-
-		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-		const callData = encodeFunctionData({
-			abi: BLOGHUB_ABI,
-			functionName: 'collect',
-			args: [articleId, referrer]
-		});
-
-		const nonce = await getSessionKeyNonce(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`
-		);
-
-		const signature = await createSessionKeySignature(
-			sessionKey,
-			FUNCTION_SELECTORS.collect,
-			callData,
-			amount,
-			deadline,
-			nonce
-		);
+		const walletClient = createSessionKeyWalletClient(sessionKey);
+		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
+		const callData = encodeFunctionData({ abi: BLOGHUB_ABI, functionName: 'collect', args: [articleId, referrer] });
+		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.collect, callData, amount, deadline, nonce);
 
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'collectWithSessionKey',
-			args: [
-				sessionKey.owner as `0x${string}`,
-				sessionKey.address as `0x${string}`,
-				articleId,
-				referrer,
-				deadline,
-				signature
-			],
+			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, referrer, deadline, signature],
 			value: amount
 		});
-
 		console.log(`Article collected with session key. Tx: ${txHash}`);
 		return txHash;
 	} catch (error) {
@@ -1483,70 +1320,24 @@ export async function likeCommentWithSessionKey(
 	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
 	amount: bigint
 ): Promise<string> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
-	if (commentId < 0n) {
-		throw new Error('Comment ID must be non-negative');
-	}
-	if (!commenter || commenter === '0x0000000000000000000000000000000000000000') {
-		throw new Error('Invalid commenter address');
-	}
-	if (amount <= 0n) {
-		throw new Error('Like amount must be greater than 0');
-	}
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired');
-	}
+	if (articleId < 0n) throw new Error('Article ID must be non-negative');
+	if (commentId < 0n) throw new Error('Comment ID must be non-negative');
+	if (!commenter || commenter === '0x0000000000000000000000000000000000000000') throw new Error('Invalid commenter address');
+	if (amount <= 0n) throw new Error('Like amount must be greater than 0');
 
 	try {
-		const chain = getChainConfig();
-		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-
-		const walletClient = createWalletClient({
-			account: sessionKeyAccount,
-			chain,
-			transport: http(getRpcUrl())
-		});
-
-		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-		const callData = encodeFunctionData({
-			abi: BLOGHUB_ABI,
-			functionName: 'likeComment',
-			args: [articleId, commentId, commenter, referrer]
-		});
-
-		const nonce = await getSessionKeyNonce(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`
-		);
-
-		const signature = await createSessionKeySignature(
-			sessionKey,
-			FUNCTION_SELECTORS.likeComment,
-			callData,
-			amount,
-			deadline,
-			nonce
-		);
+		const walletClient = createSessionKeyWalletClient(sessionKey);
+		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
+		const callData = encodeFunctionData({ abi: BLOGHUB_ABI, functionName: 'likeComment', args: [articleId, commentId, commenter, referrer] });
+		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.likeComment, callData, amount, deadline, nonce);
 
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'likeCommentWithSessionKey',
-			args: [
-				sessionKey.owner as `0x${string}`,
-				sessionKey.address as `0x${string}`,
-				articleId,
-				commentId,
-				commenter,
-				referrer,
-				deadline,
-				signature
-			],
+			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, commentId, commenter, referrer, deadline, signature],
 			value: amount
 		});
-
 		console.log(`Comment liked with session key. Tx: ${txHash}`);
 		return txHash;
 	} catch (error) {
@@ -1584,7 +1375,7 @@ export async function updateProfile(
 	}
 
 	try {
-		const walletClient = await getWalletClient();
+		const walletClient = await getWalletClientWithChainCheck();
 
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
@@ -1601,16 +1392,15 @@ export async function updateProfile(
 	}
 }
 
-/**
- * Edit article metadata on-chain (title, originalAuthor, summary, categoryId, originality)
- * @param articleId - Chain article ID
- * @param originalAuthor - Original author name (max 64 bytes)
- * @param title - Article title (max 128 bytes)
- * @param summary - Article summary (max 512 bytes)
- * @param categoryId - Category ID
- * @param originality - 0=Original, 1=SemiOriginal, 2=Reprint
- * @returns Transaction hash
- */
+/** 验证文章编辑参数 */
+function validateEditArticleParams(articleId: bigint, originalAuthor: string, title: string, summary: string, originality: number) {
+	if (articleId <= 0n) throw new Error('Article ID must be positive');
+	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) throw new Error('Original author name is too long (max 64 bytes)');
+	if (title && new TextEncoder().encode(title).length > 128) throw new Error('Title is too long (max 128 bytes)');
+	if (summary && new TextEncoder().encode(summary).length > 512) throw new Error('Summary is too long (max 512 bytes)');
+	if (originality < 0 || originality > 2) throw new Error('Originality must be 0 (Original), 1 (SemiOriginal), or 2 (Reprint)');
+}
+
 export async function editArticle(
 	articleId: bigint,
 	originalAuthor: string,
@@ -1619,36 +1409,16 @@ export async function editArticle(
 	categoryId: bigint,
 	originality: number
 ): Promise<string> {
-	if (articleId <= 0n) {
-		throw new Error('Article ID must be positive');
-	}
-
-	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) {
-		throw new Error('Original author name is too long (max 64 bytes)');
-	}
-
-	if (title && new TextEncoder().encode(title).length > 128) {
-		throw new Error('Title is too long (max 128 bytes)');
-	}
-
-	if (summary && new TextEncoder().encode(summary).length > 512) {
-		throw new Error('Summary is too long (max 512 bytes)');
-	}
-
-	if (originality < 0 || originality > 2) {
-		throw new Error('Originality must be 0 (Original), 1 (SemiOriginal), or 2 (Reprint)');
-	}
+	validateEditArticleParams(articleId, originalAuthor, title, summary, originality);
 
 	try {
-		const walletClient = await getWalletClient();
-
+		const walletClient = await getWalletClientWithChainCheck();
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticle',
 			args: [articleId, originalAuthor, title, summary, categoryId, originality]
 		});
-
 		console.log(`Article edited. Tx: ${txHash}`);
 		return txHash;
 	} catch (error) {
@@ -1657,17 +1427,6 @@ export async function editArticle(
 	}
 }
 
-/**
- * Edit article metadata using Session Key (no MetaMask popup)
- * @param sessionKey - Stored session key data
- * @param articleId - Chain article ID
- * @param originalAuthor - Original author name (max 64 bytes)
- * @param title - Article title (max 128 bytes)
- * @param summary - Article summary (max 512 bytes)
- * @param categoryId - Category ID
- * @param originality - 0=Original, 1=SemiOriginal, 2=Reprint
- * @returns Transaction hash
- */
 export async function editArticleWithSessionKey(
 	sessionKey: StoredSessionKey,
 	articleId: bigint,
@@ -1677,94 +1436,26 @@ export async function editArticleWithSessionKey(
 	categoryId: bigint,
 	originality: number
 ): Promise<string> {
-	if (articleId <= 0n) {
-		throw new Error('Article ID must be positive');
-	}
-
-	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) {
-		throw new Error('Original author name is too long (max 64 bytes)');
-	}
-
-	if (title && new TextEncoder().encode(title).length > 128) {
-		throw new Error('Title is too long (max 128 bytes)');
-	}
-
-	if (summary && new TextEncoder().encode(summary).length > 512) {
-		throw new Error('Summary is too long (max 512 bytes)');
-	}
-
-	if (originality < 0 || originality > 2) {
-		throw new Error('Originality must be 0 (Original), 1 (SemiOriginal), or 2 (Reprint)');
-	}
-
-	// Check session key validity
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired');
-	}
+	validateEditArticleParams(articleId, originalAuthor, title, summary, originality);
 
 	try {
-		const chain = getChainConfig();
-		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-
-		// Create wallet client with session key
-		const walletClient = createWalletClient({
-			account: sessionKeyAccount,
-			chain,
-			transport: http(getRpcUrl())
-		});
-
-		// Set deadline to 5 minutes from now
-		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-
-		// Encode the editArticle function call data
+		const walletClient = createSessionKeyWalletClient(sessionKey);
+		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
 		const callData = encodeFunctionData({
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticle',
 			args: [articleId, originalAuthor, title, summary, categoryId, originality]
 		});
 
-		// Get current nonce from SessionKeyManager
-		const nonce = await getSessionKeyNonce(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`
-		);
+		await assertSessionKeyActive(sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, FUNCTION_SELECTORS.editArticle, 0n);
+		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.editArticle, callData, 0n, deadline, nonce);
 
-		await assertSessionKeyActive(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			FUNCTION_SELECTORS.editArticle,
-			0n
-		);
-
-		// Create EIP-712 signature
-		const signature = await createSessionKeySignature(
-			sessionKey,
-			FUNCTION_SELECTORS.editArticle,
-			callData,
-			0n,
-			deadline,
-			nonce
-		);
-
-		// Call editArticleWithSessionKey
 		const txHash = await walletClient.writeContract({
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticleWithSessionKey',
-			args: [
-				sessionKey.owner as `0x${string}`,
-				sessionKey.address as `0x${string}`,
-				articleId,
-				originalAuthor,
-				title,
-				summary,
-				categoryId,
-				originality,
-				deadline,
-				signature
-			]
+			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, originalAuthor, title, summary, categoryId, originality, deadline, signature]
 		});
-
 		console.log(`Article edited with session key. Tx: ${txHash}`);
 		return txHash;
 	} catch (error) {

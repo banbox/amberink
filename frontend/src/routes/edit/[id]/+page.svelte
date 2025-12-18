@@ -250,13 +250,14 @@
 			let txHash: string;
 			try {
 				txHash = await editArticleWithSessionKey(
-					currentSessionKey,
-					chainArticleId,
-					author.trim(),
-					title.trim(),
-					categoryId,
-					0 // originality - default to Original
-				);
+						currentSessionKey,
+						chainArticleId,
+						author.trim(),
+						title.trim(),
+						summary.trim(),
+						categoryId,
+						0 // originality - default to Original
+					);
 			} catch (editError) {
 				// If the error is about unauthorized selector, create a new session key and retry
 				if (editError instanceof Error && editError.message.includes('not authorized for this operation')) {
@@ -264,13 +265,14 @@
 					currentSessionKey = await createSessionKey();
 					await ensureSessionKeyBalance(currentSessionKey.address);
 					txHash = await editArticleWithSessionKey(
-						currentSessionKey,
-						chainArticleId,
-						author.trim(),
-						title.trim(),
-						categoryId,
-						0
-					);
+							currentSessionKey,
+							chainArticleId,
+							author.trim(),
+							title.trim(),
+							summary.trim(),
+							categoryId,
+							0
+						);
 				} else {
 					throw editError;
 				}

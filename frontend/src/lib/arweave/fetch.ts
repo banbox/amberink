@@ -5,206 +5,104 @@ import type { ArticleMetadata } from './types';
 import { getArweaveGateways } from '$lib/config';
 
 /**
+ * 通用网关请求函数，遍历所有网关直到成功
+ */
+async function fetchWithGatewayFallback<T>(
+	path: string,
+	options: RequestInit = {},
+	processResponse: (response: Response) => Promise<T>
+): Promise<T> {
+	const gateways = getArweaveGateways();
+	for (const gateway of gateways) {
+		try {
+			const response = await fetch(`${gateway}/${path}`, options);
+			if (response.ok) return await processResponse(response);
+		} catch (error) {
+			console.warn(`Gateway ${gateway} failed:`, error);
+		}
+	}
+	throw new Error(`Failed to fetch ${path} from all gateways`);
+}
+
+/**
  * 从 Arweave 获取文章内容
- * @param arweaveId - Arweave 交易 ID
  */
 export async function fetchArticleContent(arweaveId: string): Promise<ArticleMetadata> {
-	// 尝试多个网关
-	const gateways = getArweaveGateways();
-	for (const gateway of gateways) {
-		try {
-			const response = await fetch(`${gateway}/${arweaveId}`, {
-				headers: { Accept: 'application/json' }
-			});
-
-			if (response.ok) {
-				return await response.json();
-			}
-		} catch (error) {
-			console.warn(`Gateway ${gateway} failed:`, error);
-		}
-	}
-
-	throw new Error('Failed to fetch article from all gateways');
+	return fetchWithGatewayFallback(arweaveId, { headers: { Accept: 'application/json' } }, r => r.json());
 }
 
-/**
- * 获取图片 URL（优先使用 Irys 网关）
- * @param arweaveId - Arweave 交易 ID
- */
+/** 获取主网关 URL */
+function getPrimaryGatewayUrl(path: string): string {
+	return `${getArweaveGateways()[0]}/${path}`;
+}
+
+/** 获取图片 URL */
 export function getImageUrl(arweaveId: string): string {
-	const gateways = getArweaveGateways();
-	return `${gateways[0]}/${arweaveId}`;
+	return getPrimaryGatewayUrl(arweaveId);
 }
 
-/**
- * 获取头像 URL（支持 Arweave ID 或完整 URL）
- * @param avatar - 头像字符串（可能是 Arweave ID 或完整 URL）
- * @returns 头像 URL，如果输入为空则返回 null
- */
+/** 获取头像 URL，输入为空返回 null */
 export function getAvatarUrl(avatar: string | null | undefined): string | null {
-	if (!avatar) return null;
-	const gateways = getArweaveGateways();
-	return `${gateways[0]}/${avatar}`;
+	return avatar ? getPrimaryGatewayUrl(avatar) : null;
 }
 
-/**
- * 获取 Arweave 内容 URL
- * @param arweaveId - Arweave 交易 ID
- * @param gateway - 指定网关（可选）
- */
+/** 获取 Arweave 内容 URL */
 export function getArweaveUrl(arweaveId: string, gateway?: string): string {
-	const gateways = getArweaveGateways();
-	const selectedGateway = gateway || gateways[0];
-	return `${selectedGateway}/${arweaveId}`;
+	return gateway ? `${gateway}/${arweaveId}` : getPrimaryGatewayUrl(arweaveId);
 }
 
-/**
- * 从 Arweave 获取原始数据
- * @param arweaveId - Arweave 交易 ID
- */
+/** 从 Arweave 获取原始数据 */
 export async function fetchRawContent(arweaveId: string): Promise<ArrayBuffer> {
-	const gateways = getArweaveGateways();
-	for (const gateway of gateways) {
-		try {
-			const response = await fetch(`${gateway}/${arweaveId}`);
-
-			if (response.ok) {
-				return await response.arrayBuffer();
-			}
-		} catch (error) {
-			console.warn(`Gateway ${gateway} failed:`, error);
-		}
-	}
-
-	throw new Error('Failed to fetch content from all gateways');
+	return fetchWithGatewayFallback(arweaveId, {}, r => r.arrayBuffer());
 }
 
-/**
- * 从 Arweave 获取文本内容
- * @param arweaveId - Arweave 交易 ID
- */
+/** 从 Arweave 获取文本内容 */
 export async function fetchTextContent(arweaveId: string): Promise<string> {
-	const gateways = getArweaveGateways();
-	for (const gateway of gateways) {
-		try {
-			const response = await fetch(`${gateway}/${arweaveId}`);
-
-			if (response.ok) {
-				return await response.text();
-			}
-		} catch (error) {
-			console.warn(`Gateway ${gateway} failed:`, error);
-		}
-	}
-
-	throw new Error('Failed to fetch content from all gateways');
+	return fetchWithGatewayFallback(arweaveId, {}, r => r.text());
 }
 
-/**
- * 检查 Arweave 内容是否存在
- * @param arweaveId - Arweave 交易 ID
- */
+/** 检查 Arweave 内容是否存在 */
 export async function checkContentExists(arweaveId: string): Promise<boolean> {
-	const gateways = getArweaveGateways();
-	for (const gateway of gateways) {
-		try {
-			const response = await fetch(`${gateway}/${arweaveId}`, {
-				method: 'HEAD'
-			});
-
-			if (response.ok) {
-				return true;
-			}
-		} catch {
-			// 继续尝试下一个网关
-		}
+	try {
+		await fetchWithGatewayFallback(arweaveId, { method: 'HEAD' }, async () => true);
+		return true;
+	} catch {
+		return false;
 	}
-
-	return false;
 }
 
-// ============================================================
-//                  文章文件夹获取功能
-// ============================================================
+/** 构建文件夹路径 */
+function buildFolderPath(manifestId: string, fileName: string, useMutable: boolean): string {
+	return `${useMutable ? 'mutable/' : ''}${manifestId}/${fileName}`;
+}
 
-/**
- * 从文章文件夹获取内容（支持可变 URL）
- * @param manifestId - 文章文件夹的 manifest ID
- * @param fileName - 文件名
- * @param useMutable - 是否使用可变 URL（默认 true）
- * @param bypassCache - 是否绕过缓存（默认 true，用于确保获取最新内容）
- */
+/** 从文章文件夹获取内容（支持可变 URL） */
 export async function fetchFromFolder(
 	manifestId: string,
 	fileName: string,
 	useMutable = true,
 	bypassCache = true
 ): Promise<Response> {
-	const gateways = getArweaveGateways();
-	const pathPrefix = useMutable ? 'mutable/' : '';
-	// 添加时间戳参数绕过网关缓存
+	const path = buildFolderPath(manifestId, fileName, useMutable);
 	const cacheBuster = bypassCache ? `?_t=${Date.now()}` : '';
-
-	for (const gateway of gateways) {
-		try {
-			const url = `${gateway}/${pathPrefix}${manifestId}/${fileName}${cacheBuster}`;
-			console.log(`Fetching from folder URL: ${url}`);
-			const response = await fetch(url, {
-				// 绕过浏览器缓存
-				cache: bypassCache ? 'no-store' : 'default'
-			});
-
-			if (response.ok) {
-				console.log(`Fetch successful from: ${url}`);
-				return response;
-			} else {
-				console.warn(`Fetch failed with status ${response.status}: ${url}`);
-			}
-		} catch (error) {
-			console.warn(`Gateway ${gateway} failed to fetch from folder:`, error);
-		}
-	}
-
-	throw new Error(`Failed to fetch ${fileName} from folder ${manifestId}`);
+	return fetchWithGatewayFallback(
+		`${path}${cacheBuster}`,
+		{ cache: bypassCache ? 'no-store' : 'default' },
+		async r => r
+	);
 }
 
-/**
- * 从文章文件夹获取 Markdown 内容
- * @param manifestId - 文章文件夹的 manifest ID
- * @param useMutable - 是否使用可变 URL（默认 true）
- */
-export async function fetchArticleMarkdown(
-	manifestId: string,
-	useMutable = true
-): Promise<string> {
-	const response = await fetchFromFolder(manifestId, 'index.md', useMutable);
-	return await response.text();
+/** 从文章文件夹获取 Markdown 内容 */
+export async function fetchArticleMarkdown(manifestId: string, useMutable = true): Promise<string> {
+	return (await fetchFromFolder(manifestId, 'index.md', useMutable)).text();
 }
 
-/**
- * 获取文章文件夹中封面图片的 URL
- * @param manifestId - 文章文件夹的 manifest ID
- * @param useMutable - 是否使用可变 URL（默认 true）
- */
+/** 获取文章文件夹中封面图片的 URL */
 export function getFolderCoverImageUrl(manifestId: string, useMutable = true): string {
-	const gateways = getArweaveGateways();
-	const pathPrefix = useMutable ? 'mutable/' : '';
-	return `${gateways[0]}/${pathPrefix}${manifestId}/coverImage`;
+	return getPrimaryGatewayUrl(buildFolderPath(manifestId, 'coverImage', useMutable));
 }
 
-/**
- * 获取文章文件夹中任意文件的 URL
- * @param manifestId - 文章文件夹的 manifest ID
- * @param fileName - 文件名
- * @param useMutable - 是否使用可变 URL（默认 true）
- */
-export function getFolderFileUrl(
-	manifestId: string,
-	fileName: string,
-	useMutable = true
-): string {
-	const gateways = getArweaveGateways();
-	const pathPrefix = useMutable ? 'mutable/' : '';
-	return `${gateways[0]}/${pathPrefix}${manifestId}/${fileName}`;
+/** 获取文章文件夹中任意文件的 URL */
+export function getFolderFileUrl(manifestId: string, fileName: string, useMutable = true): string {
+	return getPrimaryGatewayUrl(buildFolderPath(manifestId, fileName, useMutable));
 }

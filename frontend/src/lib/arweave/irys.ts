@@ -26,6 +26,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import type { IrysConfig } from './types';
 import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getIrysFreeUploadLimit } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
+import { getEthereumAccount } from '$lib/wallet';
 import type { StoredSessionKey } from '$lib/sessionKey';
 
 // Irys Uploader 类型
@@ -33,18 +34,7 @@ export type IrysUploader = Awaited<ReturnType<typeof createIrysUploader>>;
 export type SessionKeyIrysUploader = IrysUploader;
 
 /**
- * 获取以太坊账户
- */
-async function getEthereumAccount(): Promise<`0x${string}`> {
-	if (typeof window === 'undefined' || !window.ethereum) {
-		throw new Error('Ethereum provider not found. Please install MetaMask or another wallet.');
-	}
-	const accounts = (await window.ethereum.request({ method: 'eth_requestAccounts' })) as `0x${string}`[];
-	return accounts[0];
-}
-
-/**
- * 创建 Viem 客户端
+ * 创建 Viem 客户端 for Irys
  */
 async function createViemClients() {
 	const account = await getEthereumAccount();

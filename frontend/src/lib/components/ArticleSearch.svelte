@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS, type CategoryKey } from '$lib/data';
+	import { formatEth } from '$lib/utils';
 	import { client } from '$lib/graphql';
 	import { gql } from '@urql/svelte';
 
@@ -171,17 +172,9 @@
 	// Computed values
 	let totalPages = $derived(Math.ceil(totalResults / pageSize));
 
-	// Format date
+	// Format date (simple version for search results)
 	function formatDate(dateString: string): string {
 		return new Date(dateString).toLocaleDateString();
-	}
-
-	// Format ETH amount
-	function formatEth(wei: string): string {
-		const ethValue = Number(wei) / 1e18;
-		if (ethValue === 0) return '0';
-		if (ethValue < 0.001) return '<0.001';
-		return ethValue.toFixed(3);
 	}
 
 	// Focus input when modal opens

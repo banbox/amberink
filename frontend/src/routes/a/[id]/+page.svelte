@@ -2,6 +2,7 @@
 	import type { PageData } from './$types';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
+	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
 	import { getArticleWithCache } from '$lib/arweave/cache';
 	import { queryArticleVersions, fetchArticleVersionContent, type ArticleVersion, getStaticFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
@@ -29,8 +30,6 @@
 		type StoredSessionKey
 	} from '$lib/sessionKey';
 	import { getMinActionValue } from '$lib/config';
-
-	const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 	let { data }: { data: PageData } = $props();
 	const article = data.article;
@@ -81,12 +80,6 @@
 	let localDislikeAmount = $state(article.dislikeAmount);
 	let localCollectCount = $state(article.collectCount);
 
-	// Format address to short form
-	function shortAddress(address: string): string {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
-
 	async function handleCollect() {
 		if (!requireWallet() || isCollecting) return;
 
@@ -134,15 +127,6 @@
 		const wordsPerMinute = 200;
 		const wordCount = content.trim().split(/\s+/).length;
 		return Math.max(1, Math.ceil(wordCount / wordsPerMinute));
-	}
-
-	// Format tips (wei to ETH)
-	function formatTips(tips: string): string {
-		const wei = BigInt(tips);
-		const eth = Number(wei) / 1e18;
-		if (eth === 0) return '0';
-		if (eth < 0.0001) return '<0.0001';
-		return eth.toFixed(4);
 	}
 
 	// Get category name
@@ -544,9 +528,12 @@
 				}
 				const content = await fetchArticleVersionContent(versionTxId);
 				articleContent = {
+					title: currentVersionMeta?.title || '',
 					content,
 					summary: '',
-					wordCount: getWordCount(content)
+					tags: [],
+					createdAt: currentVersionMeta?.timestamp || Date.now(),
+					version: '1.0.0'
 				};
 			} else {
 				// article.id is now arweaveId

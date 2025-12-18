@@ -3,10 +3,10 @@
  * Allows users to perform frequent operations without signing each time
  */
 
-import { createWalletClient, createPublicClient, custom, http, parseEther, formatEther } from 'viem';
+import { formatEther } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { getBlogHubContractAddress, getSessionKeyManagerAddress, getRpcUrl, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier } from '$lib/config';
-import { getChainConfig } from '$lib/chain';
+import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier } from '$lib/config';
+import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
 import { browser } from '$app/environment';
 import { getIrysUploaderDevnet, getIrysUploader, type IrysUploader } from '$lib/arweave/irys';
 import { getIrysNetwork } from '$lib/config';
@@ -95,49 +95,6 @@ const SESSION_KEY_DURATION = 7 * 24 * 60 * 60;
 // Estimated gas for a typical transaction (used for calculating minimum balance)
 const ESTIMATED_GAS_UNITS = 200000n;
 
-/**
- * Get Ethereum account from wallet
- */
-async function getEthereumAccount(): Promise<`0x${string}`> {
-	if (typeof window === 'undefined' || !window.ethereum) {
-		throw new Error('Ethereum provider not found');
-	}
-	const accounts = (await window.ethereum.request({ method: 'eth_requestAccounts' })) as `0x${string}`[];
-	const account = accounts?.[0];
-	if (!account) {
-		throw new Error('No accounts found');
-	}
-	return account;
-}
-
-/**
- * Get wallet client for contract interaction
- */
-async function getWalletClient() {
-	if (typeof window === 'undefined' || !window.ethereum) {
-		throw new Error('Ethereum provider not found');
-	}
-
-	const account = await getEthereumAccount();
-	const chain = getChainConfig();
-
-	return createWalletClient({
-		account,
-		chain,
-		transport: custom(window.ethereum)
-	});
-}
-
-/**
- * Get public client for read-only operations
- */
-function getPublicClient() {
-	const chain = getChainConfig();
-	return createPublicClient({
-		chain,
-		transport: http(getRpcUrl())
-	});
-}
 
 /**
  * Get current gas price from the network

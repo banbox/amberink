@@ -5,6 +5,7 @@
 	import { ensureSessionKeyBalance, type StoredSessionKey } from '$lib/sessionKey';
 	import { getMinActionValue } from '$lib/config';
 	import { getAvatarUrl } from '$lib/arweave';
+	import { shortAddress, ZERO_ADDRESS } from '$lib/utils';
 
 	interface Props {
 		articleId: string;
@@ -26,12 +27,6 @@
 	let commentText = $state('');
 	let isInputFocused = $state(false);
 	let inputRef = $state<HTMLTextAreaElement | null>(null);
-
-	// Format address to short form
-	function shortAddress(address: string): string {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
 
 	// Format date - Medium style (e.g., "Dec 9, 2025")
 	function formatDate(dateStr: string): string {
@@ -99,7 +94,7 @@
 					aId,
 					cId,
 					commenter,
-					'0x0000000000000000000000000000000000000000',
+					ZERO_ADDRESS,
 					minValue
 				);
 			} else {
@@ -107,7 +102,7 @@
 					aId,
 					cId,
 					commenter,
-					'0x0000000000000000000000000000000000000000',
+					ZERO_ADDRESS,
 					minValue
 				);
 			}

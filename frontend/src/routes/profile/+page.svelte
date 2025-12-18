@@ -16,6 +16,7 @@
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import { getAvatarUrl, uploadImage } from '$lib/arweave';
 	import { getIrysNetwork } from '$lib/config';
+	import { shortAddress, formatDate } from '$lib/utils';
 	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 
 	type TabType = 'articles' | 'followers' | 'following' | 'about';
@@ -50,19 +51,6 @@
 		{ key: 'following', label: () => m.following_count() },
 		{ key: 'about', label: () => m.about_me() }
 	];
-
-	function shortAddress(address: string): string {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
-
-	function formatDate(dateStr: string): string {
-		return new Date(dateStr).toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric'
-		});
-	}
 
 	async function fetchUserProfile() {
 		if (!walletAddress) return;

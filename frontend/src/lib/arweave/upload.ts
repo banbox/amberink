@@ -260,67 +260,33 @@ export async function uploadImageWithUploaderAndPayer(
 //                  Session Key 上传功能
 // ============================================================
 
-/**
- * 使用 Session Key 上传文章到 Arweave（无需 MetaMask 签名）
- * 使用 Irys Balance Approvals 机制，由主账户付费
- * @param sessionKey - 存储的 Session Key 数据
- * @param metadata - 文章元数据
- * @param network - 网络类型（默认 devnet）
- */
+/** 获取 Session Key Uploader 和 owner 地址 */
+async function getSessionKeyUploaderAndOwner(sessionKey: StoredSessionKey, network: IrysNetwork) {
+	if (!isSessionKeyValid(sessionKey)) throw new Error('Session key is invalid or expired');
+	const uploader = network === 'mainnet'
+		? await getSessionKeyIrysUploader(sessionKey)
+		: await getSessionKeyIrysUploaderDevnet(sessionKey);
+	return { uploader, ownerAddress: getSessionKeyOwner(sessionKey) };
+}
+
 export async function uploadArticleWithSessionKey(
 	sessionKey: StoredSessionKey,
 	metadata: Omit<ArticleMetadata, 'createdAt' | 'version'>,
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
-	if (!isSessionKeyValid(sessionKey)) {
-		throw new Error('Session key is invalid or expired');
-	}
-
-	const uploader =
-		network === 'mainnet'
-			? await getSessionKeyIrysUploader(sessionKey)
-			: await getSessionKeyIrysUploaderDevnet(sessionKey);
-
-	// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
-	const ownerAddress = getSessionKeyOwner(sessionKey);
+	const { uploader, ownerAddress } = await getSessionKeyUploaderAndOwner(sessionKey, network);
 	return uploadArticleWithUploaderAndPayer(uploader, metadata, ownerAddress);
 }
 
-/**
- * 使用 Session Key 上传图片到 Arweave（无需 MetaMask 签名）
- * 使用 Irys Balance Approvals 机制，由主账户付费
- * @param sessionKey - 存储的 Session Key 数据
- * @param file - 图片文件
- * @param network - 网络类型（默认 devnet）
- */
 export async function uploadImageWithSessionKey(
 	sessionKey: StoredSessionKey,
 	file: File,
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
-	if (!isSessionKeyValid(sessionKey)) {
-		throw new Error('Session key is invalid or expired');
-	}
-
-	const uploader =
-		network === 'mainnet'
-			? await getSessionKeyIrysUploader(sessionKey)
-			: await getSessionKeyIrysUploaderDevnet(sessionKey);
-
-	// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
-	const ownerAddress = getSessionKeyOwner(sessionKey);
+	const { uploader, ownerAddress } = await getSessionKeyUploaderAndOwner(sessionKey, network);
 	return uploadImageWithUploaderAndPayer(uploader, file, ownerAddress);
 }
 
-/**
- * 使用 Session Key 上传任意数据到 Arweave（无需 MetaMask 签名）
- * 使用 Irys Balance Approvals 机制，由主账户付费
- * @param sessionKey - 存储的 Session Key 数据
- * @param data - 数据（字符串或 Buffer）
- * @param contentType - 内容类型
- * @param customTags - 自定义标签
- * @param network - 网络类型（默认 devnet）
- */
 export async function uploadDataWithSessionKey(
 	sessionKey: StoredSessionKey,
 	data: string | Buffer,
@@ -328,23 +294,10 @@ export async function uploadDataWithSessionKey(
 	customTags: IrysTag[] = [],
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
-	if (!isSessionKeyValid(sessionKey)) {
-		throw new Error('Session key is invalid or expired');
-	}
-
-	const uploader =
-		network === 'mainnet'
-			? await getSessionKeyIrysUploader(sessionKey)
-			: await getSessionKeyIrysUploaderDevnet(sessionKey);
-
+	const { uploader, ownerAddress } = await getSessionKeyUploaderAndOwner(sessionKey, network);
 	const appName = getAppName();
-	const ownerAddress = getSessionKeyOwner(sessionKey);
 	const dataSize = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
-
-	// Check if within Irys free limit (100KB) - if so, don't use paidBy
-	// Irys devnet free uploads don't work with paidBy parameter
-	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
-	const effectivePaidBy = isFreeUpload ? undefined : ownerAddress;
+	const effectivePaidBy = isWithinIrysFreeLimit(dataSize) ? undefined : ownerAddress;
 
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: contentType },
@@ -353,9 +306,7 @@ export async function uploadDataWithSessionKey(
 	];
 
 	try {
-		const uploadOptions = effectivePaidBy
-			? { tags, upload: { paidBy: effectivePaidBy } }
-			: { tags };
+		const uploadOptions = effectivePaidBy ? { tags, upload: { paidBy: effectivePaidBy } } : { tags };
 		const receipt = await uploader.upload(data, uploadOptions);
 		console.log(`Data uploaded with session key ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;

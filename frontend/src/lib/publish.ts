@@ -68,50 +68,19 @@ export interface PublishArticleResult {
 	articleId?: string;
 }
 
-/**
- * Publish article: upload to Arweave, then to blockchain
- * @param params - Article publishing parameters
- * @returns Arweave ID and transaction hash
- */
+/** 验证发布参数 */
+function validatePublishParams(params: PublishArticleParams) {
+	if (!params.title.trim()) throw new Error('Title is required');
+	if (!params.content.trim()) throw new Error('Content is required');
+	if (params.categoryId < 0n) throw new Error('Valid category is required');
+	if (params.royaltyBps < 0n || params.royaltyBps > 10000n) throw new Error('Royalty must be between 0 and 100% (0-10000 basis points)');
+}
+
+/** Publish article: upload to Arweave, then to blockchain */
 export async function publishArticle(params: PublishArticleParams): Promise<PublishArticleResult> {
-	const {
-		title,
-		summary,
-		content,
-		tags,
-		coverImage,
-		categoryId,
-		royaltyBps,
-		originalAuthor = '',
-		trueAuthor = '0x0000000000000000000000000000000000000000',
-		collectPrice = 0n,
-		maxCollectSupply = 0n,
-		originality = 0
-	} = params;
-
-	// Validation
-	if (!title.trim()) {
-		throw new Error('Title is required');
-	}
-
-	if (!content.trim()) {
-		throw new Error('Content is required');
-	}
-
-	if (categoryId < 0n) {
-		throw new Error('Valid category is required');
-	}
-
-	if (royaltyBps < 0n || royaltyBps > 10000n) {
-		throw new Error('Royalty must be between 0 and 100% (0-10000 basis points)');
-	}
-
+	validatePublishParams(params);
 	try {
-		// Get or create a valid session key
-		// This ensures we only need ONE MetaMask signature (for session key creation)
-		// instead of multiple signatures for each upload operation
-		let sessionKey = await getOrCreateValidSessionKey();
-
+		const sessionKey = await getOrCreateValidSessionKey();
 		console.log('Using Session Key for gasless publishing...');
 		return await publishArticleWithSessionKeyInternal(params, sessionKey);
 	} catch (error) {
@@ -218,44 +187,10 @@ async function publishArticleWithSessionKeyInternal(
 	};
 }
 
-/**
- * Force publish article using Session Key (explicit gasless mode)
- * @param params - Article publishing parameters
- * @returns Arweave ID and transaction hash
- * @throws Error if no valid session key is available
- */
-export async function publishArticleGasless(params: PublishArticleParams): Promise<PublishArticleResult> {
-	// Validation
-	if (!params.title.trim()) {
-		throw new Error('Title is required');
-	}
+/** @deprecated Use publishArticle instead - it already uses Session Key for gasless publishing */
+export const publishArticleGasless = publishArticle;
 
-	if (!params.content.trim()) {
-		throw new Error('Content is required');
-	}
-
-	if (params.categoryId < 0n) {
-		throw new Error('Valid category is required');
-	}
-
-	if (params.royaltyBps < 0n || params.royaltyBps > 10000n) {
-		throw new Error('Royalty must be between 0 and 100% (0-10000 basis points)');
-	}
-
-	try {
-		// Get or create a valid session key
-		const sessionKey = await getOrCreateValidSessionKey();
-		return await publishArticleWithSessionKeyInternal(params, sessionKey);
-	} catch (error) {
-		console.error('Error during gasless article publishing:', error);
-		throw error;
-	}
-}
-
-/**
- * Check if gasless publishing is available
- * @returns true if a valid session key exists
- */
+/** Check if gasless publishing is available */
 export function isGaslessPublishingAvailable(): boolean {
 	const sessionKey = getStoredSessionKey();
 	return sessionKey !== null && Date.now() / 1000 < sessionKey.validUntil;

@@ -3,6 +3,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { client, USER_FOLLOWING_QUERY, type FollowData } from '$lib/graphql';
 	import { getAvatarUrl } from '$lib/arweave';
+	import { shortAddress } from '$lib/utils';
 	import { untrack } from 'svelte';
 	import SearchButton from './SearchButton.svelte';
 	import ArticleSearch from './ArticleSearch.svelte';
@@ -49,12 +50,6 @@
 			return page.url.pathname === '/';
 		}
 		return page.url.pathname.startsWith(href);
-	}
-
-	// Format address to short form
-	function shortAddress(address: string): string {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
 	}
 
 	// Fetch following users

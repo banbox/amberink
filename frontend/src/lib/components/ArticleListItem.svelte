@@ -2,6 +2,7 @@
 	import type { ArticleData, UserData } from '$lib/graphql';
 	import { client, USER_BY_ID_QUERY } from '$lib/graphql';
 	import { CATEGORY_KEYS } from '$lib/data';
+	import { shortAddress, formatDate, formatTips } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages';
 	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
 	import { onMount } from 'svelte';
@@ -14,28 +15,6 @@
 
 	// Author data (fetched separately because SubSquid relation resolution has issues)
 	let authorData = $state<UserData | null>(null);
-
-	function shortAddress(address: string): string {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
-
-	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
-		return date.toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	}
-
-	function formatTips(tips: string): string {
-		const wei = BigInt(tips);
-		const eth = Number(wei) / 1e18;
-		if (eth === 0) return '0';
-		if (eth < 0.0001) return '<0.0001';
-		return eth.toFixed(4);
-	}
 
 	function getCategoryName(categoryId: string): string {
 		const id = parseInt(categoryId);
