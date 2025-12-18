@@ -4,6 +4,7 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
 	import { getArticleWithCache } from '$lib/arweave/cache';
+	import { queryArticleVersions, fetchArticleVersionContent, type ArticleVersion, getStaticFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
 	import { marked } from 'marked';
@@ -33,6 +34,7 @@
 
 	let { data }: { data: PageData } = $props();
 	const article = data.article;
+	const versionTxId = data.versionTxId;
 
 	// Article content from Arweave
 	let articleContent = $state<ArticleMetadata | null>(null);
@@ -61,9 +63,19 @@
 	let showTipModal = $state(false);
 	let showCollectModal = $state(false);
 	let showDislikeModal = $state(false);
+	let showVersionsDropdown = $state(false);
 	let tipAmount = $state('0.001');
 	let dislikeAmount = $state('0.001');
 	let feedbackMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+
+	// History versions state
+	let versions = $state<ArticleVersion[]>([]);
+	let versionsLoading = $state(false);
+	let versionsLoaded = $state(false);
+	let currentVersionIndex = $state<number | null>(null);
+	
+	// Current viewing version metadata (for historical versions)
+	let currentVersionMeta = $state<{ title?: string; owner?: string; timestamp?: number } | null>(null);
 
 	// Local counts (optimistic updates)
 	let localDislikeAmount = $state(article.dislikeAmount);
@@ -432,9 +444,72 @@
 		}
 	}
 
+	// Load article history versions
+	async function loadVersions() {
+		if (versionsLoaded || versionsLoading) return;
+		versionsLoading = true;
+		try {
+			versions = await queryArticleVersions(article.id);
+			versionsLoaded = true;
+			// Find current version index
+			if (versionTxId) {
+				const idx = versions.findIndex(v => v.txId === versionTxId);
+				if (idx >= 0) currentVersionIndex = idx;
+			}
+		} catch (e) {
+			console.error('Failed to load versions:', e);
+		} finally {
+			versionsLoading = false;
+		}
+	}
+
+	// Format timestamp to date string
+	function formatTimestamp(ts: number): string {
+		const date = new Date(ts);
+		return date.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	}
+
+	// Get word count from content
+	function getWordCount(content: string): number {
+		return content.trim().split(/\s+/).length;
+	}
+
+	// Toggle versions dropdown
+	async function toggleVersionsDropdown() {
+		if (!versionsLoaded) {
+			await loadVersions();
+		}
+		showVersionsDropdown = !showVersionsDropdown;
+	}
+
+	// Check if viewing a specific version (not latest)
+	const isViewingOldVersion = $derived(!!versionTxId && versionTxId !== article.id);
+
+	// Get version cover URL (use static URL for specific version)
+	function getVersionCoverUrl(txId: string): string {
+		return getStaticFolderUrl(txId, ARTICLE_COVER_IMAGE_FILE);
+	}
+
 	onMount(async () => {
 		// Fetch author data first
 		fetchAuthorData();
+		
+		// Close dropdown when clicking outside
+		const handleClickOutside = (e: MouseEvent) => {
+			if (showVersionsDropdown) {
+				const target = e.target as HTMLElement;
+				if (!target.closest('.relative')) {
+					showVersionsDropdown = false;
+				}
+			}
+		};
+		document.addEventListener('click', handleClickOutside);
 		
 		await checkWalletConnection();
 		const eth = typeof window !== 'undefined' ? window.ethereum : undefined;
@@ -452,8 +527,31 @@
 			}
 		});
 		try {
-			// article.id is now arweaveId
-			articleContent = await getArticleWithCache(article.id);
+			// If viewing a specific version, fetch that version's content and metadata
+			if (versionTxId) {
+				// Load versions to get metadata for the current version
+				if (!versionsLoaded) {
+					await loadVersions();
+				}
+				// Find the current version's metadata
+				const versionInfo = versions.find(v => v.txId === versionTxId);
+				if (versionInfo) {
+					currentVersionMeta = {
+						title: versionInfo.title,
+						owner: versionInfo.owner,
+						timestamp: versionInfo.timestamp
+					};
+				}
+				const content = await fetchArticleVersionContent(versionTxId);
+				articleContent = {
+					content,
+					summary: '',
+					wordCount: getWordCount(content)
+				};
+			} else {
+				// article.id is now arweaveId
+				articleContent = await getArticleWithCache(article.id);
+			}
 		} catch (e) {
 			contentError = e instanceof Error ? e.message : 'Failed to load article content';
 			console.error('Failed to fetch article content:', e);
@@ -464,16 +562,34 @@
 </script>
 
 <svelte:head>
-	<title>{article.title || `Article #${article.articleId}`} - DBlog</title>
-	<meta name="description" content={articleContent?.summary || article.title || 'DBlog Article'} />
+	<title>{currentVersionMeta?.title || article.title || `Article #${article.articleId}`} - DBlog</title>
+	<meta name="description" content={articleContent?.summary || currentVersionMeta?.title || article.title || 'DBlog Article'} />
 </svelte:head>
 
 <!-- Medium-style article layout -->
 <article class="mx-auto w-full max-w-[680px] px-6 py-12">
+	<!-- Old Version Banner -->
+	{#if isViewingOldVersion}
+		<div class="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+			<div class="flex items-center gap-2 text-amber-800">
+				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+				</svg>
+				<span class="text-sm font-medium">You are viewing a historical version</span>
+			</div>
+			<a 
+				href={`/a/${article.id}`}
+				class="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+			>
+				View Latest
+			</a>
+		</div>
+	{/if}
+
 	<!-- Title -->
 	<header class="mb-8">
 		<h1 class="mb-6 font-serif text-[32px] font-bold leading-tight text-gray-900 sm:text-[42px]">
-			{article.title || `Article #${article.articleId}`}
+			{currentVersionMeta?.title || article.title || `Article #${article.articleId}`}
 		</h1>
 
 		<!-- Author Info Bar -->
@@ -615,8 +731,102 @@
 				</button>
 			</div>
 
-			<!-- Right side: Edit & Share -->
+			<!-- Right side: History, Edit & Share -->
 			<div class="flex items-center gap-3">
+				<!-- History versions button -->
+				<div class="relative">
+					<button
+						type="button"
+						onclick={toggleVersionsDropdown}
+						class="flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-900"
+						title="View history versions"
+					>
+						<!-- Clock/History Icon -->
+						<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+						</svg>
+						{#if versionsLoading}
+							<svg class="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+							</svg>
+						{/if}
+					</button>
+					
+					<!-- Versions Dropdown -->
+					{#if showVersionsDropdown}
+						<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+						<div 
+							class="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
+							onclick={(e) => e.stopPropagation()}
+						>
+							<div class="border-b border-gray-100 px-4 py-3">
+								<div class="flex items-center justify-between">
+									<h4 class="font-medium text-gray-900">History Versions</h4>
+									<button
+										type="button"
+										onclick={() => showVersionsDropdown = false}
+										class="text-gray-400 hover:text-gray-600"
+										aria-label="Close versions dropdown"
+									>
+										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+								{#if isViewingOldVersion}
+									<a 
+										href={`/a/${article.id}`}
+										class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+									>
+										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+										</svg>
+										Back to latest version
+									</a>
+								{/if}
+							</div>
+							<div class="max-h-64 overflow-y-auto">
+								{#if versions.length === 0}
+									<div class="px-4 py-6 text-center text-sm text-gray-500">
+										{versionsLoading ? 'Loading...' : 'No version history found'}
+									</div>
+								{:else}
+									{#each versions as version, idx}
+										<a
+											href={idx === 0 ? `/a/${article.id}` : `/a/${article.id}?v=${version.txId}`}
+											class="flex items-start gap-3 border-b border-gray-50 px-4 py-3 transition-colors hover:bg-gray-50"
+											class:bg-blue-50={versionTxId === version.txId || (idx === 0 && !versionTxId)}
+											onclick={() => showVersionsDropdown = false}
+										>
+											<div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
+												{versions.length - idx}
+											</div>
+											<div class="min-w-0 flex-1">
+												<div class="flex items-center gap-2">
+													<span class="truncate font-medium text-gray-900">
+														{version.title || article.title || 'Untitled'}
+													</span>
+													{#if idx === 0}
+														<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">Latest</span>
+													{/if}
+												</div>
+												<div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+													<span>{formatTimestamp(version.timestamp)}</span>
+													{#if version.owner}
+														<span>·</span>
+														<span>{shortAddress(version.owner)}</span>
+													{/if}
+												</div>
+											</div>
+										</a>
+									{/each}
+								{/if}
+							</div>
+						</div>
+					{/if}
+				</div>
+
 				<!-- Edit button (only for author) -->
 				{#if isAuthor}
 					<a

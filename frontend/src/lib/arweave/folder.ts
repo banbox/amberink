@@ -12,7 +12,7 @@
 import type { IrysUploader, SessionKeyIrysUploader } from './irys';
 import { isWithinIrysFreeLimit } from './irys';
 import type { IrysTag, ArticleFolderManifest } from './types';
-import { getAppName, getAppVersion, getArweaveGateways } from '$lib/config';
+import { getAppName, getAppVersion, getArweaveGateways, getIrysNetwork } from '$lib/config';
 
 // 文章文件夹中的固定文件名
 export const ARTICLE_INDEX_FILE = 'index.md';
@@ -326,6 +326,186 @@ export async function fetchArticleFromFolder(manifestId: string, useMutable = tr
 	const response = await fetch(url);
 	if (!response.ok) {
 		throw new Error(`Failed to fetch article content: ${response.status}`);
+	}
+	
+	return await response.text();
+}
+
+/**
+ * 文章版本信息
+ */
+export interface ArticleVersion {
+	txId: string;
+	timestamp: number;
+	title?: string;
+	wordCount?: number;
+	owner?: string;
+}
+
+/**
+ * 使用 Irys GraphQL 查询文章的所有历史版本
+ * 通过 Root-TX 标签查找所有更新
+ * @param originalManifestId - 原始 manifest ID
+ */
+export async function queryArticleVersions(originalManifestId: string): Promise<ArticleVersion[]> {
+	// 根据 Irys 网络选择正确的 GraphQL 端点
+	// devnet 和 mainnet 使用不同的数据库
+	const network = getIrysNetwork();
+	const graphqlEndpoint = network === 'devnet' 
+		? 'https://devnet.irys.xyz/graphql'
+		: 'https://uploader.irys.xyz/graphql';
+	console.log('[queryArticleVersions] Using network:', network, 'endpoint:', graphqlEndpoint);
+	console.log('[queryArticleVersions] Querying versions for manifest:', originalManifestId);
+	
+	// 查询所有带有 Root-TX = originalManifestId 标签的交易，以及原始交易本身
+	const query = `
+		query getArticleVersions($rootTx: String!) {
+			transactions(
+				tags: [
+					{ name: "Root-TX", values: [$rootTx] }
+				]
+				order: DESC
+			) {
+				edges {
+					node {
+						id
+						timestamp
+						address
+						tags {
+							name
+							value
+						}
+					}
+				}
+			}
+		}
+	`;
+	
+	const versions: ArticleVersion[] = [];
+	
+	try {
+		// 查询所有更新版本
+		const response = await fetch(graphqlEndpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query,
+				variables: { rootTx: originalManifestId }
+			})
+		});
+		
+		console.log('[queryArticleVersions] Response status:', response.status);
+		if (response.ok) {
+			const result = await response.json();
+			// console.log('[queryArticleVersions] GraphQL result:', JSON.stringify(result, null, 2));
+			const edges = result?.data?.transactions?.edges || [];
+			
+			for (const edge of edges) {
+				const node = edge.node;
+				const tags = node.tags || [];
+				console.log('[queryArticleVersions] Transaction', node.id, 'tags:', tags);
+				// Debug: 检查第一个标签的结构
+				if (tags.length > 0) {
+					console.log('[queryArticleVersions] First tag structure:', JSON.stringify(tags[0]), 'keys:', Object.keys(tags[0]));
+				}
+				// 尝试找标题标签，检查不同可能的属性名
+				const titleTag = tags.find((t: { name: string; value: string }) => t.name === 'Article-Title');
+				// 备用：检查是否使用不同的属性名
+				const titleTagAlt = tags.find((t: Record<string, string>) => t['name'] === 'Article-Title' || t['Name'] === 'Article-Title');
+				console.log('[queryArticleVersions] Found title tag:', titleTag, 'alt:', titleTagAlt);
+				
+				versions.push({
+					txId: node.id,
+					timestamp: node.timestamp,
+					title: titleTag?.value,
+					owner: node.address
+				});
+			}
+		}
+		
+		// 添加原始版本（如果没有更新版本，或者作为第一个版本）
+		// 查询原始 manifest 的信息
+		// 注意：ids 参数需要数组格式
+		const originalQuery = `
+			query getOriginalManifest($ids: [String!]!) {
+				transactions(
+					ids: $ids
+				) {
+					edges {
+						node {
+							id
+							timestamp
+							address
+							tags {
+								name
+								value
+							}
+						}
+					}
+				}
+			}
+		`;
+		
+		console.log('[queryArticleVersions] Querying original manifest by ID...');
+		const originalResponse = await fetch(graphqlEndpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query: originalQuery,
+				variables: { ids: [originalManifestId] }
+			})
+		});
+		
+		console.log('[queryArticleVersions] Original query response status:', originalResponse.status);
+		if (originalResponse.ok) {
+			const originalResult = await originalResponse.json();
+			// console.log('[queryArticleVersions] Original query result:', JSON.stringify(originalResult, null, 2));
+			const originalEdges = originalResult?.data?.transactions?.edges || [];
+			
+			if (originalEdges.length > 0) {
+				const originalNode = originalEdges[0].node;
+				const originalTags = originalNode.tags || [];
+				const originalTitleTag = originalTags.find((t: { name: string; value: string }) => t.name === 'Article-Title');
+				
+				// 检查原始版本是否已在列表中
+				const existsInVersions = versions.some(v => v.txId === originalManifestId);
+				if (!existsInVersions) {
+					versions.push({
+						txId: originalNode.id,
+						timestamp: originalNode.timestamp,
+						title: originalTitleTag?.value,
+						owner: originalNode.address
+					});
+				}
+			}
+		}
+		
+		// 按时间戳降序排列（最新的在前）
+		versions.sort((a, b) => b.timestamp - a.timestamp);
+		
+		console.log('[queryArticleVersions] Found versions:', versions.length, versions);
+		return versions;
+	} catch (error) {
+		console.error('Failed to query article versions:', error);
+		return [];
+	}
+}
+
+/**
+ * 获取指定版本的文章内容
+ * @param versionTxId - 版本的 manifest TX ID
+ */
+export async function fetchArticleVersionContent(versionTxId: string): Promise<string> {
+	// 对于特定版本，不使用 mutable URL，直接使用 TX ID
+	const url = getStaticFolderUrl(versionTxId, ARTICLE_INDEX_FILE);
+	
+	const response = await fetch(url, { cache: 'no-store' });
+	if (!response.ok) {
+		throw new Error(`Failed to fetch article version content: ${response.status}`);
 	}
 	
 	return await response.text();
