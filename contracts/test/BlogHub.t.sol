@@ -101,7 +101,6 @@ contract BlogHubTest is BaseTest {
                 originalAuthor: originalAuthor,
                 title: title,
                 summary: "",
-                keywords: "",
                 trueAuthor: trueAuthor,
                 collectPrice: collectPrice,
                 maxCollectSupply: maxCollectSupply,
@@ -170,7 +169,6 @@ contract BlogHubTest is BaseTest {
                 originalAuthor: originalAuthor,
                 title: title,
                 summary: "",
-                keywords: "",
                 trueAuthor: trueAuthor,
                 collectPrice: collectPrice,
                 maxCollectSupply: maxCollectSupply,
@@ -203,7 +201,6 @@ contract BlogHubTest is BaseTest {
                 originalAuthor: string(longAuthor),
                 title: "Title",
                 summary: "",
-                keywords: "",
                 trueAuthor: address(0),
                 collectPrice: 0,
                 maxCollectSupply: 0,
@@ -223,7 +220,6 @@ contract BlogHubTest is BaseTest {
                 originalAuthor: "",
                 title: "Title",
                 summary: "",
-                keywords: "",
                 trueAuthor: address(0),
                 collectPrice: 0,
                 maxCollectSupply: 0,
@@ -234,9 +230,9 @@ contract BlogHubTest is BaseTest {
 
     function test_Publish_MultipleArticles() public {
         vm.startPrank(user1);
-        uint256 id1 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash1", categoryId: 1, royaltyBps: 500, originalAuthor: "", title: "Title1", summary: "", keywords: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
-        uint256 id2 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash2", categoryId: 2, royaltyBps: 300, originalAuthor: "Author2", title: "Title2", summary: "", keywords: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
-        uint256 id3 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash3", categoryId: 1, royaltyBps: 1000, originalAuthor: "Author3.eth", title: "Title3", summary: "", keywords: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
+        uint256 id1 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash1", categoryId: 1, royaltyBps: 500, originalAuthor: "", title: "Title1", summary: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
+        uint256 id2 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash2", categoryId: 2, royaltyBps: 300, originalAuthor: "Author2", title: "Title2", summary: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
+        uint256 id3 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash3", categoryId: 1, royaltyBps: 1000, originalAuthor: "Author3.eth", title: "Title3", summary: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
         vm.stopPrank();
 
         assertEq(id1, 1);
@@ -440,7 +436,6 @@ contract BlogHubTest is BaseTest {
                 originalAuthor: "",
                 title: "Test Article",
                 summary: "",
-                keywords: "",
                 trueAuthor: address(0),
                 collectPrice: 0.01 ether,
                 maxCollectSupply: 100,
@@ -499,7 +494,6 @@ contract BlogHubTest is BaseTest {
                 originalAuthor: "",
                 title: "Title",
                 summary: "",
-                keywords: "",
                 trueAuthor: address(0),
                 collectPrice: 0,
                 maxCollectSupply: 0,

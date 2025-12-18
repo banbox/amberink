@@ -32,9 +32,6 @@ export class Article {
     @StringColumn_({nullable: true})
     summary!: string | undefined | null
 
-    @StringColumn_({nullable: true})
-    keywords!: string | undefined | null
-
     @BigIntColumn_({nullable: false})
     categoryId!: bigint
 

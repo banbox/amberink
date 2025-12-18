@@ -24,7 +24,6 @@ type Article @entity {
   trueAuthor: String               # 真实作者地址 (address)
   title: String!                   # 文章标题
   summary: String                  # 文章摘要
-  keywords: String                 # 关键词（逗号分隔）
   categoryId: BigInt!
   royaltyBps: Int!                 # 版税 (需额外查询或默认)
   

@@ -5,9 +5,9 @@ import type { EventParams as EParams, FunctionArguments, FunctionReturn } from '
 export const events = {
     ApprovalForAll: event("0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31", "ApprovalForAll(address,address,bool)", {"account": indexed(p.address), "operator": indexed(p.address), "approved": p.bool}),
     ArticleCollected: event("0xf6447f421186fdb05672b6b81ee863f6266ccf87f727fc67ed367774af860065", "ArticleCollected(uint256,address,uint256,uint256)", {"articleId": indexed(p.uint256), "collector": indexed(p.address), "amount": p.uint256, "tokenId": p.uint256}),
-    ArticleEdited: event("0x56be70a00b3c61237e47a860e2543550d5541e2201d0c73dd3929f7afc592cf4", "ArticleEdited(uint256,string,string,string,string,uint64)", {"articleId": indexed(p.uint256), "originalAuthor": p.string, "title": p.string, "summary": p.string, "keywords": p.string, "categoryId": p.uint64}),
+    ArticleEdited: event("0x033648d1b56f7a8d9c25cf0228b942f10a56da2092f4450e42ed76a0a50ec415", "ArticleEdited(uint256,string,string,string,uint64)", {"articleId": indexed(p.uint256), "originalAuthor": p.string, "title": p.string, "summary": p.string, "categoryId": p.uint64}),
     ArticleEvaluated: event("0xc199635a11ffccf62419a83e03370cef9ba2a2c0a33d65c2fe60542bd560a0a9", "ArticleEvaluated(uint256,address,uint8,uint256)", {"articleId": indexed(p.uint256), "user": indexed(p.address), "score": p.uint8, "amountPaid": p.uint256}),
-    ArticlePublished: event("0x95359e54d698b898ab88ef0d801cc726eabf745c6331f52b758c8f732988c679", "ArticlePublished(uint256,address,uint256,string,string,string,string,string,address,uint256,uint256,uint8)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "summary": p.string, "keywords": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}),
+    ArticlePublished: event("0x595df1c744b2a994baaa3148152fad91a09e150e02d68c83d58f2f11c7291b08", "ArticlePublished(uint256,address,uint256,string,string,string,string,address,uint256,uint256,uint8)", {"articleId": indexed(p.uint256), "author": indexed(p.address), "categoryId": indexed(p.uint256), "arweaveId": p.string, "originalAuthor": p.string, "title": p.string, "summary": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}),
     CommentAdded: event("0x19a5aae49af5681d63d1a8c6ea9dc7b88af86e08d71ade984e2087fada0d4c4a", "CommentAdded(uint256,address,string,uint256,uint8)", {"articleId": indexed(p.uint256), "commenter": indexed(p.address), "content": p.string, "parentCommentId": p.uint256, "score": p.uint8}),
     CommentLiked: event("0x37d3451d72bbbc5dc39c5c55aacb3b768d87ef17ab36990c4c60e96e6a0cf145", "CommentLiked(uint256,uint256,address,address,uint256)", {"articleId": indexed(p.uint256), "commentId": indexed(p.uint256), "liker": indexed(p.address), "commenter": p.address, "amountPaid": p.uint256}),
     FollowStatusChanged: event("0x75a1fc5e2239f53dc8407b3712c878c5893431bc3c349ea3561584869670f7f2", "FollowStatusChanged(address,address,bool)", {"follower": indexed(p.address), "target": indexed(p.address), "isFollowing": p.bool}),
@@ -35,7 +35,6 @@ export const functions = {
     MAX_AVATAR_LENGTH: viewFun("0x1fe9d578", "MAX_AVATAR_LENGTH()", {}, p.uint256),
     MAX_BIO_LENGTH: viewFun("0xc477d7f7", "MAX_BIO_LENGTH()", {}, p.uint256),
     MAX_COMMENT_LENGTH: viewFun("0x5856e4fa", "MAX_COMMENT_LENGTH()", {}, p.uint256),
-    MAX_KEYWORDS_LENGTH: viewFun("0x60f30280", "MAX_KEYWORDS_LENGTH()", {}, p.uint256),
     MAX_NICKNAME_LENGTH: viewFun("0xe8f100bf", "MAX_NICKNAME_LENGTH()", {}, p.uint256),
     MAX_ORIGINAL_AUTHOR_LENGTH: viewFun("0x19e94a6e", "MAX_ORIGINAL_AUTHOR_LENGTH()", {}, p.uint256),
     MAX_SUMMARY_LENGTH: viewFun("0x544b5e61", "MAX_SUMMARY_LENGTH()", {}, p.uint256),
@@ -52,8 +51,8 @@ export const functions = {
     balanceOfBatch: viewFun("0x4e1273f4", "balanceOfBatch(address[],uint256[])", {"accounts": p.array(p.address), "ids": p.array(p.uint256)}, p.array(p.uint256)),
     collect: fun("0x8d3c100a", "collect(uint256,address)", {"_articleId": p.uint256, "_referrer": p.address}, ),
     collectWithSessionKey: fun("0x795146ef", "collectWithSessionKey(address,address,uint256,address,uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "_articleId": p.uint256, "_referrer": p.address, "deadline": p.uint256, "signature": p.bytes}, ),
-    editArticle: fun("0x29e59197", "editArticle((uint256,string,string,string,string,uint64))", {"params": p.struct({"articleId": p.uint256, "originalAuthor": p.string, "title": p.string, "summary": p.string, "keywords": p.string, "categoryId": p.uint64})}, ),
-    editArticleWithSessionKey: fun("0xa2bd5360", "editArticleWithSessionKey(address,address,(uint256,string,string,string,string,uint64),uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "params": p.struct({"articleId": p.uint256, "originalAuthor": p.string, "title": p.string, "summary": p.string, "keywords": p.string, "categoryId": p.uint64}), "deadline": p.uint256, "signature": p.bytes}, ),
+    editArticle: fun("0xb259ecde", "editArticle((uint256,string,string,string,uint64))", {"params": p.struct({"articleId": p.uint256, "originalAuthor": p.string, "title": p.string, "summary": p.string, "categoryId": p.uint64})}, ),
+    editArticleWithSessionKey: fun("0xf7714a98", "editArticleWithSessionKey(address,address,(uint256,string,string,string,uint64),uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "params": p.struct({"articleId": p.uint256, "originalAuthor": p.string, "title": p.string, "summary": p.string, "categoryId": p.uint64}), "deadline": p.uint256, "signature": p.bytes}, ),
     evaluate: fun("0xff1f090a", "evaluate(uint256,uint8,string,address,uint256)", {"_articleId": p.uint256, "_score": p.uint8, "_content": p.string, "_referrer": p.address, "_parentCommentId": p.uint256}, ),
     evaluateWithSessionKey: fun("0x63c4ea4d", "evaluateWithSessionKey(address,address,uint256,uint8,string,address,uint256,uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "_articleId": p.uint256, "_score": p.uint8, "_content": p.string, "_referrer": p.address, "_parentCommentId": p.uint256, "deadline": p.uint256, "signature": p.bytes}, ),
     follow: fun("0x63c3cc16", "follow(address,bool)", {"_target": p.address, "_status": p.bool}, ),
@@ -75,8 +74,8 @@ export const functions = {
     platformFeeBps: viewFun("0x22dcd13e", "platformFeeBps()", {}, p.uint96),
     platformTreasury: viewFun("0xe138818c", "platformTreasury()", {}, p.address),
     proxiableUUID: viewFun("0x52d1902d", "proxiableUUID()", {}, p.bytes32),
-    publish: fun("0x9a801608", "publish((string,uint64,uint96,string,string,string,string,address,uint256,uint256,uint8))", {"params": p.struct({"arweaveId": p.string, "categoryId": p.uint64, "royaltyBps": p.uint96, "originalAuthor": p.string, "title": p.string, "summary": p.string, "keywords": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8})}, p.uint256),
-    publishWithSessionKey: fun("0xbb9b1181", "publishWithSessionKey(address,address,(string,uint64,uint96,string,string,string,string,address,uint256,uint256,uint8),uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "params": p.struct({"arweaveId": p.string, "categoryId": p.uint64, "royaltyBps": p.uint96, "originalAuthor": p.string, "title": p.string, "summary": p.string, "keywords": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}), "deadline": p.uint256, "signature": p.bytes}, p.uint256),
+    publish: fun("0x4c0e8045", "publish((string,uint64,uint96,string,string,string,address,uint256,uint256,uint8))", {"params": p.struct({"arweaveId": p.string, "categoryId": p.uint64, "royaltyBps": p.uint96, "originalAuthor": p.string, "title": p.string, "summary": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8})}, p.uint256),
+    publishWithSessionKey: fun("0x060d752c", "publishWithSessionKey(address,address,(string,uint64,uint96,string,string,string,address,uint256,uint256,uint8),uint256,bytes)", {"owner": p.address, "sessionKey": p.address, "params": p.struct({"arweaveId": p.string, "categoryId": p.uint64, "royaltyBps": p.uint96, "originalAuthor": p.string, "title": p.string, "summary": p.string, "trueAuthor": p.address, "collectPrice": p.uint256, "maxCollectSupply": p.uint256, "originality": p.uint8}), "deadline": p.uint256, "signature": p.bytes}, p.uint256),
     renounceRole: fun("0x36568abe", "renounceRole(bytes32,address)", {"role": p.bytes32, "callerConfirmation": p.address}, ),
     revokeRole: fun("0xd547741f", "revokeRole(bytes32,address)", {"role": p.bytes32, "account": p.address}, ),
     royaltyInfo: viewFun("0x2a55205a", "royaltyInfo(uint256,uint256)", {"tokenId": p.uint256, "salePrice": p.uint256}, {"receiver": p.address, "amount": p.uint256}),
@@ -111,10 +110,6 @@ export class Contract extends ContractBase {
 
     MAX_COMMENT_LENGTH() {
         return this.eth_call(functions.MAX_COMMENT_LENGTH, {})
-    }
-
-    MAX_KEYWORDS_LENGTH() {
-        return this.eth_call(functions.MAX_KEYWORDS_LENGTH, {})
     }
 
     MAX_NICKNAME_LENGTH() {
@@ -273,9 +268,6 @@ export type MAX_BIO_LENGTHReturn = FunctionReturn<typeof functions.MAX_BIO_LENGT
 
 export type MAX_COMMENT_LENGTHParams = FunctionArguments<typeof functions.MAX_COMMENT_LENGTH>
 export type MAX_COMMENT_LENGTHReturn = FunctionReturn<typeof functions.MAX_COMMENT_LENGTH>
-
-export type MAX_KEYWORDS_LENGTHParams = FunctionArguments<typeof functions.MAX_KEYWORDS_LENGTH>
-export type MAX_KEYWORDS_LENGTHReturn = FunctionReturn<typeof functions.MAX_KEYWORDS_LENGTH>
 
 export type MAX_NICKNAME_LENGTHParams = FunctionArguments<typeof functions.MAX_NICKNAME_LENGTH>
 export type MAX_NICKNAME_LENGTHReturn = FunctionReturn<typeof functions.MAX_NICKNAME_LENGTH>

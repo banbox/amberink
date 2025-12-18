@@ -43,9 +43,6 @@ export class SearchArticleResult {
     @Field({ nullable: true })
     summary?: string
 
-    @Field({ nullable: true })
-    keywords?: string
-
     @Field()
     categoryId!: string
 
@@ -108,11 +105,11 @@ export class SearchResolver {
         let qb = manager.createQueryBuilder(Article, 'article')
             .leftJoinAndSelect('article.author', 'author')
 
-        // Full-text search across title, summary, keywords
+        // Full-text search across title, summary
         if (query && query.trim()) {
             const searchTerm = `%${query.trim().toLowerCase()}%`
             qb = qb.where(
-                '(LOWER(article.title) LIKE :searchTerm OR LOWER(article.summary) LIKE :searchTerm OR LOWER(article.keywords) LIKE :searchTerm)',
+                '(LOWER(article.title) LIKE :searchTerm OR LOWER(article.summary) LIKE :searchTerm)',
                 { searchTerm }
             )
         }
@@ -152,7 +149,6 @@ export class SearchResolver {
                 articleId: article.articleId.toString(),
                 title: article.title,
                 summary: article.summary || undefined,
-                keywords: article.keywords || undefined,
                 categoryId: article.categoryId.toString(),
                 originality: article.originality,
                 likeAmount: article.likeAmount.toString(),

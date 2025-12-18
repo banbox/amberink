@@ -70,7 +70,6 @@
 	// Form state
 	let title = $state('');
 	let summary = $state('');
-	let keywords = $state('');
 	let categoryId = $derived(selectedCategory ?? 0n);
 	let author = $state('');
 	let content = $state('');
@@ -110,7 +109,6 @@
 	function resetForm() {
 		title = '';
 		summary = '';
-		keywords = '';
 		selectedCategory = null;
 		author = '';
 		content = '';
@@ -189,7 +187,6 @@
 			const result = await publishArticle({
 				title: title.trim(),
 				summary: summary.trim(),
-				keywords: keywords.trim(),
 				content: fullContent,
 				tags,
 				coverImage: coverImageFile,
@@ -284,21 +281,6 @@
 					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 					disabled={isSubmitting}
 				></textarea>
-			</div>
-
-			<!-- Keywords -->
-			<div>
-				<label for="keywords" class="mb-2 block text-sm font-medium text-gray-700">
-					Keywords
-				</label>
-				<input
-					id="keywords"
-					bind:value={keywords}
-					type="text"
-					placeholder="Comma-separated keywords (e.g., blockchain, web3, defi)"
-					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-					disabled={isSubmitting}
-				/>
 			</div>
 
 			<!-- Category & Author -->

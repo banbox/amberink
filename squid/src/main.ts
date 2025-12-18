@@ -76,7 +76,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 trueAuthor: null,
                 title: '',
                 summary: null,
-                keywords: null,
                 categoryId: 0n,
                 royaltyBps: 0,
                 collectPrice: 0n,
@@ -160,7 +159,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         originalAuthor: event.originalAuthor || null,
                         title: event.title,
                         summary: event.summary || null,
-                        keywords: event.keywords || null,
                         trueAuthor: event.trueAuthor.toLowerCase(),
                         categoryId: event.categoryId,
                         collectPrice: event.collectPrice,
@@ -183,7 +181,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article.originalAuthor = event.originalAuthor || null
                     article.title = event.title
                     article.summary = event.summary || null
-                    article.keywords = event.keywords || null
                     article.trueAuthor = event.trueAuthor.toLowerCase()
                     article.categoryId = event.categoryId
                     article.collectPrice = event.collectPrice
@@ -556,7 +553,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 // 更新文章信息（只更新可修改的字段）
                 article.title = event.title
                 article.summary = event.summary || null
-                article.keywords = event.keywords || null
                 article.originalAuthor = event.originalAuthor || null
                 article.categoryId = event.categoryId
                 // originality 不在 ArticleEdited 事件中，保持原值

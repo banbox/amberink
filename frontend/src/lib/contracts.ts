@@ -293,7 +293,6 @@ const BLOGHUB_ABI = [
 			{ name: '_originalAuthor', type: 'string' },
 			{ name: '_title', type: 'string' },
 			{ name: '_summary', type: 'string' },
-			{ name: '_keywords', type: 'string' },
 			{ name: '_trueAuthor', type: 'address' },
 			{ name: '_collectPrice', type: 'uint256' },
 			{ name: '_maxCollectSupply', type: 'uint256' },
@@ -377,7 +376,6 @@ const BLOGHUB_ABI = [
 					{ name: 'originalAuthor', type: 'string' },
 					{ name: 'title', type: 'string' },
 					{ name: 'summary', type: 'string' },
-					{ name: 'keywords', type: 'string' },
 					{ name: 'trueAuthor', type: 'address' },
 					{ name: 'collectPrice', type: 'uint256' },
 					{ name: 'maxCollectSupply', type: 'uint256' },
@@ -470,7 +468,6 @@ const BLOGHUB_ABI = [
 			{ name: '_originalAuthor', type: 'string' },
 			{ name: '_title', type: 'string' },
 			{ name: '_summary', type: 'string' },
-			{ name: '_keywords', type: 'string' },
 			{ name: '_categoryId', type: 'uint64' },
 			{ name: '_originality', type: 'uint8' }
 		],
@@ -487,7 +484,6 @@ const BLOGHUB_ABI = [
 			{ name: '_originalAuthor', type: 'string' },
 			{ name: '_title', type: 'string' },
 			{ name: '_summary', type: 'string' },
-			{ name: '_keywords', type: 'string' },
 			{ name: '_categoryId', type: 'uint64' },
 			{ name: '_originality', type: 'uint8' },
 			{ name: 'deadline', type: 'uint256' },
@@ -624,7 +620,6 @@ async function getWalletClient() {
  * @param originalAuthor - Original author name (optional, for repost scenarios)
  * @param title - Article title (max 128 bytes)
  * @param summary - Article summary (max 512 bytes)
- * @param keywords - Article keywords, comma-separated (max 256 bytes)
  * @returns Transaction hash
  */
 export async function publishToContract(
@@ -634,7 +629,6 @@ export async function publishToContract(
 	originalAuthor: string = '',
 	title: string = '',
 	summary: string = '',
-	keywords: string = '',
 	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
 	collectPrice: bigint = 0n,
 	maxCollectSupply: bigint = 0n,
@@ -664,10 +658,6 @@ export async function publishToContract(
 		throw new Error('Summary is too long (max 512 bytes)');
 	}
 
-	if (keywords && new TextEncoder().encode(keywords).length > 256) {
-		throw new Error('Keywords are too long (max 256 bytes)');
-	}
-
 	try {
 		const walletClient = await getWalletClient();
 
@@ -683,7 +673,6 @@ export async function publishToContract(
 				originalAuthor,
 				title,
 				summary,
-				keywords,
 				trueAuthor,
 				collectPrice,
 				maxCollectSupply,
@@ -1093,7 +1082,6 @@ async function createSessionKeySignature(
  * @param originalAuthor - Original author name (optional)
  * @param title - Article title (max 128 bytes)
  * @param summary - Article summary (max 512 bytes)
- * @param keywords - Article keywords, comma-separated (max 256 bytes)
  * @returns Transaction hash
  */
 export async function publishToContractWithSessionKey(
@@ -1104,7 +1092,6 @@ export async function publishToContractWithSessionKey(
 	originalAuthor: string = '',
 	title: string = '',
 	summary: string = '',
-	keywords: string = '',
 	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
 	collectPrice: bigint = 0n,
 	maxCollectSupply: bigint = 0n,
@@ -1132,10 +1119,6 @@ export async function publishToContractWithSessionKey(
 
 	if (summary && new TextEncoder().encode(summary).length > 512) {
 		throw new Error('Summary is too long (max 512 bytes)');
-	}
-
-	if (keywords && new TextEncoder().encode(keywords).length > 256) {
-		throw new Error('Keywords are too long (max 256 bytes)');
 	}
 
 	// Check session key validity
@@ -1168,7 +1151,6 @@ export async function publishToContractWithSessionKey(
 				originalAuthor,
 				title,
 				summary,
-				keywords,
 				trueAuthor,
 				BigInt(collectPrice),
 				BigInt(maxCollectSupply),
@@ -1230,7 +1212,6 @@ export async function publishToContractWithSessionKey(
 					originalAuthor,
 					title,
 					summary,
-					keywords,
 					trueAuthor: trueAuthor,
 					collectPrice: BigInt(collectPrice),
 					maxCollectSupply: BigInt(maxCollectSupply),
@@ -1621,12 +1602,11 @@ export async function updateProfile(
 }
 
 /**
- * Edit article metadata on-chain (title, originalAuthor, summary, keywords, categoryId, originality)
+ * Edit article metadata on-chain (title, originalAuthor, summary, categoryId, originality)
  * @param articleId - Chain article ID
  * @param originalAuthor - Original author name (max 64 bytes)
  * @param title - Article title (max 128 bytes)
  * @param summary - Article summary (max 512 bytes)
- * @param keywords - Article keywords, comma-separated (max 256 bytes)
  * @param categoryId - Category ID
  * @param originality - 0=Original, 1=SemiOriginal, 2=Reprint
  * @returns Transaction hash
@@ -1636,7 +1616,6 @@ export async function editArticle(
 	originalAuthor: string,
 	title: string,
 	summary: string,
-	keywords: string,
 	categoryId: bigint,
 	originality: number
 ): Promise<string> {
@@ -1656,10 +1635,6 @@ export async function editArticle(
 		throw new Error('Summary is too long (max 512 bytes)');
 	}
 
-	if (keywords && new TextEncoder().encode(keywords).length > 256) {
-		throw new Error('Keywords are too long (max 256 bytes)');
-	}
-
 	if (originality < 0 || originality > 2) {
 		throw new Error('Originality must be 0 (Original), 1 (SemiOriginal), or 2 (Reprint)');
 	}
@@ -1671,7 +1646,7 @@ export async function editArticle(
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticle',
-			args: [articleId, originalAuthor, title, summary, keywords, categoryId, originality]
+			args: [articleId, originalAuthor, title, summary, categoryId, originality]
 		});
 
 		console.log(`Article edited. Tx: ${txHash}`);
@@ -1689,7 +1664,6 @@ export async function editArticle(
  * @param originalAuthor - Original author name (max 64 bytes)
  * @param title - Article title (max 128 bytes)
  * @param summary - Article summary (max 512 bytes)
- * @param keywords - Article keywords, comma-separated (max 256 bytes)
  * @param categoryId - Category ID
  * @param originality - 0=Original, 1=SemiOriginal, 2=Reprint
  * @returns Transaction hash
@@ -1700,7 +1674,6 @@ export async function editArticleWithSessionKey(
 	originalAuthor: string,
 	title: string,
 	summary: string,
-	keywords: string,
 	categoryId: bigint,
 	originality: number
 ): Promise<string> {
@@ -1718,10 +1691,6 @@ export async function editArticleWithSessionKey(
 
 	if (summary && new TextEncoder().encode(summary).length > 512) {
 		throw new Error('Summary is too long (max 512 bytes)');
-	}
-
-	if (keywords && new TextEncoder().encode(keywords).length > 256) {
-		throw new Error('Keywords are too long (max 256 bytes)');
 	}
 
 	if (originality < 0 || originality > 2) {
@@ -1751,7 +1720,7 @@ export async function editArticleWithSessionKey(
 		const callData = encodeFunctionData({
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticle',
-			args: [articleId, originalAuthor, title, summary, keywords, categoryId, originality]
+			args: [articleId, originalAuthor, title, summary, categoryId, originality]
 		});
 
 		// Get current nonce from SessionKeyManager
@@ -1789,7 +1758,6 @@ export async function editArticleWithSessionKey(
 				originalAuthor,
 				title,
 				summary,
-				keywords,
 				categoryId,
 				originality,
 				deadline,

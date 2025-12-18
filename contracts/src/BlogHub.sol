@@ -42,7 +42,6 @@ contract BlogHub is
     error OriginalAuthorTooLong();
     error TitleTooLong();
     error SummaryTooLong();
-    error KeywordsTooLong();
     error InsufficientPayment();
     error MaxSupplyReached();
     error CollectNotEnabled();
@@ -77,7 +76,6 @@ contract BlogHub is
         string originalAuthor;
         string title;
         string summary;
-        string keywords;
         address trueAuthor;
         uint256 collectPrice;
         uint256 maxCollectSupply;
@@ -89,7 +87,6 @@ contract BlogHub is
         string originalAuthor;
         string title;
         string summary;
-        string keywords;
         uint64 categoryId;
     }
 
@@ -117,8 +114,6 @@ contract BlogHub is
     uint256 public constant MAX_TITLE_LENGTH = 128;
     // 最大摘要长度（512字节，约170个中文字符）
     uint256 public constant MAX_SUMMARY_LENGTH = 512;
-    // 最大关键词长度（256字节，多个关键词用逗号分隔）
-    uint256 public constant MAX_KEYWORDS_LENGTH = 256;
     // 用户资料字段最大长度
     uint256 public constant MAX_NICKNAME_LENGTH = 64;
     uint256 public constant MAX_BIO_LENGTH = 256;
@@ -154,7 +149,6 @@ contract BlogHub is
         string originalAuthor,
         string title,
         string summary,
-        string keywords,
         address trueAuthor,
         uint256 collectPrice,
         uint256 maxCollectSupply,
@@ -219,7 +213,6 @@ contract BlogHub is
         string originalAuthor,
         string title,
         string summary,
-        string keywords,
         uint64 categoryId
     );
 
@@ -300,14 +293,12 @@ contract BlogHub is
         uint96 royaltyBps,
         string calldata originalAuthor,
         string calldata title,
-        string calldata summary,
-        string calldata keywords
+        string calldata summary
     ) internal pure {
         if (royaltyBps > 10000) revert RoyaltyTooHigh();
         if (bytes(originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
         if (bytes(title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
         if (bytes(summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
-        if (bytes(keywords).length > MAX_KEYWORDS_LENGTH) revert KeywordsTooLong();
     }
 
     function _executeFollow(address follower, address target, bool status) internal {
@@ -331,7 +322,6 @@ contract BlogHub is
             params.originalAuthor,
             params.title,
             params.summary,
-            params.keywords,
             trueAuthor,
             params.collectPrice,
             params.maxCollectSupply,
@@ -359,7 +349,6 @@ contract BlogHub is
         if (bytes(params.originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
         if (bytes(params.title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
         if (bytes(params.summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
-        if (bytes(params.keywords).length > MAX_KEYWORDS_LENGTH) revert KeywordsTooLong();
         if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
         
         // 更新文章信息
@@ -370,7 +359,6 @@ contract BlogHub is
             params.originalAuthor,
             params.title,
             params.summary,
-            params.keywords,
             params.categoryId
         );
     }
@@ -616,7 +604,7 @@ contract BlogHub is
     function publish(
         PublishParams calldata params
     ) external whenNotPaused returns (uint256) {
-        _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary, params.keywords);
+        _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary);
 
         if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
         if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
@@ -911,7 +899,7 @@ contract BlogHub is
         // Scope block to limit stack usage for session key validation
         {
             ISessionKeyManager manager = _requireSessionKeyManager();
-            _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary, params.keywords);
+            _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary);
             bytes4 selector = BlogHub.publish.selector;
             bytes memory callData = _encodePublishCallData(params);
             _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
