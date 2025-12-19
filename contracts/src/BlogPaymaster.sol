@@ -8,6 +8,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {CallDataParser} from "./libraries/CallDataParser.sol";
 
 /**
  * @title BlogPaymaster
@@ -107,55 +108,48 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     //                      资金管理
     // =============================================================
 
+    function _deposit(address account, uint256 amount) internal {
+        if (amount == 0) revert ZeroAmount();
+        if (account == address(0)) revert ZeroAddress();
+        balanceOf[account] += amount;
+        emit Deposited(account, amount);
+    }
+
     /**
      * @notice 存入资金到自己的账户
      */
     function deposit() external payable nonReentrant {
-        if (msg.value == 0) revert ZeroAmount();
-        balanceOf[msg.sender] += msg.value;
-        emit Deposited(msg.sender, msg.value);
+        _deposit(msg.sender, msg.value);
     }
 
     /**
      * @notice 为指定账户存入资金（可为他人充值）
-     * @param account 目标账户地址
      */
     function depositTo(address account) external payable nonReentrant {
-        if (msg.value == 0) revert ZeroAmount();
-        if (account == address(0)) revert ZeroAddress();
-        balanceOf[account] += msg.value;
-        emit Deposited(account, msg.value);
+        _deposit(account, msg.value);
+    }
+
+    function _withdraw(address account, uint256 amount) internal {
+        if (amount == 0) revert ZeroAmount();
+        if (balanceOf[account] < amount) revert InsufficientBalance();
+        balanceOf[account] -= amount;
+        (bool success, ) = payable(account).call{value: amount}("");
+        if (!success) revert TransferFailed();
+        emit Withdrawn(account, amount);
     }
 
     /**
      * @notice 提取自己的资金
-     * @param amount 提取金额
      */
     function withdraw(uint256 amount) external nonReentrant {
-        if (amount == 0) revert ZeroAmount();
-        if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
-        
-        balanceOf[msg.sender] -= amount;
-        
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
-        if (!success) revert TransferFailed();
-        
-        emit Withdrawn(msg.sender, amount);
+        _withdraw(msg.sender, amount);
     }
 
     /**
      * @notice 提取全部资金
      */
     function withdrawAll() external nonReentrant {
-        uint256 amount = balanceOf[msg.sender];
-        if (amount == 0) revert ZeroAmount();
-        
-        balanceOf[msg.sender] = 0;
-        
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
-        if (!success) revert TransferFailed();
-        
-        emit Withdrawn(msg.sender, amount);
+        _withdraw(msg.sender, balanceOf[msg.sender]);
     }
 
     // =============================================================
@@ -192,17 +186,30 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     function decreaseAllowance(address spender, uint256 subtractedValue) external {
         if (spender == address(0)) revert ZeroAddress();
         uint256 currentAllowance = allowance[msg.sender][spender];
-        if (currentAllowance < subtractedValue) {
-            allowance[msg.sender][spender] = 0;
-        } else {
-            allowance[msg.sender][spender] = currentAllowance - subtractedValue;
-        }
-        emit ApprovalSet(msg.sender, spender, allowance[msg.sender][spender]);
+        uint256 newAllowance = currentAllowance < subtractedValue ? 0 : currentAllowance - subtractedValue;
+        allowance[msg.sender][spender] = newAllowance;
+        emit ApprovalSet(msg.sender, spender, newAllowance);
     }
 
     // =============================================================
     //                      ERC-4337 Paymaster 接口
     // =============================================================
+
+    /**
+     * @dev 检查并扣除 sponsor 余额和授权
+     */
+    function _chargeSponsorship(address sponsor, address spender, uint256 maxCost) internal {
+        if (sponsor == address(0)) revert InvalidSponsor();
+        if (balanceOf[sponsor] < maxCost) revert InsufficientBalance();
+        if (sponsor != spender) {
+            uint256 currentAllowance = allowance[sponsor][spender];
+            if (currentAllowance < maxCost) revert InsufficientAllowance();
+            if (currentAllowance != type(uint256).max) {
+                allowance[sponsor][spender] = currentAllowance - maxCost;
+            }
+        }
+        balanceOf[sponsor] -= maxCost;
+    }
 
     /**
      * @notice 验证是否为此 UserOperation 付款
@@ -244,27 +251,7 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     ) internal returns (bytes memory context, uint256 validationData) {
         address sponsor = address(bytes20(userOp.paymasterAndData[21:41]));
         address sender = userOp.sender;
-        
-        if (sponsor == address(0)) revert InvalidSponsor();
-        
-        // 检查余额
-        if (balanceOf[sponsor] < maxCost) revert InsufficientBalance();
-        
-        // 如果 sponsor 不是 sender，检查授权
-        if (sponsor != sender) {
-            uint256 currentAllowance = allowance[sponsor][sender];
-            if (currentAllowance < maxCost) revert InsufficientAllowance();
-            
-            // 扣除授权额度（如果不是无限授权）
-            if (currentAllowance != type(uint256).max) {
-                allowance[sponsor][sender] = currentAllowance - maxCost;
-            }
-        }
-        
-        // 预扣余额
-        balanceOf[sponsor] -= maxCost;
-        
-        // context: [mode (1)][sponsor (20)][sender (20)][maxCost (32)][userOpHash (32)]
+        _chargeSponsorship(sponsor, sender, maxCost);
         context = abi.encode(uint8(0), sponsor, sender, maxCost, userOpHash);
         validationData = 0;
     }
@@ -315,7 +302,7 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
             // 从 userOp.callData 中提取目标合约和函数选择器
             // callData 格式: execute(address dest, uint256 value, bytes calldata func)
             // 或者直接调用目标合约
-            (address target, bytes4 selector) = _extractTargetAndSelector(userOp.callData);
+            (address target, bytes4 selector) = CallDataParser.extractTargetAndSelector(userOp.callData);
             
             bool isValid = sessionKeyManager.validateSessionKey(
                 owner,
@@ -328,69 +315,9 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
             if (!isValid) revert InvalidSessionKey();
         }
         
-        // 检查 sponsor 余额
-        if (sponsor == address(0)) revert InvalidSponsor();
-        if (balanceOf[sponsor] < maxCost) revert InsufficientBalance();
-        
-        // 如果 sponsor 不是 owner，检查授权
-        if (sponsor != owner) {
-            uint256 currentAllowance = allowance[sponsor][owner];
-            if (currentAllowance < maxCost) revert InsufficientAllowance();
-            
-            if (currentAllowance != type(uint256).max) {
-                allowance[sponsor][owner] = currentAllowance - maxCost;
-            }
-        }
-        
-        // 预扣余额
-        balanceOf[sponsor] -= maxCost;
-        
-        // context: [mode (1)][sponsor (20)][owner (20)][sessionKey (20)][maxCost (32)][userOpHash (32)]
+        _chargeSponsorship(sponsor, owner, maxCost);
         context = abi.encode(uint8(1), sponsor, owner, sessionKey, maxCost, userOpHash);
         validationData = 0;
-    }
-
-    /**
-     * @dev 从 callData 中提取目标合约地址和函数选择器
-     * 支持两种格式：
-     * 1. 直接调用: selector + params
-     * 2. execute 调用: execute(address dest, uint256 value, bytes func)
-     * 
-     * ABI 编码布局 for execute(address dest, uint256 value, bytes calldata func):
-     * - bytes 0-3: selector (0xb61d27f6)
-     * - bytes 4-35: dest (address, 左填充 12 字节)
-     * - bytes 36-67: value (uint256)
-     * - bytes 68-99: offset to func data (通常是 0x60 = 96)
-     * - bytes 100-131: func length
-     * - bytes 132+: func data (包含内部函数的 selector)
-     */
-    function _extractTargetAndSelector(bytes calldata callData) internal pure returns (address target, bytes4 selector) {
-        if (callData.length < 4) {
-            return (address(0), bytes4(0));
-        }
-        
-        selector = bytes4(callData[:4]);
-        
-        // 检查是否是 execute 函数 (0xb61d27f6)
-        // execute(address dest, uint256 value, bytes calldata func)
-        if (selector == bytes4(0xb61d27f6) && callData.length >= 100) {
-            // 解析 dest 地址 (bytes 4-35, 取后 20 字节)
-            target = address(uint160(uint256(bytes32(callData[4:36]))));
-            // 解析内部函数选择器
-            // func offset 在 bytes 68-99
-            uint256 funcOffset = uint256(bytes32(callData[68:100]));
-            // func 数据起始位置 = 4 (selector) + funcOffset
-            uint256 funcStart = 4 + funcOffset;
-            // func 数据的前 32 字节是长度，之后是实际数据
-            if (callData.length >= funcStart + 36) {
-                // 内部函数的 selector 在 func 数据的前 4 字节
-                selector = bytes4(callData[funcStart + 32:funcStart + 36]);
-            }
-        } else {
-            // 直接调用，target 需要从 UserOp 的其他字段获取
-            // 这里返回 address(0)，由调用方处理
-            target = address(0);
-        }
     }
 
     /**
@@ -414,6 +341,22 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev 处理退款和授权额度恢复的通用逻辑
+     */
+    function _processRefund(
+        address sponsor,
+        address spender,
+        uint256 refundAmount
+    ) internal {
+        if (refundAmount > 0) {
+            balanceOf[sponsor] += refundAmount;
+            if (sponsor != spender && allowance[sponsor][spender] != type(uint256).max) {
+                allowance[sponsor][spender] += refundAmount;
+            }
+        }
+    }
+
+    /**
      * @dev 普通模式的 postOp 处理
      */
     function _postOpNormalMode(
@@ -424,21 +367,10 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         (, address sponsor, address sender, uint256 maxCost, bytes32 userOpHash) = 
             abi.decode(context, (uint8, address, address, uint256, bytes32));
         
-        uint256 refund = maxCost - actualGasCost;
-        
         if (opMode == PostOpMode.opReverted) {
-            // 操作回滚，全额退款
-            balanceOf[sponsor] += maxCost;
-            if (sponsor != sender && allowance[sponsor][sender] != type(uint256).max) {
-                allowance[sponsor][sender] += maxCost;
-            }
+            _processRefund(sponsor, sender, maxCost);
         } else {
-            if (refund > 0) {
-                balanceOf[sponsor] += refund;
-                if (sponsor != sender && allowance[sponsor][sender] != type(uint256).max) {
-                    allowance[sponsor][sender] += refund;
-                }
-            }
+            _processRefund(sponsor, sender, maxCost - actualGasCost);
             emit GasPaid(sponsor, sender, actualGasCost, userOpHash);
         }
     }
@@ -454,23 +386,10 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         (, address sponsor, address owner, address sessionKey, uint256 maxCost, bytes32 userOpHash) = 
             abi.decode(context, (uint8, address, address, address, uint256, bytes32));
         
-        uint256 refund = maxCost - actualGasCost;
-        
         if (opMode == PostOpMode.opReverted) {
-            // 操作回滚，全额退款
-            balanceOf[sponsor] += maxCost;
-            if (sponsor != owner && allowance[sponsor][owner] != type(uint256).max) {
-                allowance[sponsor][owner] += maxCost;
-            }
-            // 注意：不回滚 Session Key nonce，防止重放攻击
-            // 即使操作失败，nonce 也应该保持递增
+            _processRefund(sponsor, owner, maxCost);
         } else {
-            if (refund > 0) {
-                balanceOf[sponsor] += refund;
-                if (sponsor != owner && allowance[sponsor][owner] != type(uint256).max) {
-                    allowance[sponsor][owner] += refund;
-                }
-            }
+            _processRefund(sponsor, owner, maxCost - actualGasCost);
             emit SessionKeyGasPaid(owner, sessionKey, sponsor, actualGasCost, userOpHash);
         }
     }
@@ -652,9 +571,7 @@ contract BlogPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         return true;
     }
 
-    // 允许合约接收 ETH
     receive() external payable {
-        balanceOf[msg.sender] += msg.value;
-        emit Deposited(msg.sender, msg.value);
+        _deposit(msg.sender, msg.value);
     }
 }

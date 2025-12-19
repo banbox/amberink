@@ -62,6 +62,16 @@ contract TokenPriceOracle is ITokenPriceOracle, Ownable {
     // =============================================================
 
     /**
+     * @dev 获取已验证的代币配置和价格
+     */
+    function _getValidatedConfig(address token) internal view returns (TokenConfig memory config, uint256 price) {
+        config = tokenConfigs[token];
+        if (!config.supported) revert TokenNotSupported();
+        price = _getTokenToEthPrice(token, config);
+        if (price == 0) revert InvalidPrice();
+    }
+
+    /**
      * @notice 获取将指定数量的 ETH 兑换所需的代币数量
      * @param token 代币地址
      * @param ethAmount 需要的 ETH 数量（wei）
@@ -71,15 +81,8 @@ contract TokenPriceOracle is ITokenPriceOracle, Ownable {
         address token,
         uint256 ethAmount
     ) external view override returns (uint256 tokenAmount) {
-        TokenConfig memory config = tokenConfigs[token];
-        if (!config.supported) revert TokenNotSupported();
-        
-        uint256 tokenToEthPrice = _getTokenToEthPrice(token, config);
-        if (tokenToEthPrice == 0) revert InvalidPrice();
-        
-        // tokenAmount = ethAmount / tokenToEthPrice * tokenDecimals
-        // 为了精度，先乘后除
-        tokenAmount = (ethAmount * (10 ** config.tokenDecimals)) / tokenToEthPrice;
+        (TokenConfig memory config, uint256 price) = _getValidatedConfig(token);
+        tokenAmount = (ethAmount * (10 ** config.tokenDecimals)) / price;
     }
 
     /**
@@ -92,13 +95,8 @@ contract TokenPriceOracle is ITokenPriceOracle, Ownable {
         address token,
         uint256 tokenAmount
     ) external view override returns (uint256 ethAmount) {
-        TokenConfig memory config = tokenConfigs[token];
-        if (!config.supported) revert TokenNotSupported();
-        
-        uint256 tokenToEthPrice = _getTokenToEthPrice(token, config);
-        
-        // ethAmount = tokenAmount * tokenToEthPrice / tokenDecimals
-        ethAmount = (tokenAmount * tokenToEthPrice) / (10 ** config.tokenDecimals);
+        (TokenConfig memory config, uint256 price) = _getValidatedConfig(token);
+        ethAmount = (tokenAmount * price) / (10 ** config.tokenDecimals);
     }
 
     /**
@@ -172,56 +170,42 @@ contract TokenPriceOracle is ITokenPriceOracle, Ownable {
     // =============================================================
 
     /**
-     * @notice 添加支持的代币（手动价格模式）
-     * @param token 代币地址
-     * @param tokenDecimals 代币精度
-     * @param initialPrice 初始价格（18 位精度，表示 1 个代币最小单位值多少 wei）
+     * @dev 内部添加代币配置
      */
-    function addToken(
+    function _addToken(
         address token,
         uint8 tokenDecimals,
-        uint256 initialPrice
-    ) external onlyOwner {
+        bool useChainlink,
+        address chainlinkFeed,
+        uint256 manualPrice
+    ) internal {
         if (token == address(0)) revert ZeroAddress();
-        if (initialPrice == 0) revert InvalidPrice();
-        
         tokenConfigs[token] = TokenConfig({
             supported: true,
-            useChainlink: false,
-            chainlinkFeed: address(0),
+            useChainlink: useChainlink,
+            chainlinkFeed: chainlinkFeed,
             tokenDecimals: tokenDecimals,
-            manualPrice: initialPrice,
+            manualPrice: manualPrice,
             lastUpdateTime: block.timestamp
         });
-        
         emit TokenSupportUpdated(token, true);
+    }
+
+    /**
+     * @notice 添加支持的代币（手动价格模式）
+     */
+    function addToken(address token, uint8 tokenDecimals, uint256 initialPrice) external onlyOwner {
+        if (initialPrice == 0) revert InvalidPrice();
+        _addToken(token, tokenDecimals, false, address(0), initialPrice);
         emit TokenPriceUpdated(token, initialPrice);
     }
 
     /**
      * @notice 添加支持的代币（Chainlink 模式）
-     * @param token 代币地址
-     * @param tokenDecimals 代币精度
-     * @param chainlinkFeed Chainlink 价格源地址
      */
-    function addTokenWithChainlink(
-        address token,
-        uint8 tokenDecimals,
-        address chainlinkFeed
-    ) external onlyOwner {
-        if (token == address(0)) revert ZeroAddress();
+    function addTokenWithChainlink(address token, uint8 tokenDecimals, address chainlinkFeed) external onlyOwner {
         if (chainlinkFeed == address(0)) revert ZeroAddress();
-        
-        tokenConfigs[token] = TokenConfig({
-            supported: true,
-            useChainlink: true,
-            chainlinkFeed: chainlinkFeed,
-            tokenDecimals: tokenDecimals,
-            manualPrice: 0,
-            lastUpdateTime: block.timestamp
-        });
-        
-        emit TokenSupportUpdated(token, true);
+        _addToken(token, tokenDecimals, true, chainlinkFeed, 0);
         emit ChainlinkFeedUpdated(token, chainlinkFeed);
     }
 

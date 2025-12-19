@@ -251,7 +251,7 @@ contract BlogHub is
 
         // 默认参数
         platformTreasury = _treasury;
-        platformFeeBps = 250; // 默认 2.5% 平台抽成
+        platformFeeBps = 1000; // 默认 10% 平台抽成
         _setDefaultRoyalty(_initialOwner, 500); // 默认 5% 版税
         nextArticleId = 1; // 从 1 开始 ID（避免 id=0 的歧义）
         minActionValue = 0.00002 ether; // 默认约 0.01 USD (价格500USD) 防 Spam
@@ -289,6 +289,21 @@ contract BlogHub is
         if (!valid) revert SessionKeyValidationFailed();
     }
 
+    function _safeTransferETH(address to, uint256 amount) internal {
+        (bool success, ) = payable(to).call{value: amount}("");
+        if (!success) revert TransferFailed();
+    }
+
+    function _validateStringParams(
+        string calldata originalAuthor,
+        string calldata title,
+        string calldata summary
+    ) internal pure {
+        if (bytes(originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
+        if (bytes(title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
+        if (bytes(summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
+    }
+
     function _validatePublishParams(
         uint96 royaltyBps,
         string calldata originalAuthor,
@@ -296,26 +311,41 @@ contract BlogHub is
         string calldata summary
     ) internal pure {
         if (royaltyBps > 10000) revert RoyaltyTooHigh();
-        if (bytes(originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
-        if (bytes(title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
-        if (bytes(summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
+        _validateStringParams(originalAuthor, title, summary);
     }
 
-    function _executeFollow(address follower, address target, bool status) internal {
-        emit FollowStatusChanged(follower, target, status);
-    }
 
     /**
-     * @dev 发出 ArticlePublished 事件（独立函数避免 Stack Too Deep）
+     * @dev 创建文章的核心逻辑（内部函数，避免代码重复）
      */
-    function _emitArticlePublished(
-        uint256 articleId,
+    function _createArticle(
         address publisher,
-        PublishParams calldata params,
-        address trueAuthor
-    ) internal {
+        PublishParams calldata params
+    ) internal returns (uint256 newId) {
+        if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
+        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
+        if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
+
+        address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : publisher;
+        newId = nextArticleId++;
+
+        articles[newId] = Article({
+            arweaveHash: params.arweaveId,
+            categoryId: uint16(params.categoryId),
+            timestamp: uint64(block.timestamp),
+            author: trueAuthor,
+            collectPrice: uint96(params.collectPrice),
+            maxCollectSupply: uint32(params.maxCollectSupply),
+            collectCount: 1,
+            originality: params.originality
+        });
+        arweaveIdToArticleId[params.arweaveId] = newId;
+
+        _mint(publisher, newId, 1, "");
+        _setTokenRoyalty(newId, trueAuthor, params.royaltyBps);
+
         emit ArticlePublished(
-            articleId,
+            newId,
             publisher,
             params.categoryId,
             params.arweaveId,
@@ -346,9 +376,7 @@ contract BlogHub is
         if (article.author != sender) revert NotArticleAuthor();
         
         // 验证参数
-        if (bytes(params.originalAuthor).length > MAX_ORIGINAL_AUTHOR_LENGTH) revert OriginalAuthorTooLong();
-        if (bytes(params.title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
-        if (bytes(params.summary).length > MAX_SUMMARY_LENGTH) revert SummaryTooLong();
+        _validateStringParams(params.originalAuthor, params.title, params.summary);
         if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
         
         // 更新文章信息
@@ -402,16 +430,11 @@ contract BlogHub is
         if (amount > 0) {
             // 资金分配
             if (_score == SCORE_DISLIKE) {
-                // 不喜欢时，金额归平台（直接转账）
-                (bool success, ) = payable(platformTreasury).call{value: amount}("");
-                if (!success) revert TransferFailed();
+                _safeTransferETH(platformTreasury, amount);
             } else {
-                address validReferrer = _validateReferrer(_referrer, sender, articleAuthor);
+                address validReferrer = _validateReferrer(_referrer, sender, articleAuthor, address(0));
                 uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
-                if (authorShare > 0) {
-                    (bool success, ) = payable(articleAuthor).call{value: authorShare}("");
-                    if (!success) revert TransferFailed();
-                }
+                if (authorShare > 0) _safeTransferETH(articleAuthor, authorShare);
             }
 
             emit ArticleEvaluated(
@@ -465,13 +488,9 @@ contract BlogHub is
         _mint(sender, _articleId, 1, "");
 
         // 资金分配
-        address validReferrer = _validateReferrer(_referrer, sender, articleAuthor);
+        address validReferrer = _validateReferrer(_referrer, sender, articleAuthor, address(0));
         uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
-        
-        if (authorShare > 0) {
-            (bool success, ) = payable(articleAuthor).call{value: authorShare}("");
-            if (!success) revert TransferFailed();
-        }
+        if (authorShare > 0) _safeTransferETH(articleAuthor, authorShare);
 
         emit ArticleCollected(
             _articleId,
@@ -515,18 +534,10 @@ contract BlogHub is
 
         uint256 remaining = _distributePlatformAndReferralFees(amount, validReferrer);
 
-        uint256 halfShare = remaining / 2;
-        uint256 commenterShare = remaining - halfShare;
-
-        if (halfShare > 0) {
-            // 作者份额给 trueAuthor
-            (bool success1, ) = payable(articleAuthor).call{value: halfShare}("");
-            if (!success1) revert TransferFailed();
-        }
-        if (commenterShare > 0) {
-            (bool success2, ) = payable(_commenter).call{value: commenterShare}("");
-            if (!success2) revert TransferFailed();
-        }
+        uint256 authorShare = remaining / 2;
+        if (authorShare > 0) _safeTransferETH(articleAuthor, authorShare);
+        uint256 commenterShare = remaining - authorShare;
+        if (commenterShare > 0) _safeTransferETH(_commenter, commenterShare);
 
         emit CommentLiked(
             _articleId,
@@ -540,15 +551,6 @@ contract BlogHub is
     /**
      * @dev 校验推荐人地址有效性
      */
-    function _validateReferrer(
-        address referrer,
-        address sender,
-        address invalid0
-    ) internal pure returns (address) {
-        if (referrer == address(0) || referrer == sender || referrer == invalid0) return address(0);
-        return referrer;
-    }
-
     function _validateReferrer(
         address referrer,
         address sender,
@@ -577,13 +579,9 @@ contract BlogHub is
             ? (_amount * 1000) / 10000
             : 0;
 
-        if (platformShare > 0) {
-            (bool success1, ) = payable(platformTreasury).call{value: platformShare}("");
-            if (!success1) revert TransferFailed();
-        }
+        if (platformShare > 0) _safeTransferETH(platformTreasury, platformShare);
         if (referralShare > 0) {
-            (bool success2, ) = payable(_referrer).call{value: referralShare}("");
-            if (!success2) revert TransferFailed();
+            _safeTransferETH(_referrer, referralShare);
             emit ReferralPaid(_referrer, referralShare);
         }
 
@@ -598,43 +596,13 @@ contract BlogHub is
 
     /**
      * @dev 发布文章 (铸造 NFT)
-     * 支持 meta-transactions (使用 _msgSender())
      * @param params 发布参数结构体（避免 Stack Too Deep）
      */
     function publish(
         PublishParams calldata params
     ) external whenNotPaused returns (uint256) {
         _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary);
-
-        if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
-        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
-        if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
-
-        address publisher = _msgSender();
-        address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : publisher;
-        uint256 newId = nextArticleId++;
-
-        articles[newId] = Article({
-            arweaveHash: params.arweaveId,
-            categoryId: uint16(params.categoryId),
-            timestamp: uint64(block.timestamp),
-            author: trueAuthor,
-            collectPrice: uint96(params.collectPrice),
-            maxCollectSupply: uint32(params.maxCollectSupply),
-            collectCount: 1,
-            originality: params.originality
-        });
-        
-        // 建立 ArweaveID 到 ArticleID 的映射
-        arweaveIdToArticleId[params.arweaveId] = newId;
-
-        _mint(publisher, newId, 1, "");
-
-        address royaltyReceiver = trueAuthor;
-        _setTokenRoyalty(newId, royaltyReceiver, params.royaltyBps);
-
-        _emitArticlePublished(newId, publisher, params, trueAuthor);
-        return newId;
+        return _createArticle(_msgSender(), params);
     }
 
     /**
@@ -677,7 +645,7 @@ contract BlogHub is
      * @dev 关注用户
      */
     function follow(address _target, bool _status) external whenNotPaused {
-        _executeFollow(_msgSender(), _target, _status);
+        emit FollowStatusChanged(_msgSender(), _target, _status);
     }
 
     /**
@@ -826,13 +794,13 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external payable nonReentrant whenNotPaused {
+        if (msg.value == 0) revert SpamProtection();
         {
             ISessionKeyManager manager = _requireSessionKeyManager();
             bytes4 selector = BlogHub.likeComment.selector;
             bytes memory callData = abi.encodeWithSelector(selector, _articleId, _commentId, _commenter, _referrer);
             _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, msg.value, deadline, signature);
         }
-        if (msg.value == 0) revert SpamProtection();
         _executeLikeComment(owner, _articleId, _commentId, _commenter, _referrer, msg.value);
         emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.likeComment.selector);
     }
@@ -854,7 +822,7 @@ contract BlogHub is
             bytes memory callData = abi.encodeWithSelector(selector, _target, _status);
             _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
         }
-        _executeFollow(owner, _target, _status);
+        emit FollowStatusChanged(owner, _target, _status);
         emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.follow.selector);
     }
 
@@ -868,23 +836,16 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external whenNotPaused {
-        // Scope block to limit stack usage for session key validation
         {
             ISessionKeyManager manager = _requireSessionKeyManager();
             bytes4 selector = BlogHub.editArticle.selector;
-            bytes memory callData = _encodeEditArticleCallData(params);
+            bytes memory callData = abi.encodeWithSelector(BlogHub.editArticle.selector, params);
             _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
         }
-
         _executeEditArticle(owner, params);
         emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.editArticle.selector);
     }
 
-    function _encodeEditArticleCallData(
-        EditArticleParams calldata params
-    ) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(BlogHub.editArticle.selector, params);
-    }
 
     /**
      * @notice 使用 Session Key 发布文章（无感交互）
@@ -896,47 +857,17 @@ contract BlogHub is
         uint256 deadline,
         bytes calldata signature
     ) external whenNotPaused returns (uint256) {
-        // Scope block to limit stack usage for session key validation
         {
             ISessionKeyManager manager = _requireSessionKeyManager();
             _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary);
             bytes4 selector = BlogHub.publish.selector;
-            bytes memory callData = _encodePublishCallData(params);
-            _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, 0, deadline, signature);
+            _validateAndUseSessionKey(manager, owner, sessionKey, selector, abi.encodeWithSelector(selector, params), 0, deadline, signature);
         }
-
-        if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
-        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
-        if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
-
-        address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : owner;
-        uint256 newId = nextArticleId++;
-
-        articles[newId] = Article({
-            arweaveHash: params.arweaveId,
-            categoryId: uint16(params.categoryId),
-            timestamp: uint64(block.timestamp),
-            author: trueAuthor,
-            collectPrice: uint96(params.collectPrice),
-            maxCollectSupply: uint32(params.maxCollectSupply),
-            collectCount: 1,
-            originality: params.originality
-        });
-        arweaveIdToArticleId[params.arweaveId] = newId;
-
-        _mint(owner, newId, 1, "");
-        _setTokenRoyalty(newId, trueAuthor, params.royaltyBps);
-        _emitArticlePublished(newId, owner, params, trueAuthor);
+        uint256 newId = _createArticle(owner, params);
         emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.publish.selector);
-
         return newId;
     }
 
-    function _encodePublishCallData(
-        PublishParams calldata params
-    ) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(BlogHub.publish.selector, params);
-    }
 
     // =============================================================
     //                      底层 Override (必须实现)

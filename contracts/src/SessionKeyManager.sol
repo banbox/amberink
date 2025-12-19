@@ -353,10 +353,9 @@ contract SessionKeyManager is ISessionKeyManager, EIP712, ReentrancyGuard {
         address sessionKey
     ) external view override returns (bool) {
         SessionKeyData storage data = _sessionKeys[owner][sessionKey];
-        if (data.sessionKey == address(0)) return false;
-        if (block.timestamp < data.validAfter) return false;
-        if (block.timestamp > data.validUntil) return false;
-        return true;
+        return data.sessionKey != address(0) && 
+               block.timestamp >= data.validAfter && 
+               block.timestamp <= data.validUntil;
     }
 
     /**

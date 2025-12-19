@@ -11,6 +11,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {CallDataParser} from "./libraries/CallDataParser.sol";
 
 /**
  * @title BlogTokenPaymaster
@@ -149,65 +150,49 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     //                      代币管理
     // =============================================================
 
-    /**
-     * @notice 存入代币到自己的账户
-     * @param token 代币地址
-     * @param amount 存入数量
-     */
-    function depositToken(address token, uint256 amount) external nonReentrant {
-        if (amount == 0) revert ZeroAmount();
-        if (!supportedTokens[token]) revert TokenNotSupported();
-        
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        tokenBalanceOf[msg.sender][token] += amount;
-        
-        emit TokenDeposited(msg.sender, token, amount);
-    }
-
-    /**
-     * @notice 为指定账户存入代币
-     * @param account 目标账户地址
-     * @param token 代币地址
-     * @param amount 存入数量
-     */
-    function depositTokenTo(address account, address token, uint256 amount) external nonReentrant {
+    function _depositToken(address account, address token, uint256 amount) internal {
         if (amount == 0) revert ZeroAmount();
         if (account == address(0)) revert ZeroAddress();
         if (!supportedTokens[token]) revert TokenNotSupported();
-        
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         tokenBalanceOf[account][token] += amount;
-        
         emit TokenDeposited(account, token, amount);
     }
 
     /**
+     * @notice 存入代币到自己的账户
+     */
+    function depositToken(address token, uint256 amount) external nonReentrant {
+        _depositToken(msg.sender, token, amount);
+    }
+
+    /**
+     * @notice 为指定账户存入代币
+     */
+    function depositTokenTo(address account, address token, uint256 amount) external nonReentrant {
+        _depositToken(account, token, amount);
+    }
+
+    function _withdrawToken(address account, address token, uint256 amount) internal {
+        if (amount == 0) revert ZeroAmount();
+        if (tokenBalanceOf[account][token] < amount) revert InsufficientTokenBalance();
+        tokenBalanceOf[account][token] -= amount;
+        IERC20(token).safeTransfer(account, amount);
+        emit TokenWithdrawn(account, token, amount);
+    }
+
+    /**
      * @notice 提取代币
-     * @param token 代币地址
-     * @param amount 提取数量
      */
     function withdrawToken(address token, uint256 amount) external nonReentrant {
-        if (amount == 0) revert ZeroAmount();
-        if (tokenBalanceOf[msg.sender][token] < amount) revert InsufficientTokenBalance();
-        
-        tokenBalanceOf[msg.sender][token] -= amount;
-        IERC20(token).safeTransfer(msg.sender, amount);
-        
-        emit TokenWithdrawn(msg.sender, token, amount);
+        _withdrawToken(msg.sender, token, amount);
     }
 
     /**
      * @notice 提取全部代币
-     * @param token 代币地址
      */
     function withdrawAllToken(address token) external nonReentrant {
-        uint256 amount = tokenBalanceOf[msg.sender][token];
-        if (amount == 0) revert ZeroAmount();
-        
-        tokenBalanceOf[msg.sender][token] = 0;
-        IERC20(token).safeTransfer(msg.sender, amount);
-        
-        emit TokenWithdrawn(msg.sender, token, amount);
+        _withdrawToken(msg.sender, token, tokenBalanceOf[msg.sender][token]);
     }
 
     // =============================================================
@@ -252,8 +237,15 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev 检查并扣除用户代币余额
+     */
+    function _chargeToken(address account, address token, uint256 amount) internal {
+        if (tokenBalanceOf[account][token] < amount) revert InsufficientTokenBalance();
+        tokenBalanceOf[account][token] -= amount;
+    }
+
+    /**
      * @dev 普通代币模式验证
-     * 从 userOp.sender 扣除代币
      */
     function _validateNormalTokenMode(
         PackedUserOperation calldata userOp,
@@ -262,16 +254,7 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         uint256 requiredTokenAmount
     ) internal returns (bytes memory context, uint256 validationData) {
         address sender = userOp.sender;
-        
-        // 检查用户代币余额
-        if (tokenBalanceOf[sender][token] < requiredTokenAmount) {
-            revert InsufficientTokenBalance();
-        }
-        
-        // 预扣代币
-        tokenBalanceOf[sender][token] -= requiredTokenAmount;
-        
-        // context: [mode (1)][token (20)][payer (20)][tokenAmount (32)][userOpHash (32)]
+        _chargeToken(sender, token, requiredTokenAmount);
         context = abi.encode(uint8(0), token, sender, requiredTokenAmount, userOpHash);
         validationData = 0;
     }
@@ -320,7 +303,7 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         
         // 验证 Session Key 在 SessionKeyManager 中的有效性
         if (address(sessionKeyManager) != address(0)) {
-            (address target, bytes4 selector) = _extractTargetAndSelector(userOp.callData);
+            (address target, bytes4 selector) = CallDataParser.extractTargetAndSelector(userOp.callData);
             
             bool isValid = sessionKeyManager.validateSessionKey(
                 owner,
@@ -333,40 +316,9 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
             if (!isValid) revert InvalidSessionKey();
         }
         
-        // 检查 owner 的代币余额
-        if (tokenBalanceOf[owner][token] < requiredTokenAmount) {
-            revert InsufficientTokenBalance();
-        }
-        
-        // 预扣代币
-        tokenBalanceOf[owner][token] -= requiredTokenAmount;
-        
-        // context: [mode (1)][token (20)][owner (20)][sessionKey (20)][tokenAmount (32)][userOpHash (32)]
+        _chargeToken(owner, token, requiredTokenAmount);
         context = abi.encode(uint8(1), token, owner, sessionKey, requiredTokenAmount, userOpHash);
         validationData = 0;
-    }
-
-    /**
-     * @dev 从 callData 中提取目标合约地址和函数选择器
-     */
-    function _extractTargetAndSelector(bytes calldata callData) internal pure returns (address target, bytes4 selector) {
-        if (callData.length < 4) {
-            return (address(0), bytes4(0));
-        }
-        
-        selector = bytes4(callData[:4]);
-        
-        // 检查是否是 execute 函数 (0xb61d27f6)
-        if (selector == bytes4(0xb61d27f6) && callData.length >= 100) {
-            target = address(uint160(uint256(bytes32(callData[4:36]))));
-            uint256 funcOffset = uint256(bytes32(callData[68:100]));
-            uint256 funcStart = 4 + funcOffset;
-            if (callData.length >= funcStart + 36) {
-                selector = bytes4(callData[funcStart + 32:funcStart + 36]);
-            }
-        } else {
-            target = address(0);
-        }
     }
 
     /**
@@ -388,6 +340,21 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev 处理代币退款的通用逻辑
+     */
+    function _processTokenRefund(
+        address account,
+        address token,
+        uint256 preCharged,
+        uint256 actualCost
+    ) internal returns (uint256) {
+        if (preCharged > actualCost) {
+            tokenBalanceOf[account][token] += preCharged - actualCost;
+        }
+        return actualCost;
+    }
+
+    /**
      * @dev 普通代币模式的 postOp 处理
      */
     function _postOpNormalTokenMode(
@@ -398,19 +365,10 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         (, address token, address payer, uint256 preChargedTokenAmount, bytes32 userOpHash) = 
             abi.decode(context, (uint8, address, address, uint256, bytes32));
         
-        // 计算实际消耗的代币数量
-        uint256 actualTokenCost = _calculateTokenCost(token, actualGasCost);
-        
         if (opMode == PostOpMode.opReverted) {
-            // 操作回滚，全额退款
             tokenBalanceOf[payer][token] += preChargedTokenAmount;
         } else {
-            // 退还多余的代币
-            if (preChargedTokenAmount > actualTokenCost) {
-                uint256 refund = preChargedTokenAmount - actualTokenCost;
-                tokenBalanceOf[payer][token] += refund;
-            }
-            
+            uint256 actualTokenCost = _processTokenRefund(payer, token, preChargedTokenAmount, _calculateTokenCost(token, actualGasCost));
             emit TokenGasPaid(payer, token, actualTokenCost, actualGasCost, userOpHash);
         }
     }
@@ -426,18 +384,10 @@ contract BlogTokenPaymaster is IPaymaster, EIP712, ReentrancyGuard, Ownable {
         (, address token, address owner, address sessionKey, uint256 preChargedTokenAmount, bytes32 userOpHash) = 
             abi.decode(context, (uint8, address, address, address, uint256, bytes32));
         
-        uint256 actualTokenCost = _calculateTokenCost(token, actualGasCost);
-        
         if (opMode == PostOpMode.opReverted) {
-            // 操作回滚，全额退款
             tokenBalanceOf[owner][token] += preChargedTokenAmount;
         } else {
-            // 退还多余的代币
-            if (preChargedTokenAmount > actualTokenCost) {
-                uint256 refund = preChargedTokenAmount - actualTokenCost;
-                tokenBalanceOf[owner][token] += refund;
-            }
-            
+            uint256 actualTokenCost = _processTokenRefund(owner, token, preChargedTokenAmount, _calculateTokenCost(token, actualGasCost));
             emit SessionKeyTokenGasPaid(owner, sessionKey, token, actualTokenCost, actualGasCost, userOpHash);
         }
     }
