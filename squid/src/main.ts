@@ -68,7 +68,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 articleId: 0n,
                 author: await ensureUser(UNKNOWN_USER_ID, timestamp),
                 originalAuthor: null,
-                trueAuthor: null,
                 title: '',
                 summary: null,
                 categoryId: 0n,
@@ -134,7 +133,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         originalAuthor: event.originalAuthor || null,
                         title: event.title,
                         summary: event.summary || null,
-                        trueAuthor: event.trueAuthor.toLowerCase(),
                         categoryId: event.categoryId,
                         collectPrice: event.collectPrice,
                         maxCollectSupply: event.maxCollectSupply,
@@ -156,7 +154,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article.originalAuthor = event.originalAuthor || null
                     article.title = event.title
                     article.summary = event.summary || null
-                    article.trueAuthor = event.trueAuthor.toLowerCase()
                     article.categoryId = event.categoryId
                     article.collectPrice = event.collectPrice
                     article.maxCollectSupply = event.maxCollectSupply

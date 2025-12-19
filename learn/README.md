@@ -982,3 +982,18 @@ Claude: 重复3次，减少约220行代码冗余
 @help.md   请针对squid下的所有代码文件，帮我进行逐个检查；发现冗余或相似的代码片段时，帮我提取为子函数，确保遵循DRY原则，不要重复；并且，如果有只调用其他函数的一行body的函数，也应该删除，引用地方直接改为body内的那行；核心原则是尽量减少代码行数，方便维护。另外根据常见的SubSquid最佳实践，考虑每个函数的实际业务实现是否有可优化空间；可优化的地方在保持业务逻辑大致不变的情况下直接优化   
 Claude：减少约200行冗余代码
 
+#### 2025-12-19 12:30  冗余页面删除
+@help.md 帮我把frontend\src\routes\settings\+page.svelte中的published合并到 frontend\src\routes\library\+page.svelte页面中吧；draft删除掉不要；保持代码容易维护，避免冗余代码  
+Claude: 已完成
+开发者：@help.md frontend\src\lib\components\WalletButton.svelte 钱包按钮，点击展开时，不应该显示完整的地址；frontend\src\routes\profile\+page.svelte 个人信息页面，在305行，应该显示完整地址  
+Claude：完成
+
+#### 2025-12-19 13:20  合约冗余字段删除
+@contracts.md @help.md @README.md 当前是一个完全去中心化的博客应用；支持ERC20代币发布文章；也支持代为发布文章，记录钱包地址为真是作者的钱包地址；目前已经在合约和SubSquid中支持了author和trueAuthor两个字段，分别记录作者和真是作者的钱包；目前我在考虑是否真的有必要使用两个字段？目前在SubSquid中是按author索引的；请你作为高级产品专家和区块链专家，根据当前项目的实际需求，以及整体架构考虑，阅读关键代码，了解业务逻辑，帮我分析是应该保留2个字段还是使用1个字段？  
+Claude：当前NFT给发布者，版税和权限归trueAuthor；建议保留现状，避免丢失代发关系，以及无法支持代发平台抽成等  
+开发者：合约实现有误，正确的行为应该是版税、NFT、编辑权限都归真实作者；且应该按真实作者索引查询，暂时也不需要给代发平台抽成；合约只在本地部署了，修改成本很低；请你重新评估；如果有必要，则删除event中的trueAuthor，然后当publish时传入了trueAuthor则记录到author中，否则直接将当前地址记录到author中。同时对应修改SubSquid中的相关代码，确保逻辑正确  
+Claude：修改完成
+
+#### 2025-12-19 13:56  合约字段类型优化
+@help.md 当前智能合约中有很多字段的类型和顺序可能使用不够准确，比如在Article中实际categoryId用uint16足以，但在调用时传入用的uint64；可能还有很多其他类似的问题，请你作为高级智能合约专家，帮我分析这些是否应该修改，如果应该，全部帮我改为更符合最佳实践的方式。针对 contracts\src 下的合约代码都进行分析  
+Claude: 修改完成

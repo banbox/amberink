@@ -302,7 +302,7 @@
 						{user?.nickname || shortAddress(walletAddress || '')}
 					</h1>
 					{#if user?.nickname}
-						<p class="text-sm text-gray-500">{shortAddress(walletAddress || '')}</p>
+						<p class="text-sm text-gray-500">{walletAddress}</p>
 					{/if}
 					{#if user}
 						<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">

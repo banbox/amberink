@@ -27,9 +27,9 @@
 		return getCoverImageUrl(arweaveId, true);
 	}
 
-	// Get author ID from article data (trueAuthor takes precedence for actual author)
+	// Get author ID from article data
 	const articleAuthorId = $derived(
-		(article.author?.id || article.trueAuthor || '').toLowerCase()
+		(article.author?.id || '').toLowerCase()
 	);
 
 	// Use fetched authorData if available, fallback to article.author

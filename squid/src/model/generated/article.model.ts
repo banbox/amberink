@@ -23,9 +23,6 @@ export class Article {
     @StringColumn_({nullable: true})
     originalAuthor!: string | undefined | null
 
-    @StringColumn_({nullable: true})
-    trueAuthor!: string | undefined | null
-
     @StringColumn_({nullable: false})
     title!: string
 

@@ -181,7 +181,7 @@
 				</div>
 
 				{#if user?.nickname}
-					<p class="text-sm text-gray-500">{shortAddress(authorId)}</p>
+					<p class="text-sm text-gray-500">{authorId}</p>
 				{/if}
 
 				{#if user}

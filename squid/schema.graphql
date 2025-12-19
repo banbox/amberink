@@ -19,9 +19,8 @@ type User @entity {
 type Article @entity {
   id: ID!                          # arweaveId (Irys 可变文件夹的 manifest ID，作为主键)
   articleId: BigInt!               # 链上 articleId（用于合约交互）
-  author: User!                    # 发布者
-  originalAuthor: String           # 原始作者名称（字符串）
-  trueAuthor: String               # 真实作者地址 (address)
+  author: User!                    # 作者（真实作者，版税/NFT/编辑权限归属）
+  originalAuthor: String           # 原始作者名称（字符串，用于转载场景）
   title: String!                   # 文章标题
   summary: String                  # 文章摘要
   categoryId: BigInt!

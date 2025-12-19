@@ -13,13 +13,13 @@ contract BlogHubTest is BaseTest {
     event ArticlePublished(
         uint256 indexed articleId,
         address indexed author,
-        uint256 indexed categoryId,
+        uint16 indexed categoryId,
         string arweaveId,
         string originalAuthor,
         string title,
-        address trueAuthor,
-        uint256 collectPrice,
-        uint256 maxCollectSupply,
+        string summary,
+        uint96 collectPrice,
+        uint32 maxCollectSupply,
         BlogHub.Originality originality
     );
 
@@ -61,7 +61,7 @@ contract BlogHubTest is BaseTest {
         assertTrue(blogHub.hasRole(blogHub.UPGRADER_ROLE(), owner));
         assertTrue(blogHub.hasRole(blogHub.PAUSER_ROLE(), owner));
         assertEq(blogHub.platformTreasury(), treasury);
-        assertEq(blogHub.platformFeeBps(), 250);
+        assertEq(blogHub.platformFeeBps(), 1000); // 默认 10% 平台抽成
         assertEq(blogHub.nextArticleId(), 1);
     }
 
@@ -69,13 +69,13 @@ contract BlogHubTest is BaseTest {
 
     function test_Publish_Success() public {
         string memory arweaveHash = "test-arweave-hash-123";
-        uint64 categoryId = 1;
+        uint16 categoryId = 1;
         uint96 royaltyBps = 500;
         string memory originalAuthor = "";
         string memory title = "Test Article Title";
         address trueAuthor = address(0);
-        uint256 collectPrice = 0.01 ether;
-        uint256 maxCollectSupply = 100;
+        uint96 collectPrice = 0.01 ether;
+        uint32 maxCollectSupply = 100;
         BlogHub.Originality originality = BlogHub.Originality.Original;
 
         vm.expectEmit(true, true, true, true);
@@ -86,7 +86,7 @@ contract BlogHubTest is BaseTest {
             arweaveHash,
             originalAuthor,
             title,
-            user1,
+            "",  // summary
             collectPrice,
             maxCollectSupply,
             originality
@@ -137,13 +137,13 @@ contract BlogHubTest is BaseTest {
 
     function test_Publish_WithOriginalAuthor() public {
         string memory arweaveHash = "test-arweave-hash-456";
-        uint64 categoryId = 2;
+        uint16 categoryId = 2;
         uint96 royaltyBps = 500;
         string memory originalAuthor = "RealAuthor.eth";
         string memory title = "Another Article";
         address trueAuthor = address(0);
-        uint256 collectPrice = 0.01 ether;
-        uint256 maxCollectSupply = 100;
+        uint96 collectPrice = 0.01 ether;
+        uint32 maxCollectSupply = 100;
         BlogHub.Originality originality = BlogHub.Originality.Original;
 
         vm.expectEmit(true, true, true, true);
@@ -154,7 +154,7 @@ contract BlogHubTest is BaseTest {
             arweaveHash,
             originalAuthor,
             title,
-            user1,
+            "",  // summary
             collectPrice,
             maxCollectSupply,
             originality
@@ -260,8 +260,8 @@ contract BlogHubTest is BaseTest {
         // 验证 NFT 铸造给评价者
         assertEq(blogHub.balanceOf(user2, articleId), 0);
 
-        // 验证资金直接转账 (2.5% 平台费)
-        uint256 platformFee = (paymentAmount * 250) / 10000;
+        // 验证资金直接转账 (10% 平台费)
+        uint256 platformFee = (paymentAmount * 1000) / 10000;
         uint256 authorShare = paymentAmount - platformFee;
         
         assertEq(treasury.balance, treasuryBalanceBefore + platformFee);
@@ -375,8 +375,8 @@ contract BlogHubTest is BaseTest {
         // 验证 NFT 铸造
         assertEq(blogHub.balanceOf(user2, articleId), 0);
 
-        // 验证资金直接转账
-        uint256 platformFee = (paymentAmount * 250) / 10000;
+        // 验证资金直接转账 (10% 平台费)
+        uint256 platformFee = (paymentAmount * 1000) / 10000;
         uint256 remaining = paymentAmount - platformFee;
         uint256 halfShare = remaining / 2;
         uint256 commenterShare = remaining - halfShare;

@@ -45,9 +45,6 @@ contract BlogHub is
     error InsufficientPayment();
     error MaxSupplyReached();
     error CollectNotEnabled();
-    error CollectPriceTooHigh();
-    error CategoryIdTooHigh();
-    error MaxCollectSupplyTooHigh();
     error NotArticleAuthor();
     
     // 定义常量：最大评论长度（字节）
@@ -71,14 +68,14 @@ contract BlogHub is
     // --- 参数结构体（避免 Stack Too Deep）---
     struct PublishParams {
         string arweaveId;
-        uint64 categoryId;
+        uint16 categoryId;
         uint96 royaltyBps;
         string originalAuthor;
         string title;
         string summary;
         address trueAuthor;
-        uint256 collectPrice;
-        uint256 maxCollectSupply;
+        uint96 collectPrice;
+        uint32 maxCollectSupply;
         Originality originality;
     }
 
@@ -87,7 +84,7 @@ contract BlogHub is
         string originalAuthor;
         string title;
         string summary;
-        uint64 categoryId;
+        uint16 categoryId;
     }
 
     // --- 结构体 ---
@@ -144,14 +141,13 @@ contract BlogHub is
     event ArticlePublished(
         uint256 indexed articleId,
         address indexed author,
-        uint256 indexed categoryId,
+        uint16 indexed categoryId,
         string arweaveId,       // Irys 可变文件夹的 manifest ID
         string originalAuthor,
         string title,
         string summary,
-        address trueAuthor,
-        uint256 collectPrice,
-        uint256 maxCollectSupply,
+        uint96 collectPrice,
+        uint32 maxCollectSupply,
         Originality originality
     );
 
@@ -213,7 +209,7 @@ contract BlogHub is
         string originalAuthor,
         string title,
         string summary,
-        uint64 categoryId
+        uint16 categoryId
     );
 
     // 用户资料更新事件
@@ -322,37 +318,33 @@ contract BlogHub is
         address publisher,
         PublishParams calldata params
     ) internal returns (uint256 newId) {
-        if (params.collectPrice > type(uint96).max) revert CollectPriceTooHigh();
-        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
-        if (params.maxCollectSupply > type(uint32).max) revert MaxCollectSupplyTooHigh();
-
-        address trueAuthor = params.trueAuthor != address(0) ? params.trueAuthor : publisher;
+        address author = params.trueAuthor != address(0) ? params.trueAuthor : publisher;
         newId = nextArticleId++;
 
         articles[newId] = Article({
             arweaveHash: params.arweaveId,
-            categoryId: uint16(params.categoryId),
+            categoryId: params.categoryId,
             timestamp: uint64(block.timestamp),
-            author: trueAuthor,
-            collectPrice: uint96(params.collectPrice),
-            maxCollectSupply: uint32(params.maxCollectSupply),
+            author: author,
+            collectPrice: params.collectPrice,
+            maxCollectSupply: params.maxCollectSupply,
             collectCount: 1,
             originality: params.originality
         });
         arweaveIdToArticleId[params.arweaveId] = newId;
 
-        _mint(publisher, newId, 1, "");
-        _setTokenRoyalty(newId, trueAuthor, params.royaltyBps);
+        // NFT、版税都归真实作者
+        _mint(author, newId, 1, "");
+        _setTokenRoyalty(newId, author, params.royaltyBps);
 
         emit ArticlePublished(
             newId,
-            publisher,
+            author,
             params.categoryId,
             params.arweaveId,
             params.originalAuthor,
             params.title,
             params.summary,
-            trueAuthor,
             params.collectPrice,
             params.maxCollectSupply,
             params.originality
@@ -377,10 +369,8 @@ contract BlogHub is
         
         // 验证参数
         _validateStringParams(params.originalAuthor, params.title, params.summary);
-        if (params.categoryId > type(uint16).max) revert CategoryIdTooHigh();
-        
         // 更新文章信息
-        article.categoryId = uint16(params.categoryId);
+        article.categoryId = params.categoryId;
         
         emit ArticleEdited(
             params.articleId,

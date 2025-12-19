@@ -338,9 +338,9 @@
 		}
 	}
 
-	// Get author ID from article data (trueAuthor takes precedence for actual author)
+	// Get author ID from article data
 	const articleAuthorId = $derived(
-		(article.author?.id || article.trueAuthor || '').toLowerCase()
+		(article.author?.id || '').toLowerCase()
 	);
 
 	// Use fetched authorData if available, fallback to article.author
@@ -355,9 +355,7 @@
 		authorData?.nickname ||
 		author.nickname ||
 		article.originalAuthor ||
-		(article.trueAuthor && article.trueAuthor !== '0x0000000000000000000000000000000000000000'
-			? shortAddress(article.trueAuthor)
-			: shortAddress(authorId)) ||
+		shortAddress(authorId) ||
 		'Anonymous'
 	);
 	// Get author avatar (prefer fetched data)
@@ -370,21 +368,11 @@
 				? article.originalAuthor.slice(0, 2).toUpperCase()
 				: (authorId ? authorId.slice(2, 4).toUpperCase() : '??'))
 	);
-	// Check if article is published on behalf of trueAuthor by author
-	const isProxyPublish = $derived(
-		article.trueAuthor && 
-		article.trueAuthor !== '0x0000000000000000000000000000000000000000' &&
-		authorId &&
-		article.trueAuthor.toLowerCase() !== authorId.toLowerCase()
-	);
 	const authorAddress = $derived(authorId);
 	const readingTime = $derived(articleContent?.content ? getReadingTime(articleContent.content) : 0);
-	const trueAuthorAddress = $derived(article.trueAuthor || authorId);
 	// Check if current user is the article author (for edit button)
 	const isAuthor = $derived(
-		walletAddress && 
-		(walletAddress.toLowerCase() === authorId.toLowerCase() ||
-		 (article.trueAuthor && walletAddress.toLowerCase() === article.trueAuthor.toLowerCase()))
+		walletAddress && walletAddress.toLowerCase() === authorId.toLowerCase()
 	);
 	const maxCollectSupply = $derived(BigInt(article.maxCollectSupply));
 	const collectAvailable = $derived(maxCollectSupply > 0n && BigInt(localCollectCount) < maxCollectSupply);
@@ -597,20 +585,9 @@
 			<div class="flex flex-1 flex-col">
 				<!-- Name & Follow -->
 				<div class="flex items-center gap-2">
-					{#if isProxyPublish}
-						<span class="group relative">
-							<a href={`/u/${trueAuthorAddress}`} class="font-medium text-gray-900 hover:underline">
-								{displayAuthor}
-							</a>
-							<span class="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
-								Published by {shortAddress(authorId)}
-							</span>
-						</span>
-					{:else}
-						<a href={`/u/${authorAddress}`} class="font-medium text-gray-900 hover:underline">
-							{displayAuthor}
-						</a>
-					{/if}
+					<a href={`/u/${authorAddress}`} class="font-medium text-gray-900 hover:underline">
+						{displayAuthor}
+					</a>
 					<span class="text-gray-300">·</span>
 					<button
 						type="button"

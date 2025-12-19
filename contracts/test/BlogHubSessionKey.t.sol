@@ -493,13 +493,13 @@ contract BlogHubSessionKeyTest is BaseTest {
     event ArticlePublished(
         uint256 indexed articleId,
         address indexed author,
-        uint256 indexed categoryId,
+        uint16 indexed categoryId,
         string arweaveId,
         string originalAuthor,
         string title,
-        address trueAuthor,
-        uint256 collectPrice,
-        uint256 maxCollectSupply,
+        string summary,
+        uint96 collectPrice,
+        uint32 maxCollectSupply,
         BlogHub.Originality originality
     );
 
@@ -548,7 +548,7 @@ contract BlogHubSessionKeyTest is BaseTest {
             params.arweaveId,
             params.originalAuthor,
             params.title,
-            user1,
+            params.summary,
             params.collectPrice,
             params.maxCollectSupply,
             params.originality
@@ -1211,7 +1211,7 @@ contract BlogHubSessionKeyTest is BaseTest {
                 title: "Test Title",
                 summary: "",
                 trueAuthor: address(0),
-                collectPrice: amount,
+                collectPrice: uint96(amount),
                 maxCollectSupply: 2,
                 originality: BlogHub.Originality.Original
             })

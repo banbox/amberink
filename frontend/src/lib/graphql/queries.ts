@@ -23,7 +23,6 @@ export const ARTICLES_QUERY = gql`
 				avatar
 			}
 			originalAuthor
-			trueAuthor
 			title
 			categoryId
 			collectPrice
@@ -55,7 +54,6 @@ export const ALL_ARTICLES_QUERY = gql`
 				avatar
 			}
 			originalAuthor
-			trueAuthor
 			title
 			categoryId
 			collectPrice
@@ -108,7 +106,6 @@ export interface ArticleData {
 		avatar?: string | null;
 	};
 	originalAuthor: string | null;
-	trueAuthor: string | null;
 	title: string;
 	categoryId: string;
 	collectPrice: string;
@@ -148,7 +145,6 @@ export const ARTICLE_BY_ID_QUERY = gql`
 				avatar
 			}
 			originalAuthor
-			trueAuthor
 			title
 			categoryId
 			royaltyBps
@@ -244,7 +240,6 @@ export interface ArticleDetailData {
 		avatar?: string | null;
 	};
 	originalAuthor: string | null;
-	trueAuthor: string | null;
 	title: string;
 	categoryId: string;
 	royaltyBps: number;
@@ -304,7 +299,6 @@ export const ARTICLES_BY_AUTHOR_QUERY = gql`
 				avatar
 			}
 			originalAuthor
-			trueAuthor
 			title
 			categoryId
 			collectPrice

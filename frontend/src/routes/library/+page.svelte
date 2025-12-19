@@ -3,6 +3,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import {
 		client,
+		ARTICLES_BY_AUTHOR_QUERY,
 		USER_LIKED_ARTICLES_QUERY,
 		USER_DISLIKED_ARTICLES_QUERY,
 		USER_COLLECTED_ARTICLES_QUERY,
@@ -15,11 +16,11 @@
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 
-	type TabType = 'liked' | 'disliked' | 'collected' | 'commented';
+	type TabType = 'published' | 'liked' | 'disliked' | 'collected' | 'commented';
 
 	const PAGE_SIZE = 20;
 
-	let activeTab = $state<TabType>('liked');
+	let activeTab = $state<TabType>('published');
 	let articles = $state<ArticleData[]>([]);
 	let loading = $state(false);
 	let hasMore = $state(true);
@@ -29,6 +30,7 @@
 	let connected = $derived(isWalletConnected());
 
 	const tabs: { key: TabType; label: () => string }[] = [
+		{ key: 'published', label: () => m.published() },
 		{ key: 'liked', label: () => m.liked() },
 		{ key: 'disliked', label: () => m.disliked() },
 		{ key: 'collected', label: () => m.collected() },
@@ -37,6 +39,8 @@
 
 	function getQueryForTab(tab: TabType) {
 		switch (tab) {
+			case 'published':
+				return ARTICLES_BY_AUTHOR_QUERY;
 			case 'liked':
 				return USER_LIKED_ARTICLES_QUERY;
 			case 'disliked':
@@ -56,13 +60,11 @@
 
 		try {
 			const query = getQueryForTab(activeTab);
-			const result = await client
-				.query(query, {
-					userId: walletAddress.toLowerCase(),
-					limit: PAGE_SIZE,
-					offset: currentOffset
-				})
-				.toPromise();
+			const variables = activeTab === 'published'
+				? { authorId: walletAddress.toLowerCase(), limit: PAGE_SIZE, offset: currentOffset }
+				: { userId: walletAddress.toLowerCase(), limit: PAGE_SIZE, offset: currentOffset };
+			
+			const result = await client.query(query, variables).toPromise();
 
 			if (result.error) {
 				throw new Error(result.error.message);
@@ -70,7 +72,9 @@
 
 			let newArticles: ArticleData[] = [];
 
-			if (activeTab === 'liked' || activeTab === 'disliked') {
+			if (activeTab === 'published') {
+				newArticles = result.data?.articles || [];
+			} else if (activeTab === 'liked' || activeTab === 'disliked') {
 				const evaluations = (result.data?.evaluations || []) as EvaluationWithArticle[];
 				newArticles = evaluations.map((e) => e.article);
 			} else if (activeTab === 'collected') {

@@ -268,21 +268,6 @@
 				/>
 			</div>
 
-			<!-- Summary -->
-			<div>
-				<label for="summary" class="mb-2 block text-sm font-medium text-gray-700">
-					Summary
-				</label>
-				<textarea
-					id="summary"
-					bind:value={summary}
-					placeholder="Brief summary of the article (max 512 bytes)"
-					rows="2"
-					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-					disabled={isSubmitting}
-				></textarea>
-			</div>
-
 			<!-- Category & Author -->
 			<div class="grid grid-cols-2 gap-4">
 				<div>
@@ -352,6 +337,21 @@
 					bind:value={postscript}
 					placeholder={m.optional_postscript()}
 					rows="4"
+					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+					disabled={isSubmitting}
+				></textarea>
+			</div>
+			
+			<!-- Summary -->
+			<div>
+				<label for="summary" class="mb-2 block text-sm font-medium text-gray-700">
+					Summary
+				</label>
+				<textarea
+					id="summary"
+					bind:value={summary}
+					placeholder="Brief summary of the article (max 512 bytes)"
+					rows="2"
 					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 					disabled={isSubmitting}
 				></textarea>

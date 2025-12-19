@@ -140,7 +140,7 @@
 			if (accounts.length > 0) {
 				walletAddress = accounts[0].toLowerCase();
 				// Check if user is the author
-				const articleAuthor = (article.author?.id || article.trueAuthor || '').toLowerCase();
+				const articleAuthor = (article.author?.id || '').toLowerCase();
 				isAuthorized = walletAddress === articleAuthor;
 			}
 		} catch (e) {
@@ -462,21 +462,6 @@
 					/>
 				</div>
 
-				<!-- Summary -->
-				<div>
-					<label for="summary" class="mb-2 block text-sm font-medium text-gray-700">
-						{m.summary()}
-					</label>
-					<textarea
-						id="summary"
-						bind:value={summary}
-						placeholder={m.optional_summary()}
-						rows="3"
-						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-						disabled={isSubmitting}
-					></textarea>
-				</div>
-
 				<!-- Content -->
 				<div>
 					<label for="content" class="mb-2 block text-sm font-medium text-gray-700">
@@ -488,6 +473,21 @@
 						placeholder={m.write_article_here()}
 						rows="16"
 						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-mono text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+						disabled={isSubmitting}
+					></textarea>
+				</div>
+
+				<!-- Summary -->
+				<div>
+					<label for="summary" class="mb-2 block text-sm font-medium text-gray-700">
+						{m.summary()}
+					</label>
+					<textarea
+						id="summary"
+						bind:value={summary}
+						placeholder={m.optional_summary()}
+						rows="3"
+						class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 						disabled={isSubmitting}
 					></textarea>
 				</div>
