@@ -1,5 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
+	import { getIrysFreeUploadLimit } from '$lib/config';
+	import { compressImage } from '$lib/utils/imageCompressor';
 
 	/**
 	 * Content Image Manager Component
@@ -41,9 +43,16 @@
 		onImagesChange = () => {},
 		onInsertMarkdown = () => {},
 		maxImages = 20,
-		maxFileSize = 500 * 1024, // 500KB default
+		maxFileSize = undefined,
 		disabled = false
 	}: Props = $props();
+
+	// Use config value if maxFileSize not provided
+	let effectiveMaxFileSize = $derived(maxFileSize ?? getIrysFreeUploadLimit());
+
+	// Compression state
+	let isCompressing = $state(false);
+	let compressionStatus = $state('');
 
 	// State
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -69,19 +78,20 @@
 	}
 
 	// Handle file selection
-	function handleFileSelect(e: Event) {
+	async function handleFileSelect(e: Event) {
 		const target = e.target as HTMLInputElement;
 		const files = target.files;
 		if (!files || files.length === 0) return;
 
 		error = '';
+		compressionStatus = '';
 
 		if (images.length >= maxImages) {
 			error = m.max_images_reached ? m.max_images_reached({ max: maxImages }) : `Maximum ${maxImages} images allowed`;
 			return;
 		}
 
-		const file = files[0];
+		let file = files[0];
 
 		// Validate file type
 		if (!file.type.startsWith('image/')) {
@@ -89,10 +99,30 @@
 			return;
 		}
 
-		// Validate file size
-		if (file.size > maxFileSize) {
-			error = m.image_too_large_kb ? m.image_too_large_kb({ size: Math.round(maxFileSize / 1024) }) : `Image must be smaller than ${Math.round(maxFileSize / 1024)}KB`;
-			return;
+		// Auto-compress if file exceeds size limit
+		if (file.size > effectiveMaxFileSize) {
+			try {
+				isCompressing = true;
+				compressionStatus = m.compressing_image ? m.compressing_image() : 'Compressing image...';
+
+				const result = await compressImage(file, {
+					maxSize: effectiveMaxFileSize
+				});
+
+				file = result.file;
+				compressionStatus = m.compression_complete 
+					? m.compression_complete({ original: formatFileSize(result.originalSize), compressed: formatFileSize(result.compressedSize) })
+					: `Compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`;
+
+				// Clear status after 3 seconds
+				setTimeout(() => { compressionStatus = ''; }, 3000);
+			} catch (err) {
+				error = m.compression_failed ? m.compression_failed() : 'Failed to compress image';
+				isCompressing = false;
+				return;
+			} finally {
+				isCompressing = false;
+			}
 		}
 
 		// Create new image entry
@@ -198,21 +228,34 @@
 	<!-- Upload button -->
 	{#if images.length < maxImages}
 		<label
-			class="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 px-4 py-3 text-sm transition-colors hover:border-gray-300 {disabled ? 'cursor-not-allowed opacity-50' : ''}"
+			class="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 px-4 py-3 text-sm transition-colors hover:border-gray-300 {disabled || isCompressing ? 'cursor-not-allowed opacity-50' : ''}"
 		>
-			<svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-			</svg>
-			<span class="text-gray-600">{m.add_image ? m.add_image() : 'Add Image'}</span>
+			{#if isCompressing}
+				<svg class="h-5 w-5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+				</svg>
+				<span class="text-blue-600">{compressionStatus}</span>
+			{:else}
+				<svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+				</svg>
+				<span class="text-gray-600">{m.add_image ? m.add_image() : 'Add Image'}</span>
+			{/if}
 			<input
 				bind:this={fileInput}
 				type="file"
 				accept="image/*"
 				class="hidden"
-				{disabled}
+				disabled={disabled || isCompressing}
 				onchange={handleFileSelect}
 			/>
 		</label>
+	{/if}
+
+	<!-- Compression success status -->
+	{#if compressionStatus && !isCompressing}
+		<p class="mb-3 text-sm text-green-600">{compressionStatus}</p>
 	{/if}
 
 	{#if error}

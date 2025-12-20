@@ -49,7 +49,7 @@ Web3交互：viem + @wagmi/core
 其他：prettier，eslint，tailwindcss，vitest，playwright，@inlang/paraglide-sveltekit
 
 ## TODO
-* 文章内图片支持
 * 赞赏单位统一USD
 * logo修改
 * 文章发布后自动跳转
+* 支持markdown编辑器[cherry-markdown](https://github.com/Tencent/cherry-markdown)

@@ -278,7 +278,6 @@
 					? (formData.coverImageFile ? m.new_cover() : (keepExistingCover ? m.replace_cover() : m.upload_cover()))
 					: m.cover()}
 				aspectRatio={16 / 9}
-				maxFileSize={100 * 1024}
 				maxOutputWidth={1200}
 				maxOutputHeight={675}
 				{disabled}

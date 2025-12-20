@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
+	import { getIrysFreeUploadLimit } from '$lib/config';
 
 	interface Props {
 		/** Aspect ratio (width/height). e.g., 16/9, 1, 4/3. If undefined, free crop */
@@ -34,9 +35,12 @@
 		previewHeightClass?: string;
 	}
 
+	// Use config value if maxFileSize not provided
+	let configMaxFileSize = $derived(getIrysFreeUploadLimit());
+
 	let {
 		aspectRatio = undefined,
-		maxFileSize = 100 * 1024,
+		maxFileSize = undefined,
 		minWidth = 0,
 		minHeight = 0,
 		maxOutputWidth = 1920,
@@ -51,6 +55,9 @@
 		circular = false,
 		previewHeightClass = 'h-64'
 	}: Props = $props();
+
+	// Effective max file size (prop or config)
+	let effectiveMaxFileSize = $derived(maxFileSize ?? configMaxFileSize);
 
 	// State
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -373,7 +380,7 @@
 
 				if (!blob) throw new Error('Failed to create blob');
 
-				if (blob.size <= maxFileSize || currentQuality <= 0.1) {
+				if (blob.size <= effectiveMaxFileSize || currentQuality <= 0.1) {
 					break;
 				}
 
@@ -385,8 +392,8 @@
 			if (!blob) throw new Error('Failed to compress image');
 
 			// If still too large after quality reduction, resize
-			if (blob.size > maxFileSize) {
-				const reductionFactor = Math.sqrt(maxFileSize / blob.size);
+			if (blob.size > effectiveMaxFileSize) {
+				const reductionFactor = Math.sqrt(effectiveMaxFileSize / blob.size);
 				const newWidth = Math.round(outputWidth * reductionFactor);
 				const newHeight = Math.round(outputHeight * reductionFactor);
 
@@ -521,7 +528,7 @@
 				<p class="text-xs text-gray-500">{helpText}</p>
 			{:else}
 				<p class="text-xs text-gray-500">
-					{m.image_format_help()} · {m.max_size({ size: formatFileSize(maxFileSize) })}
+					{m.image_format_help()} · {m.max_size({ size: formatFileSize(effectiveMaxFileSize) })}
 				</p>
 			{/if}
 			<input
@@ -666,7 +673,7 @@
 							<span>{m.aspect_ratio()}: {aspectRatio.toFixed(2)}</span>
 							<span class="mx-2">·</span>
 						{/if}
-						<span>{m.max_size({ size: formatFileSize(maxFileSize) })}</span>
+						<span>{m.max_size({ size: formatFileSize(effectiveMaxFileSize) })}</span>
 					</div>
 					<div class="flex gap-3">
 						<button
