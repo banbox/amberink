@@ -295,5 +295,19 @@
 	"width": "Width",
 	"height": "Height",
 	"uploading_images": "Uploading images...",
-	"uploading_image": "Uploading image {current}/{total}..."
+	"uploading_image": "Uploading image {current}/{total}...",
+	"default_tip_usd": "Default Tip Amount (USD)",
+	"default_dislike_usd": "Default Dislike Amount (USD)",
+	"default_collect_price_usd": "Default Collect Price (USD)",
+	"min_action_value_usd": "Minimum Action Value (USD)",
+	"usd_pricing": "USD Pricing",
+	"usd_pricing_desc": "All amounts are in USD and automatically converted to native tokens",
+	"current_price": "Current Price",
+	"price_updated": "Price updated",
+	"price_loading": "Loading price...",
+	"price_error": "Price unavailable",
+	"approx_native": "≈ {amount} {symbol}",
+	"tip_in_usd": "Tip (USD)",
+	"dislike_in_usd": "Dislike (USD)",
+	"collect_price_usd": "Collect Price (USD)"
 }

@@ -4,6 +4,9 @@
 	import SearchSelect, { type SelectOption } from '$lib/components/SearchSelect.svelte';
 	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 	import ContentImageManager from '$lib/components/ContentImageManager.svelte';
+	import { onMount } from 'svelte';
+	import { getNativeTokenPriceUsd, getNativeTokenSymbol } from '$lib/priceService';
+	import { getDefaultCollectPriceUsd } from '$lib/config';
 
 	/**
 	 * Article Editor Component
@@ -31,7 +34,7 @@
 		coverImageFile: File | null;
 		contentImages: ContentImage[];
 		royaltyBps: bigint;
-		collectPriceEth: string | number;
+		collectPriceUsd: string | number; // Changed from ETH to USD
 		maxCollectSupply: string | number;
 		originality: '0' | '1' | '2';
 	}
@@ -57,6 +60,33 @@
 		resetKey?: number;
 	}
 
+	// Native token price state for USD conversion display
+	let nativeTokenPrice = $state<number | null>(null);
+	let priceLoading = $state(false);
+	let nativeSymbol = $state('ETH');
+
+	// Load native token price on mount
+	onMount(async () => {
+		priceLoading = true;
+		try {
+			nativeTokenPrice = await getNativeTokenPriceUsd();
+			nativeSymbol = getNativeTokenSymbol();
+		} catch (e) {
+			console.error('Failed to load native token price:', e);
+		} finally {
+			priceLoading = false;
+		}
+	});
+
+	// Calculate approximate native token amount from USD
+	function getApproxNativeAmount(usdAmount: string | number): string {
+		if (!nativeTokenPrice || nativeTokenPrice <= 0) return '...';
+		const usd = typeof usdAmount === 'string' ? parseFloat(usdAmount) : usdAmount;
+		if (isNaN(usd) || usd <= 0) return '0';
+		const nativeAmount = usd / nativeTokenPrice;
+		return nativeAmount.toFixed(6);
+	}
+
 	let {
 		formData = $bindable({
 			title: '',
@@ -68,7 +98,7 @@
 			coverImageFile: null,
 			contentImages: [],
 			royaltyBps: 500n,
-			collectPriceEth: '0',
+			collectPriceUsd: getDefaultCollectPriceUsd(),
 			maxCollectSupply: '0',
 			originality: '0'
 		}),
@@ -367,17 +397,28 @@
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<label for="collectPrice" class="mb-2 block text-sm font-medium text-gray-700">
-					Collect Price (ETH)
+					{m.collect_price_usd({})}
 				</label>
-				<input
-					id="collectPrice"
-					bind:value={formData.collectPriceEth}
-					type="number"
-					min="0"
-					step="0.000001"
-					class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-					{disabled}
-				/>
+				<div class="flex items-center gap-2">
+					<span class="text-sm font-medium text-gray-600">$</span>
+					<input
+						id="collectPrice"
+						bind:value={formData.collectPriceUsd}
+						type="number"
+						min="0"
+						step="0.01"
+						class="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+						{disabled}
+					/>
+				</div>
+				<!-- Show approximate native token amount -->
+				<div class="mt-1 text-xs text-gray-500">
+					{#if priceLoading}
+						{m.price_loading({})}
+					{:else if nativeTokenPrice && formData.collectPriceUsd}
+						≈ {getApproxNativeAmount(formData.collectPriceUsd)} {nativeSymbol}
+					{/if}
+				</div>
 			</div>
 			<div>
 				<label for="maxCollectSupply" class="mb-2 block text-sm font-medium text-gray-700">

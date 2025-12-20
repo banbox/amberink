@@ -23,6 +23,27 @@ const PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)[
 
 const CONFIG_STORAGE_KEY = 'dblog_user_config';
 
+// Chainlink Price Feed addresses for different chains
+// ETH/USD price feeds - see https://docs.chain.link/data-feeds/price-feeds/addresses
+export const CHAINLINK_PRICE_FEEDS: Record<number, `0x${string}`> = {
+	// Ethereum Mainnet
+	1: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
+	// Optimism Mainnet
+	10: '0x13e3Ee699D1909E989722E753853AE30b17e08c5',
+	// Polygon Mainnet (MATIC/USD)
+	137: '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0',
+	// Arbitrum One
+	42161: '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612',
+	// Base Mainnet
+	8453: '0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',
+	// Optimism Sepolia (testnet)
+	11155420: '0x61Ec26aA57019C486B10502285c5A3D4A4750AD7',
+	// Sepolia (testnet)
+	11155111: '0x694AA1769357215DE4FAC081bf1f309aDC325306',
+	// Local Anvil (mock - will use fallback price)
+	31337: '0x0000000000000000000000000000000000000000'
+};
+
 // Default values (used when env vars are not set)
 export const defaults = {
 	blogHubContractAddress: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9',
@@ -37,7 +58,16 @@ export const defaults = {
 	minGasFeeMultiplier: 10,
 	defaultGasFeeMultiplier: 30,
 	irysFreeUploadLimit: 102400,
-	minActionValue: '20000000000000' // Store as string for JSON serialization
+	minActionValue: '20000000000000', // Store as string for JSON serialization
+	// USD pricing defaults
+	defaultTipAmountUsd: '1.00',
+	defaultDislikeAmountUsd: '1.00',
+	defaultCollectPriceUsd: '5.00',
+	minActionValueUsd: '0.05',
+	// Price cache duration in seconds (5 minutes)
+	priceCacheDuration: 300,
+	// Fallback ETH price in USD (used when price feed unavailable)
+	fallbackEthPriceUsd: 3000
 };
 
 // Environment-based defaults (build-time values from .env)
@@ -60,7 +90,14 @@ export const envDefaults = {
 		? parseInt(PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER, 10) 
 		: defaults.defaultGasFeeMultiplier,
 	irysFreeUploadLimit: defaults.irysFreeUploadLimit,
-	minActionValue: defaults.minActionValue
+	minActionValue: defaults.minActionValue,
+	// USD pricing defaults
+	defaultTipAmountUsd: defaults.defaultTipAmountUsd,
+	defaultDislikeAmountUsd: defaults.defaultDislikeAmountUsd,
+	defaultCollectPriceUsd: defaults.defaultCollectPriceUsd,
+	minActionValueUsd: defaults.minActionValueUsd,
+	priceCacheDuration: defaults.priceCacheDuration,
+	fallbackEthPriceUsd: defaults.fallbackEthPriceUsd
 };
 
 // User-overridable config keys
@@ -73,7 +110,11 @@ export type UserConfigKey =
 	| 'irysNetwork'
 	| 'arweaveGateways'
 	| 'subsquidEndpoint'
-	| 'defaultGasFeeMultiplier';
+	| 'defaultGasFeeMultiplier'
+	| 'defaultTipAmountUsd'
+	| 'defaultDislikeAmountUsd'
+	| 'defaultCollectPriceUsd'
+	| 'minActionValueUsd';
 
 export interface UserConfig {
 	blogHubContractAddress?: string;
@@ -84,6 +125,10 @@ export interface UserConfig {
 	arweaveGateways?: string[];
 	subsquidEndpoint?: string;
 	defaultGasFeeMultiplier?: number;
+	defaultTipAmountUsd?: string;
+	defaultDislikeAmountUsd?: string;
+	defaultCollectPriceUsd?: string;
+	minActionValueUsd?: string;
 }
 
 // Config field metadata for settings UI
@@ -150,6 +195,30 @@ export const configFields: ConfigFieldMeta[] = [
 		labelKey: 'gas_multiplier',
 		type: 'number',
 		placeholder: '30'
+	},
+	{
+		key: 'defaultTipAmountUsd',
+		labelKey: 'default_tip_usd',
+		type: 'text',
+		placeholder: '1.00'
+	},
+	{
+		key: 'defaultDislikeAmountUsd',
+		labelKey: 'default_dislike_usd',
+		type: 'text',
+		placeholder: '1.00'
+	},
+	{
+		key: 'defaultCollectPriceUsd',
+		labelKey: 'default_collect_price_usd',
+		type: 'text',
+		placeholder: '5.00'
+	},
+	{
+		key: 'minActionValueUsd',
+		labelKey: 'min_action_value_usd',
+		type: 'text',
+		placeholder: '0.05'
 	}
 ];
 
@@ -195,11 +264,24 @@ export function getConfig() {
 		arweaveGateways: userConfig.arweaveGateways || envDefaults.arweaveGateways,
 		subsquidEndpoint: userConfig.subsquidEndpoint || envDefaults.subsquidEndpoint,
 		defaultGasFeeMultiplier: userConfig.defaultGasFeeMultiplier ?? envDefaults.defaultGasFeeMultiplier,
+		// USD pricing (user-overridable)
+		defaultTipAmountUsd: userConfig.defaultTipAmountUsd || envDefaults.defaultTipAmountUsd,
+		defaultDislikeAmountUsd: userConfig.defaultDislikeAmountUsd || envDefaults.defaultDislikeAmountUsd,
+		defaultCollectPriceUsd: userConfig.defaultCollectPriceUsd || envDefaults.defaultCollectPriceUsd,
+		minActionValueUsd: userConfig.minActionValueUsd || envDefaults.minActionValueUsd,
 		// Fixed values (not user-overridable)
 		minGasFeeMultiplier: envDefaults.minGasFeeMultiplier,
 		irysFreeUploadLimit: envDefaults.irysFreeUploadLimit,
-		minActionValue: BigInt(envDefaults.minActionValue)
+		minActionValue: BigInt(envDefaults.minActionValue),
+		priceCacheDuration: envDefaults.priceCacheDuration,
+		fallbackEthPriceUsd: envDefaults.fallbackEthPriceUsd
 	};
+}
+
+// Get Chainlink Price Feed address for current chain
+export function getChainlinkPriceFeedAddress(): `0x${string}` {
+	const chainId = getConfig().chainId;
+	return CHAINLINK_PRICE_FEEDS[chainId] || '0x0000000000000000000000000000000000000000';
 }
 
 // Get current user overrides

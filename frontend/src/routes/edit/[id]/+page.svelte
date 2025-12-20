@@ -76,7 +76,7 @@
 		coverImageFile: null,
 		contentImages: [],
 		royaltyBps: 500n,
-		collectPriceEth: '0',
+		collectPriceUsd: '0',
 		maxCollectSupply: '0',
 		originality: '0'
 	});

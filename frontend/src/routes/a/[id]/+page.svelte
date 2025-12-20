@@ -11,8 +11,10 @@
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import CommentSection from '$lib/components/CommentSection.svelte';
-	import { parseEther } from 'viem';
+	import { parseEther, formatUnits } from 'viem';
 	import { client, USER_BY_ID_QUERY, type UserData } from '$lib/graphql';
+	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
+	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd } from '$lib/config';
 	import {
 		EvaluationScore,
 		collectArticle,
@@ -30,6 +32,11 @@
 		type StoredSessionKey
 	} from '$lib/sessionKey';
 	import { getMinActionValue } from '$lib/config';
+
+	// Native token price state
+	let nativeTokenPrice = $state<number | null>(null);
+	let priceLoading = $state(false);
+	let nativeSymbol = $state('ETH');
 
 	let { data }: { data: PageData } = $props();
 	const article = data.article;
@@ -63,8 +70,8 @@
 	let showCollectModal = $state(false);
 	let showDislikeModal = $state(false);
 	let showVersionsDropdown = $state(false);
-	let tipAmount = $state('0.001');
-	let dislikeAmount = $state('0.001');
+	let tipAmountUsd = $state(getDefaultTipAmountUsd());
+	let dislikeAmountUsd = $state(getDefaultDislikeAmountUsd());
 	let feedbackMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	// History versions state
@@ -270,7 +277,7 @@
 	// Handle Dislike
 	async function handleDislike() {
 		if (!requireWallet()) return;
-		const amount = parseFloat(dislikeAmount);
+		const amount = parseFloat(dislikeAmountUsd);
 		if (isNaN(amount) || amount <= 0) {
 			showFeedback('error', 'Invalid amount');
 			return;
@@ -279,14 +286,15 @@
 		try {
 			// Use articleId for contract interaction (not arweaveId)
 			const chainArticleId = BigInt(article.articleId);
-			const dislikeWei = parseEther(dislikeAmount);
+			// Convert USD to wei using Chainlink price
+			const dislikeWei = await usdToWei(dislikeAmountUsd);
 			await callWithSessionKey(
 				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
 				() => evaluateArticle(chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei)
 			);
 			localDislikeAmount = (BigInt(localDislikeAmount) + dislikeWei).toString();
 			showDislikeModal = false;
-			dislikeAmount = '0.001';
+			dislikeAmountUsd = getDefaultDislikeAmountUsd();
 			showFeedback('success', m.dislike_success({}));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
@@ -316,7 +324,7 @@
 	// Handle Tip
 	async function handleTip() {
 		if (!requireWallet()) return;
-		const amount = parseFloat(tipAmount);
+		const amount = parseFloat(tipAmountUsd);
 		if (isNaN(amount) || amount <= 0) {
 			showFeedback('error', 'Invalid tip amount');
 			return;
@@ -325,13 +333,14 @@
 		try {
 			// Use articleId for contract interaction (not arweaveId)
 			const chainArticleId = BigInt(article.articleId);
-			const tipWei = parseEther(tipAmount);
+			// Convert USD to wei using Chainlink price
+			const tipWei = await usdToWei(tipAmountUsd);
 			await callWithSessionKey(
 				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
 				() => evaluateArticle(chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei)
 			);
 			showTipModal = false;
-			tipAmount = '0.001';
+			tipAmountUsd = getDefaultTipAmountUsd();
 			showFeedback('success', m.tip_success({}));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
@@ -347,7 +356,9 @@
 		try {
 			// Use articleId for contract interaction (not arweaveId)
 			const chainArticleId = BigInt(article.articleId);
-			const minValue = getMinActionValue();
+			// Convert minimum USD value to wei
+			const minValueUsd = getMinActionValueUsd();
+			const minValue = await usdToWei(minValueUsd);
 			const text = commentText.trim();
 			await callWithSessionKey(
 				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
@@ -359,6 +370,28 @@
 		} finally {
 			isCommenting = false;
 		}
+	}
+
+	// Load native token price on mount
+	async function loadNativeTokenPrice() {
+		priceLoading = true;
+		try {
+			nativeTokenPrice = await getNativeTokenPriceUsd();
+			nativeSymbol = getNativeTokenSymbol();
+		} catch (e) {
+			console.error('Failed to load native token price:', e);
+		} finally {
+			priceLoading = false;
+		}
+	}
+
+	// Calculate approximate native token amount from USD
+	function getApproxNativeAmount(usdAmount: string): string {
+		if (!nativeTokenPrice || nativeTokenPrice <= 0) return '...';
+		const usd = parseFloat(usdAmount);
+		if (isNaN(usd) || usd <= 0) return '0';
+		const nativeAmount = usd / nativeTokenPrice;
+		return nativeAmount.toFixed(6);
 	}
 
 	// Get author ID from article data
@@ -524,6 +557,9 @@
 	}
 
 	onMount(async () => {
+		// Load native token price for USD conversion
+		loadNativeTokenPrice();
+		
 		// Fetch author data first
 		fetchAuthorData();
 		
@@ -1019,23 +1055,32 @@
 				<div class="mb-4">
 					<label for={config.inputId} class="mb-2 block text-sm font-medium text-gray-700">{config.labelText}</label>
 					<div class="flex items-center gap-2">
+						<span class="text-sm font-medium text-gray-600">$</span>
 						<input
 							id={config.inputId}
 							type="number"
 							value={config.value}
 							oninput={(e) => config.onValueChange(e.currentTarget.value)}
-							step="0.001"
-							min="0.001"
-							class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-{config.colorScheme}-500 focus:outline-none focus:ring-1 focus:ring-{config.colorScheme}-500"
+							step="0.01"
+							min="0.01"
+							class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 							disabled={config.isProcessing}
 						/>
-						<span class="text-sm font-medium text-gray-600">{m.eth({})}</span>
+						<span class="text-sm font-medium text-gray-600">USD</span>
+					</div>
+					<!-- Show approximate native token amount -->
+					<div class="mt-2 text-xs text-gray-500">
+						{#if priceLoading}
+							{m.price_loading({})}
+						{:else if nativeTokenPrice}
+							≈ {getApproxNativeAmount(config.value)} {nativeSymbol}
+						{/if}
 					</div>
 				</div>
 
-				<!-- Quick amounts -->
+				<!-- Quick USD amounts -->
 				<div class="mb-6 flex gap-2">
-					{#each ['0.001', '0.005', '0.01', '0.05'] as amount}
+					{#each ['0.50', '1.00', '2.00', '5.00'] as amount}
 						<button
 							type="button"
 							onclick={() => config.onValueChange(amount)}
@@ -1047,7 +1092,7 @@
 							class:border-red-500={config.colorScheme === 'red' && config.value === amount}
 							class:bg-red-50={config.colorScheme === 'red' && config.value === amount}
 						>
-							{amount}
+							${amount}
 						</button>
 					{/each}
 				</div>
@@ -1187,10 +1232,10 @@
 	show: showTipModal,
 	onClose: () => showTipModal = false,
 	title: m.tip_author({}),
-	labelText: m.tip_amount({}),
+	labelText: m.tip_in_usd({}),
 	inputId: 'tip-amount',
-	value: tipAmount,
-	onValueChange: (v: string) => tipAmount = v,
+	value: tipAmountUsd,
+	onValueChange: (v: string) => tipAmountUsd = v,
 	isProcessing: isTipping,
 	onSubmit: handleTip,
 	submitText: m.send_tip({}),
@@ -1203,10 +1248,10 @@
 	onClose: () => showDislikeModal = false,
 	title: m.dislike({}),
 	description: m.dislike_description({}),
-	labelText: m.dislike_amount({}),
+	labelText: m.dislike_in_usd({}),
 	inputId: 'dislike-amount',
-	value: dislikeAmount,
-	onValueChange: (v: string) => dislikeAmount = v,
+	value: dislikeAmountUsd,
+	onValueChange: (v: string) => dislikeAmountUsd = v,
 	isProcessing: isDisliking,
 	onSubmit: handleDislike,
 	submitText: m.send_dislike({}),

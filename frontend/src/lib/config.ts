@@ -21,6 +21,8 @@ import {
 	getEnvDefault,
 	configFields,
 	MIN_DEFAULT_GAS_FEE_MULTIPLIER,
+	getChainlinkPriceFeedAddress,
+	CHAINLINK_PRICE_FEEDS,
 	type UserConfig,
 	type UserConfigKey,
 	type ConfigFieldMeta
@@ -37,6 +39,8 @@ export {
 	getEnvDefault,
 	configFields,
 	MIN_DEFAULT_GAS_FEE_MULTIPLIER,
+	getChainlinkPriceFeedAddress,
+	CHAINLINK_PRICE_FEEDS,
 	type UserConfig,
 	type UserConfigKey,
 	type ConfigFieldMeta
@@ -93,6 +97,31 @@ export function getIrysFreeUploadLimit(): number {
 
 export function getMinActionValue(): bigint {
 	return getConfig().minActionValue;
+}
+
+// USD pricing getters
+export function getDefaultTipAmountUsd(): string {
+	return getConfig().defaultTipAmountUsd;
+}
+
+export function getDefaultDislikeAmountUsd(): string {
+	return getConfig().defaultDislikeAmountUsd;
+}
+
+export function getDefaultCollectPriceUsd(): string {
+	return getConfig().defaultCollectPriceUsd;
+}
+
+export function getMinActionValueUsd(): string {
+	return getConfig().minActionValueUsd;
+}
+
+export function getPriceCacheDuration(): number {
+	return getConfig().priceCacheDuration;
+}
+
+export function getFallbackEthPriceUsd(): number {
+	return getConfig().fallbackEthPriceUsd;
 }
 
 // Legacy exports for backward compatibility

@@ -295,5 +295,19 @@
 	"width": "宽度",
 	"height": "高度",
 	"uploading_images": "上传图片中...",
-	"uploading_image": "上传图片 {current}/{total}..."
+	"uploading_image": "上传图片 {current}/{total}...",
+	"default_tip_usd": "默认打赏金额（美元）",
+	"default_dislike_usd": "默认不喜欢金额（美元）",
+	"default_collect_price_usd": "默认收藏价格（美元）",
+	"min_action_value_usd": "最小操作金额（美元）",
+	"usd_pricing": "美元计价",
+	"usd_pricing_desc": "所有金额以美元计价，自动转换为原生代币",
+	"current_price": "当前价格",
+	"price_updated": "价格已更新",
+	"price_loading": "加载价格中...",
+	"price_error": "价格不可用",
+	"approx_native": "≈ {amount} {symbol}",
+	"tip_in_usd": "打赏（美元）",
+	"dislike_in_usd": "不喜欢（美元）",
+	"collect_price_usd": "收藏价格（美元）"
 }

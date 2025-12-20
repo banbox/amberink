@@ -1040,4 +1040,9 @@ frontend\src\lib\stores\config.svelte.ts  frontend\src\lib\config.ts 图片最�
 请你根据上面文档，帮我在合适位置实现此需求；注意应当始终保持代码精简已维护，减少冗余代码；  
 Claude: 已完成
 
+#### 2025-12-20 14:08  去中心化查询币价
+如果要查询各种币的价格，基于USD的；我需要使用完全去中心化的方式实现；在静态前端页面中使用，有哪些方案？请推荐一些给我，最好易用，高度去中心化；  
+Gemini：首选viem查询Chainlink Price Feeds；次选Pyth Network；或者Uniswap V3
 
+#### 2025-12-20 14:15  统一USD计价金额
+@README.md @help.md @Developers.md 当前项目中多处涉及打赏和支付等金额，包括发布文章时充值，赞赏，不喜欢的赞赏等；后续此应用会发布到多个区块链上，如OP和POL等，每个链的币价格都不一样，当前的固定数量对用户很不友好。所以我希望改为统一使用USD计价，需要使用金额时，自动根据最新价格计算折算后币的数量；价格的获取是前端调用去中心化的接口查询的，应当使用Chainlink Price Feeds，基于viem实现；需要维护任何配置或接口时，应当统一维护在 frontend\src\lib\stores\config.svelte.ts；并允许用户在settings页面修改配置  

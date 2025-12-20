@@ -4,7 +4,8 @@
 	import { ContractError } from '$lib/contracts';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
-	import { parseEther } from 'viem';
+	import { usdToWei } from '$lib/priceService';
+	import { getDefaultCollectPriceUsd } from '$lib/config';
 
 	// Helper function to get category label
 	function getCategoryLabel(key: string): string {
@@ -65,7 +66,7 @@
 		coverImageFile: null,
 		contentImages: [],
 		royaltyBps: 500n,
-		collectPriceEth: '0',
+		collectPriceUsd: getDefaultCollectPriceUsd(),
 		maxCollectSupply: '0',
 		originality: '0'
 	});
@@ -97,7 +98,7 @@
 			coverImageFile: null,
 			contentImages: [],
 			royaltyBps: 500n,
-			collectPriceEth: '0',
+			collectPriceUsd: getDefaultCollectPriceUsd(),
 			maxCollectSupply: '0',
 			originality: '0'
 		};
@@ -165,11 +166,15 @@
 
 			let collectPrice = 0n;
 			try {
-				const collectPriceEthTrimmed = String(formData.collectPriceEth ?? '0').trim();
-				collectPrice = parseEther(collectPriceEthTrimmed || '0');
+				const collectPriceUsdTrimmed = String(formData.collectPriceUsd ?? '0').trim();
+				const usdValue = parseFloat(collectPriceUsdTrimmed || '0');
+				if (usdValue > 0) {
+					// Convert USD to wei using Chainlink price
+					collectPrice = await usdToWei(collectPriceUsdTrimmed);
+				}
 			} catch {
 				throw new Error(
-					`Invalid collect price: expected a non-negative number string in ETH with up to 18 decimals (example: 0, 0.01, 1.5). Got: "${String(formData.collectPriceEth ?? '').trim()}"`
+					`Invalid collect price: expected a non-negative number in USD (example: 0, 1.00, 5.00). Got: "${String(formData.collectPriceUsd ?? '').trim()}"`
 				);
 			}
 
