@@ -13,6 +13,9 @@ const ARTICLE_COLLECTED = blogHub.events.ArticleCollected.topic
 const USER_PROFILE_UPDATED = blogHub.events.UserProfileUpdated.topic
 const ARTICLE_EDITED = blogHub.events.ArticleEdited.topic
 
+// 收藏者 TokenID: articleId + COLLECTOR_TOKEN_OFFSET
+const COLLECTOR_TOKEN_OFFSET = 1n << 250n
+
 processor.run(new TypeormDatabase(), async (ctx) => {
     const articles: Article[] = []
     const articlesToUpdate = new Map<string, Article>()

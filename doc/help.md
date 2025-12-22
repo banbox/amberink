@@ -224,7 +224,10 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 ## 项目特点
 
 1. **完全去中心化**: 无后端服务，所有数据存储在链上和 Arweave 上
-2. **NFT 文章**: 每个文章对应一个 ERC-1155 NFT，用户可收藏
+2. **NFT 文章**: 每个文章对应 ERC-1155 NFT，创作者和收藏者的 NFT 使用不同的 TokenID 区分：
+   - **创作者 TokenID**: `articleId`（低位）
+   - **收藏者 TokenID**: `articleId + COLLECTOR_TOKEN_OFFSET`（高位标识 + 低位文章ID）
+   - `COLLECTOR_TOKEN_OFFSET = 1 << 250`（2^250，预留 250 位给文章ID）
 3. **永久存储**: 文章内容存储在 Arweave，一次付费永久保存
 4. **无感交互**: Session Keys 实现无需每次 MetaMask 签名的体验
 5. **Gas 代付**: Paymaster 支持用户或项目方代付 Gas 费用

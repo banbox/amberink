@@ -1080,3 +1080,13 @@ Claude：已完成
 ### 2025-12-20 18:00  文章发布&编辑自动跳转
 @help.md  文章在发布和编辑成功后，应当自动跳转到详情页，请帮我实现  
 Claude：已完成
+
+### 2025-12-22 18:00  收藏NFT逻辑更新
+@README.md @BlogHub.sol @help.md  当前智能合约，当创作者发布内容，以及读者收藏文章时，都会铸造NFT，我希望他们之间的NFT有一定区别；不能完全相同，不然创作者的NFT意义不大了。我打算把将 uint256 的高位作为“类型标识”，低位作为“文章 ID”。比如用 1 << 250
+收藏者 ID: (1 + OFFSET), (2 + OFFSET), (3 + OFFSET)...
+请帮我在合约中修改实现，最小修改；在使用NFT的地方也要做对应处理，比如Subsquid中统计文章收藏情况，以及项目中其他地方等。  
+Claude: 已完成  
+开发者：@help.md @BlogHub.sol 当前在智能合约中引入了COLLECTOR_TOKEN_OFFSET用于收藏着NFT的偏移，在项目所有后续使用NFT或收藏逻辑的地方，都需要增加对ArticleID的判断和恢复，请阅读前端和squid中的相关代码，帮我吧受影响的地方逻辑进行纠正  
+Claude：已完成  
+@help.md   frontend\src\routes\a\[id]\+page.svelte 在文章详情页显示的收藏部分，当maxCollectSupply为0时，表示不允许收藏，不应该显示收藏按钮。能收藏时，应当正确显示相关逻辑，包括已收藏数量，收藏用户信息列表等；  
+Claude：已完成

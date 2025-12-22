@@ -50,6 +50,8 @@ contract BlogHub is
     // 定义常量：最大评论长度（字节）
     // 140单词英文大约 700-1000 字节，中文约 400 汉字 = 1200 字节
     uint256 public constant MAX_COMMENT_LENGTH = 1024;
+    // 收藏者 TokenID: articleId + COLLECTOR_TOKEN_OFFSET
+    uint256 public constant COLLECTOR_TOKEN_OFFSET = 1 << 250;
     // 评价分数常量：0:中立, 1:喜欢, 2:不喜欢
     uint8 public constant SCORE_NEUTRAL = 0;
     uint8 public constant SCORE_LIKE = 1;
@@ -328,7 +330,7 @@ contract BlogHub is
             author: author,
             collectPrice: params.collectPrice,
             maxCollectSupply: params.maxCollectSupply,
-            collectCount: 1,
+            collectCount: 0,
             originality: params.originality
         });
         arweaveIdToArticleId[params.arweaveId] = newId;
@@ -474,8 +476,9 @@ contract BlogHub is
             article.collectCount++;
         }
 
-        // 铸造 NFT
-        _mint(sender, _articleId, 1, "");
+        // 铸造收藏者 NFT（使用 COLLECTOR_TOKEN_OFFSET 区分）
+        uint256 collectorTokenId = _articleId + COLLECTOR_TOKEN_OFFSET;
+        _mint(sender, collectorTokenId, 1, "");
 
         // 资金分配
         address validReferrer = _validateReferrer(_referrer, sender, articleAuthor, address(0));
@@ -486,7 +489,7 @@ contract BlogHub is
             _articleId,
             sender,
             amount,
-            _articleId // TokenID = ArticleID
+            collectorTokenId
         );
     }
 
@@ -652,6 +655,13 @@ contract BlogHub is
     //                          元数据
     // =============================================================
 
+    function getArticleIdFromTokenId(uint256 tokenId) public pure returns (uint256) {
+        if (tokenId >= COLLECTOR_TOKEN_OFFSET) {
+            return tokenId - COLLECTOR_TOKEN_OFFSET;
+        }
+        return tokenId;
+    }
+
     /**
      * @dev 重写 uri 函数，使其返回 Irys 可变文件夹的预览 URL
      * 格式: https://gateway.irys.xyz/mutable/{manifestId}/index.md
@@ -659,12 +669,13 @@ contract BlogHub is
      * 封面图片固定路径: coverImage
      */
     function uri(uint256 _id) public view override returns (string memory) {
-        if (_id == 0 || _id >= nextArticleId) revert ArticleNotFound();
+        uint256 articleId = getArticleIdFromTokenId(_id);
+        if (articleId == 0 || articleId >= nextArticleId) revert ArticleNotFound();
         return
             string(
                 abi.encodePacked(
                     "https://gateway.irys.xyz/mutable/",
-                    articles[_id].arweaveHash,
+                    articles[articleId].arweaveHash,
                     "/index.md"
                 )
             );

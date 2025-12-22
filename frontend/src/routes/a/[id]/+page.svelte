@@ -431,7 +431,8 @@
 		walletAddress && walletAddress.toLowerCase() === authorId.toLowerCase()
 	);
 	const maxCollectSupply = $derived(BigInt(article.maxCollectSupply));
-	const collectAvailable = $derived(maxCollectSupply > 0n && BigInt(localCollectCount) < maxCollectSupply);
+	const collectEnabled = $derived(maxCollectSupply > 0n);
+	const collectAvailable = $derived(collectEnabled && BigInt(localCollectCount) < maxCollectSupply);
 	
 	// Article quality score: round(likeAmount*10/(likeAmount+dislikeAmount*2), 1)
 	const qualityScore = $derived(() => {
@@ -756,19 +757,21 @@
 					<span class="text-sm">{article.comments?.length || 0}</span>
 				</a>
 
-				<!-- Collect/Bookmark -->
-				<button
-					type="button"
-					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-					onclick={() => showCollectModal = true}
-					title="Collect"
-				>
-					<!-- Bookmark Icon -->
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
-					</svg>
-					<span class="text-sm">{localCollectCount}</span>
-				</button>
+				<!-- Collect/Bookmark (only show when collecting is enabled) -->
+				{#if collectEnabled}
+					<button
+						type="button"
+						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+						onclick={() => showCollectModal = true}
+						title="Collect"
+					>
+						<!-- Bookmark Icon -->
+						<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
+						</svg>
+						<span class="text-sm">{localCollectCount}/{maxCollectSupply.toString()}</span>
+					</button>
+				{/if}
 
 				<!-- Dislike -->
 				<button
@@ -1126,8 +1129,8 @@
 	{/if}
 {/snippet}
 
-<!-- Collect Modal -->
-{#if showCollectModal}
+<!-- Collect Modal (only when collecting is enabled) -->
+{#if showCollectModal && collectEnabled}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" tabindex="-1" onclick={() => showCollectModal = false}>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->

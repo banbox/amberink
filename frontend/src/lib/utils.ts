@@ -3,6 +3,26 @@
  * Shared across components and modules to avoid duplication
  */
 
+// ============================================================
+//                  NFT Token ID Utilities
+// ============================================================
+
+/**
+ * - Collector TokenID: articleId + COLLECTOR_TOKEN_OFFSET (high bit + low article ID)
+ */
+export const COLLECTOR_TOKEN_OFFSET = 1n << 250n;
+
+export function getArticleIdFromTokenId(tokenId: bigint): bigint {
+	if (tokenId >= COLLECTOR_TOKEN_OFFSET) {
+		return tokenId - COLLECTOR_TOKEN_OFFSET;
+	}
+	return tokenId;
+}
+
+// ============================================================
+//                  Address Utilities
+// ============================================================
+
 /**
  * Format address to short form (0x1234...5678)
  */
