@@ -1115,3 +1115,13 @@ Gemini：有很多公共RPC节点无需key，如https://mainnet.optimism.io，�
 ### 2025-12-25 15:48  前端部署
 我有个dapp，是访问部署在optimism链上的智能合约。文件存储在irys+Arweave；这个dapp的前端是静态的，打算部署在某个去中心化存储上，方便用户直接访问，一般部署在哪里最合适？我需要尽可能高的去中心化程度，至少中高。现在已经通过ens申请了一个.eth域名。希望尽量有全球访问加速  
 Gemini：推荐4EVERLAND 或 Fleek，都支持全球加速
+
+### 2025-12-25 17:10  更新前端页面标题
+@help.md 当前前端中很多页面，都并未正确设置header中的title，请你阅读所有相关的前端页面，设置友好的title内容，一般应当是[content] - [appName]，当查看文章详情等页面时，content可取文章标题。在首页等页面，可直接显示appName；appName应当从配置中读取，方便维护  
+Claude: 已完成
+
+### 2025-12-25 19:10  squid遇到429
+我需要比较高频的访问op mainnet的rpc节点，每秒可能2-7次，哪些厂商提供这项服务，推荐一些比较流行的rpc api服务厂商，top30；  
+在满足并发要求的情况下，提供每月或每日免费额度最多的厂商，或者付费但费用非常便宜的厂商，各自推荐top5个给我  
+Gemini：免费：Infura, Alchemy, Ankr, NOWNodes, dRPC；付费：Ankr, NOWNodes, dRPC, LlamaNodes, Chainstack
+开发者：把squid的.env尝试改为Alchemy

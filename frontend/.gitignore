@@ -1,6 +1,8 @@
 test-results
 node_modules
 
+local.md
+
 # Output
 .output
 .vercel
@@ -19,6 +21,7 @@ Thumbs.db
 !.env.example
 !.env.dev
 !.env.prod
+!.env.test
 
 # Vite
 vite.config.js.timestamp-*
