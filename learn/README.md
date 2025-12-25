@@ -1125,3 +1125,11 @@ Claude: 已完成
 在满足并发要求的情况下，提供每月或每日免费额度最多的厂商，或者付费但费用非常便宜的厂商，各自推荐top5个给我  
 Gemini：免费：Infura, Alchemy, Ankr, NOWNodes, dRPC；付费：Ankr, NOWNodes, dRPC, LlamaNodes, Chainstack
 开发者：把squid的.env尝试改为Alchemy
+
+### 2025-12-25 21:31  squid-processor错误
+Failed to fetch block 100#4bc9f: got 0 log records from eth_getLogs, but logs bloom is not empty. Perhaps finality confirmation was not large enough
+help.md 我在启动squid的processer后，监听的op mainnet，出现了上面错误，帮我排查下原因，并解决。  
+Claude：代码中`setFinalityConfirmation(1)`对于主网太小，建议改为75  
+开发者：帮我改为使用环境变量，同时帮我审查squid中是否有其他配置也推荐作为环境变量的，方便在开发网，测试网，正式网等之间切换  
+Claude：提取FINALITY_CONFIRMATION，BLOCK_RANGE_FROM, GATEWAY_URL 三个环境变量
+

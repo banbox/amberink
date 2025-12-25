@@ -14,13 +14,21 @@ import * as blogHub from './abi/BlogHub'
 const BLOG_HUB_ADDRESS = (process.env.BLOG_HUB_ADDRESS || '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9').toLowerCase()
 
 const envRateLimit = process.env.RPC_RATE_LIMIT
+const envFinalityConfirmation = process.env.FINALITY_CONFIRMATION
+const envBlockRangeFrom = process.env.BLOCK_RANGE_FROM
+const envGatewayUrl = process.env.GATEWAY_URL
 
-export const processor = new EvmBatchProcessor()
-    // Lookup archive by the network name in Subsquid registry
-    // See https://docs.subsquid.io/evm-indexing/supported-networks/
-    // Optimism Sepolia (uncomment for testnet):
-    // .setGateway('https://v2.archive.subsquid.io/network/optimism-sepolia')
-    // Local Anvil: 不使用 Gateway，直接从 RPC 获取数据
+// 创建 processor 实例
+const processorBuilder = new EvmBatchProcessor()
+
+// 如果配置了 Gateway URL，则使用 Gateway 加速数据同步
+// OP Mainnet: https://v2.archive.subsquid.io/network/optimism-mainnet
+// OP Sepolia: https://v2.archive.subsquid.io/network/optimism-sepolia
+if (envGatewayUrl) {
+    processorBuilder.setGateway(envGatewayUrl)
+}
+
+export const processor = processorBuilder
 
     // Chain RPC endpoint is required for
     //  - indexing unfinalized blocks https://docs.subsquid.io/basics/unfinalized-blocks/
@@ -34,9 +42,8 @@ export const processor = new EvmBatchProcessor()
         // More RPC connection options at https://docs.subsquid.io/evm-indexing/configuration/initialization/#set-data-source
         rateLimit: envRateLimit ? parseInt(envRateLimit) : 10
     })
-    // Local Anvil: 使用较小的确认数（Anvil 区块少）
-    // Optimism Sepolia: 使用 75
-    .setFinalityConfirmation(1)
+    // Finality confirmation: Local Anvil 可设为 1，OP Mainnet/Sepolia 推荐 75+
+    .setFinalityConfirmation(envFinalityConfirmation ? parseInt(envFinalityConfirmation) : 75)
     .setFields({
         transaction: {
             from: true,
@@ -48,7 +55,7 @@ export const processor = new EvmBatchProcessor()
         },
     })
     .setBlockRange({
-        from: 0,
+        from: envBlockRangeFrom ? parseInt(envBlockRangeFrom) : 0,
     })
     .addLog({
         address: [BLOG_HUB_ADDRESS],
