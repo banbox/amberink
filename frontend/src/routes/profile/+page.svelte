@@ -15,7 +15,7 @@
 	import { updateProfile } from '$lib/contracts';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import { getAvatarUrl, uploadImage } from '$lib/arweave';
-	import { getIrysNetwork } from '$lib/config';
+	import { getIrysNetwork, getAppName } from '$lib/config';
 	import { shortAddress, formatDate } from '$lib/utils';
 	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 
@@ -275,6 +275,10 @@
 		return () => window.removeEventListener('scroll', handleScroll);
 	});
 </script>
+
+<svelte:head>
+	<title>{m.profile ? m.profile() : 'Profile'} - {getAppName()}</title>
+</svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	{#if !connected}

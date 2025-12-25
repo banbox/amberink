@@ -215,6 +215,7 @@ npx squid-typeorm-codegen
 npx tsc
 cp .env.example .env.test  # or prod
 vim .env.test
+cp .env.test .env
 npx squid-typeorm-migration apply
 npm run build
 pm2 start ecosystem.config.js [--env production]

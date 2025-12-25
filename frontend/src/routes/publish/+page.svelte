@@ -6,7 +6,7 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
 	import { usdToWei } from '$lib/priceService';
-	import { getDefaultCollectPriceUsd } from '$lib/config';
+	import { getDefaultCollectPriceUsd, getAppName } from '$lib/config';
 
 	// Helper function to get category label
 	function getCategoryLabel(key: string): string {
@@ -263,6 +263,10 @@
 		}
 	});
 </script>
+
+<svelte:head>
+	<title>{m.publish_article()} - {getAppName()}</title>
+</svelte:head>
 
 <div class="min-h-screen bg-white">
 	<div class="mx-auto max-w-3xl px-6 py-12">

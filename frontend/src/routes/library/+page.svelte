@@ -15,6 +15,7 @@
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
+	import { getAppName } from '$lib/config';
 
 	type TabType = 'published' | 'liked' | 'disliked' | 'collected' | 'commented';
 
@@ -148,6 +149,10 @@
 		return () => window.removeEventListener('scroll', handleScroll);
 	});
 </script>
+
+<svelte:head>
+	<title>{m.library()} - {getAppName()}</title>
+</svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<!-- Page Header -->

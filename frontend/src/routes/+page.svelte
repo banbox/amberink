@@ -6,6 +6,7 @@
 	import { client, ARTICLES_QUERY, ALL_ARTICLES_QUERY, type ArticleData } from '$lib/graphql';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import CategoryFilter from '$lib/components/CategoryFilter.svelte';
+	import { getAppName } from '$lib/config';
 
 	const PAGE_SIZE = 20;
 
@@ -111,6 +112,10 @@
 		return () => window.removeEventListener('scroll', handleWindowScroll);
 	});
 </script>
+
+<svelte:head>
+	<title>{getAppName()}</title>
+</svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<!-- Page Header -->
