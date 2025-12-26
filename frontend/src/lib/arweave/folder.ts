@@ -12,7 +12,7 @@
 import type { IrysUploader, SessionKeyIrysUploader } from './irys';
 import { isWithinIrysFreeLimit } from './irys';
 import type { IrysTag, ArticleFolderManifest } from './types';
-import { getAppName, getAppVersion, getArweaveGateways, getIrysNetwork } from '$lib/config';
+import { getConfig, getArweaveGateways, getIrysNetwork } from '$lib/config';
 
 // 文章文件夹中的固定文件名
 export const ARTICLE_INDEX_FILE = 'index.md';
@@ -38,15 +38,15 @@ export async function downloadManifest(manifestId: string, useMutable = true): P
 	const gateways = getArweaveGateways();
 	// 添加时间戳参数绕过网关缓存
 	const cacheBuster = `?_t=${Date.now()}`;
-	
+
 	for (const gateway of gateways) {
 		try {
 			// 对于 mutable folders，使用 /mutable/ 路径获取最新版本的 manifest
 			// 否则使用直接路径获取原始 manifest
-			const url = useMutable 
+			const url = useMutable
 				? `${gateway}/mutable/${manifestId}${cacheBuster}`
 				: `${gateway}/${manifestId}${cacheBuster}`;
-			
+
 			// 使用 Accept 头请求 manifest JSON
 			// 当 manifest 设置了 indexFile 时，直接访问会返回 index 文件内容
 			// 通过指定 Accept 头可以获取原始 manifest
@@ -58,14 +58,14 @@ export async function downloadManifest(manifestId: string, useMutable = true): P
 				cache: 'no-store'
 			});
 			if (!response.ok) continue;
-			
+
 			const contentType = response.headers.get('content-type') || '';
 			// 验证返回的是 manifest JSON 而不是其他内容
 			if (!contentType.includes('json') && !contentType.includes('manifest')) {
 				console.warn(`Gateway ${gateway} returned non-manifest content type: ${contentType}`);
 				continue;
 			}
-			
+
 			const manifest = await response.json();
 			// 验证是有效的 manifest 结构
 			if (!manifest.paths || typeof manifest.paths !== 'object') {
@@ -77,7 +77,7 @@ export async function downloadManifest(manifestId: string, useMutable = true): P
 			console.warn(`Gateway ${gateway} failed to fetch manifest:`, error);
 		}
 	}
-	
+
 	throw new Error('Failed to fetch manifest from all gateways');
 }
 
@@ -92,12 +92,12 @@ export async function generateArticleFolderManifest(
 	uploader: IrysUploader | SessionKeyIrysUploader,
 	files: Map<string, string>,
 	indexFile?: string
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
 	// 使用 Irys SDK 的 generateFolder 方法生成正确格式的 manifest
-	const manifest = await uploader.uploader.generateFolder({ 
+	const manifest = await uploader.uploader.generateFolder({
 		items: files,
-		indexFile 
+		indexFile
 	});
 	return manifest;
 }
@@ -109,22 +109,22 @@ export async function generateArticleFolderManifest(
  */
 export function createArticleFolderManifest(files: Map<string, string>, indexFile?: string): IrysManifest & { index?: { path: string } } {
 	const paths: Record<string, { id: string }> = {};
-	
+
 	files.forEach((txId, fileName) => {
 		paths[fileName] = { id: txId };
 	});
-	
+
 	const manifest: IrysManifest & { index?: { path: string } } = {
 		manifest: 'irys:manifest',
 		version: '0.1.0',
 		paths
 	};
-	
+
 	// 添加 index 属性指定默认文件
 	if (indexFile) {
 		manifest.index = { path: indexFile };
 	}
-	
+
 	return manifest;
 }
 
@@ -138,11 +138,11 @@ export function appendToManifest(
 	newFiles: Map<string, string>
 ): IrysManifest {
 	const updatedPaths = { ...originalManifest.paths };
-	
+
 	newFiles.forEach((txId, fileName) => {
 		updatedPaths[fileName] = { id: txId };
 	});
-	
+
 	return {
 		...originalManifest,
 		paths: updatedPaths
@@ -161,9 +161,10 @@ export async function uploadManifest(
 	manifest: IrysManifest | any,
 	customTags: IrysTag[] = []
 ): Promise<string> {
-	const appName = getAppName();
-	const appVersion = getAppVersion();
-	
+	const appCfg = getConfig();
+	const appName = appCfg.appName;
+	const appVersion = appCfg.appVersion;
+
 	const tags: IrysTag[] = [
 		{ name: 'Type', value: 'manifest' },
 		{ name: 'Content-Type', value: 'application/x.irys-manifest+json' },
@@ -171,7 +172,7 @@ export async function uploadManifest(
 		{ name: 'App-Version', value: appVersion },
 		...customTags
 	];
-	
+
 	const receipt = await uploader.upload(JSON.stringify(manifest), { tags });
 	console.log(`Manifest uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 	return receipt.id;
@@ -191,16 +192,17 @@ export async function uploadManifestWithPayer(
 	customTags: IrysTag[] = [],
 	paidBy?: string
 ): Promise<string> {
-	const appName = getAppName();
-	const appVersion = getAppVersion();
+	const appCfg = getConfig();
+	const appName = appCfg.appName;
+	const appVersion = appCfg.appVersion;
 	const manifestData = JSON.stringify(manifest);
 	const dataSize = new TextEncoder().encode(manifestData).length;
-	
+
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
 	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
-	
+
 	const tags: IrysTag[] = [
 		{ name: 'Type', value: 'manifest' },
 		{ name: 'Content-Type', value: 'application/x.irys-manifest+json' },
@@ -208,11 +210,11 @@ export async function uploadManifestWithPayer(
 		{ name: 'App-Version', value: appVersion },
 		...customTags
 	];
-	
-	const uploadOptions = effectivePaidBy 
+
+	const uploadOptions = effectivePaidBy
 		? { tags, upload: { paidBy: effectivePaidBy } }
 		: { tags };
-	
+
 	const receipt = await uploader.upload(manifestData, uploadOptions);
 	console.log(`Manifest uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 	return receipt.id;
@@ -232,9 +234,10 @@ export async function uploadUpdatedManifest(
 	originalManifestId: string,
 	customTags: IrysTag[] = []
 ): Promise<string> {
-	const appName = getAppName();
-	const appVersion = getAppVersion();
-	
+	const appCfg = getConfig();
+	const appName = appCfg.appName;
+	const appVersion = appCfg.appVersion;
+
 	const tags: IrysTag[] = [
 		{ name: 'Type', value: 'manifest' },
 		{ name: 'Content-Type', value: 'application/x.irys-manifest+json' },
@@ -243,7 +246,7 @@ export async function uploadUpdatedManifest(
 		{ name: 'App-Version', value: appVersion },
 		...customTags
 	];
-	
+
 	const receipt = await uploader.upload(JSON.stringify(manifest), { tags });
 	console.log(`Updated manifest uploaded ==> https://gateway.irys.xyz/mutable/${originalManifestId}`);
 	return receipt.id;
@@ -263,7 +266,7 @@ export function getMutableFolderUrl(manifestId: string, fileName?: string): stri
 	// devnet 需要直接使用 devnet.irys.xyz 域名，避免 gateway.irys.xyz 的 302 重定向
 	let baseHost = gateways[0];
 	let baseUrl = `${baseHost}/mutable/${manifestId}`;
-	if(network === 'devnet'){
+	if (network === 'devnet') {
 		baseHost = 'https://devnet.irys.xyz';
 		baseUrl = `${baseHost}/${manifestId}`;
 	}
@@ -309,19 +312,19 @@ export function getCoverImageUrl(manifestId: string, useMutable = true): string 
  */
 export async function parseArticleFolderManifest(manifestId: string): Promise<ArticleFolderManifest> {
 	const manifest = await downloadManifest(manifestId);
-	
+
 	const result: ArticleFolderManifest = {
 		manifestId,
 		indexTxId: manifest.paths[ARTICLE_INDEX_FILE]?.id,
 		coverImageTxId: manifest.paths[ARTICLE_COVER_IMAGE_FILE]?.id,
 		allFiles: {}
 	};
-	
+
 	// 复制所有文件映射
 	for (const [fileName, { id }] of Object.entries(manifest.paths)) {
 		result.allFiles[fileName] = id;
 	}
-	
+
 	return result;
 }
 
@@ -332,12 +335,12 @@ export async function parseArticleFolderManifest(manifestId: string): Promise<Ar
  */
 export async function fetchArticleFromFolder(manifestId: string, useMutable = true): Promise<string> {
 	const url = getArticleContentUrl(manifestId, useMutable);
-	
+
 	const response = await fetch(url);
 	if (!response.ok) {
 		throw new Error(`Failed to fetch article content: ${response.status}`);
 	}
-	
+
 	return await response.text();
 }
 
@@ -361,12 +364,12 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 	// 根据 Irys 网络选择正确的 GraphQL 端点
 	// devnet 和 mainnet 使用不同的数据库
 	const network = getIrysNetwork();
-	const graphqlEndpoint = network === 'devnet' 
+	const graphqlEndpoint = network === 'devnet'
 		? 'https://devnet.irys.xyz/graphql'
 		: 'https://uploader.irys.xyz/graphql';
 	console.log('[queryArticleVersions] Using network:', network, 'endpoint:', graphqlEndpoint);
 	console.log('[queryArticleVersions] Querying versions for manifest:', originalManifestId);
-	
+
 	// 查询所有带有 Root-TX = originalManifestId 标签的交易，以及原始交易本身
 	const query = `
 		query getArticleVersions($rootTx: String!) {
@@ -390,9 +393,9 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 			}
 		}
 	`;
-	
+
 	const versions: ArticleVersion[] = [];
-	
+
 	try {
 		// 查询所有更新版本
 		const response = await fetch(graphqlEndpoint, {
@@ -405,13 +408,13 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				variables: { rootTx: originalManifestId }
 			})
 		});
-		
+
 		console.log('[queryArticleVersions] Response status:', response.status);
 		if (response.ok) {
 			const result = await response.json();
 			// console.log('[queryArticleVersions] GraphQL result:', JSON.stringify(result, null, 2));
 			const edges = result?.data?.transactions?.edges || [];
-			
+
 			for (const edge of edges) {
 				const node = edge.node;
 				const tags = node.tags || [];
@@ -425,7 +428,7 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				// 备用：检查是否使用不同的属性名
 				const titleTagAlt = tags.find((t: Record<string, string>) => t['name'] === 'Article-Title' || t['Name'] === 'Article-Title');
 				console.log('[queryArticleVersions] Found title tag:', titleTag, 'alt:', titleTagAlt);
-				
+
 				versions.push({
 					txId: node.id,
 					timestamp: node.timestamp,
@@ -434,7 +437,7 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				});
 			}
 		}
-		
+
 		// 添加原始版本（如果没有更新版本，或者作为第一个版本）
 		// 查询原始 manifest 的信息
 		// 注意：ids 参数需要数组格式
@@ -457,7 +460,7 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				}
 			}
 		`;
-		
+
 		console.log('[queryArticleVersions] Querying original manifest by ID...');
 		const originalResponse = await fetch(graphqlEndpoint, {
 			method: 'POST',
@@ -469,18 +472,18 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				variables: { ids: [originalManifestId] }
 			})
 		});
-		
+
 		console.log('[queryArticleVersions] Original query response status:', originalResponse.status);
 		if (originalResponse.ok) {
 			const originalResult = await originalResponse.json();
 			// console.log('[queryArticleVersions] Original query result:', JSON.stringify(originalResult, null, 2));
 			const originalEdges = originalResult?.data?.transactions?.edges || [];
-			
+
 			if (originalEdges.length > 0) {
 				const originalNode = originalEdges[0].node;
 				const originalTags = originalNode.tags || [];
 				const originalTitleTag = originalTags.find((t: { name: string; value: string }) => t.name === 'Article-Title');
-				
+
 				// 检查原始版本是否已在列表中
 				const existsInVersions = versions.some(v => v.txId === originalManifestId);
 				if (!existsInVersions) {
@@ -493,10 +496,10 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				}
 			}
 		}
-		
+
 		// 按时间戳降序排列（最新的在前）
 		versions.sort((a, b) => b.timestamp - a.timestamp);
-		
+
 		console.log('[queryArticleVersions] Found versions:', versions.length, versions);
 		return versions;
 	} catch (error) {
@@ -512,11 +515,11 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 export async function fetchArticleVersionContent(versionTxId: string): Promise<string> {
 	// 对于特定版本，不使用 mutable URL，直接使用 TX ID
 	const url = getStaticFolderUrl(versionTxId, ARTICLE_INDEX_FILE);
-	
+
 	const response = await fetch(url, { cache: 'no-store' });
 	if (!response.ok) {
 		throw new Error(`Failed to fetch article version content: ${response.status}`);
 	}
-	
+
 	return await response.text();
 }

@@ -13,7 +13,7 @@ import {
 	type IrysUploader
 } from './irys';
 import type { ArticleMetadata, IrysTag, IrysNetwork, ArticleFolderUploadParams, ArticleFolderUploadResult, ContentImageInfo } from './types';
-import { getAppName, getAppVersion } from '$lib/config';
+import { getConfig } from '$lib/config';
 import type { StoredSessionKey } from '$lib/sessionKey';
 import {
 	generateArticleFolderManifest,
@@ -47,8 +47,9 @@ export async function uploadArticleWithUploader(
 	metadata: Omit<ArticleMetadata, 'createdAt' | 'version'>
 ): Promise<string> {
 	// 准备完整数据
-	const appName = getAppName();
-	const appVersion = getAppVersion();
+	const appCfg = getConfig();
+	const appName = appCfg.appName;
+	const appVersion = appCfg.appVersion;
 	const fullMetadata: ArticleMetadata = {
 		...metadata,
 		version: appVersion,
@@ -101,14 +102,14 @@ export async function uploadImage(file: File, network: IrysNetwork = 'devnet'): 
  * @param file - 图片文件
  */
 export async function uploadImageWithUploader(uploader: IrysUploader, file: File): Promise<string> {
-	const appName = getAppName();
-	
+	const appName = getConfig().appName;
+
 	// 确保 Irys 余额充足
 	const hasBalance = await ensureIrysBalance(uploader, file.size);
 	if (!hasBalance) {
 		throw new Error('Failed to fund Irys. Please try again.');
 	}
-	
+
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: file.type },
 		{ name: 'App-Name', value: appName },
@@ -139,7 +140,7 @@ export async function uploadData(
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
 	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
-	const appName = getAppName();
+	const appName = getConfig().appName;
 
 	// 计算数据大小并确保余额充足
 	const dataSize = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
@@ -180,8 +181,9 @@ export async function uploadArticleWithUploaderAndPayer(
 	paidBy: string
 ): Promise<string> {
 	// 准备完整数据
-	const appName = getAppName();
-	const appVersion = getAppVersion();
+	const appCfg = getConfig();
+	const appName = appCfg.appName;
+	const appVersion = appCfg.appVersion;
 	const fullMetadata: ArticleMetadata = {
 		...metadata,
 		version: appVersion,
@@ -230,13 +232,13 @@ export async function uploadImageWithUploaderAndPayer(
 	file: File,
 	paidBy: string
 ): Promise<string> {
-	const appName = getAppName();
+	const appName = getConfig().appName;
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
 	const isFreeUpload = isWithinIrysFreeLimit(file.size);
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
-	
+
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: file.type },
 		{ name: 'App-Name', value: appName },
@@ -295,7 +297,7 @@ export async function uploadDataWithSessionKey(
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
 	const { uploader, ownerAddress } = await getSessionKeyUploaderAndOwner(sessionKey, network);
-	const appName = getAppName();
+	const appName = getConfig().appName;
 	const dataSize = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
 	const effectivePaidBy = isWithinIrysFreeLimit(dataSize) ? undefined : ownerAddress;
 
@@ -335,8 +337,9 @@ async function uploadMarkdownContent(
 	articleTags: string[],
 	paidBy?: string
 ): Promise<string> {
-	const appName = getAppName();
-	const appVersion = getAppVersion();
+	const appCfg = getConfig();
+	const appName = appCfg.appName;
+	const appVersion = appCfg.appVersion;
 	const dataSize = new TextEncoder().encode(content).length;
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
@@ -362,7 +365,7 @@ async function uploadMarkdownContent(
 	];
 
 	try {
-		const uploadOptions = effectivePaidBy 
+		const uploadOptions = effectivePaidBy
 			? { tags, upload: { paidBy: effectivePaidBy } }
 			: { tags };
 		const receipt = await uploader.upload(content, uploadOptions);
@@ -385,7 +388,7 @@ async function uploadCoverImageFile(
 	file: File,
 	paidBy?: string
 ): Promise<string> {
-	const appName = getAppName();
+	const appName = getConfig().appName;
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
@@ -407,7 +410,7 @@ async function uploadCoverImageFile(
 	];
 
 	try {
-		const uploadOptions = effectivePaidBy 
+		const uploadOptions = effectivePaidBy
 			? { tags, upload: { paidBy: effectivePaidBy } }
 			: { tags };
 		const receipt = await uploader.uploadFile(file, uploadOptions);
@@ -431,7 +434,7 @@ async function uploadContentImageFile(
 	imageInfo: ContentImageInfo,
 	paidBy?: string
 ): Promise<{ filename: string; txId: string }> {
-	const appName = getAppName();
+	const appName = getConfig().appName;
 	const filename = `${imageInfo.id}.${imageInfo.extension}`;
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
@@ -454,7 +457,7 @@ async function uploadContentImageFile(
 	];
 
 	try {
-		const uploadOptions = effectivePaidBy 
+		const uploadOptions = effectivePaidBy
 			? { tags, upload: { paidBy: effectivePaidBy } }
 			: { tags };
 		const receipt = await uploader.uploadFile(imageInfo.file, uploadOptions);
@@ -673,7 +676,7 @@ export async function updateArticleFolderWithUploader(
 	if (coverImageTxId) {
 		files.set(ARTICLE_COVER_IMAGE_FILE, coverImageTxId);
 	}
-	
+
 	// Debug: 显示 manifest 将包含的文件
 	console.log('Manifest files:', {
 		[ARTICLE_INDEX_FILE]: indexTxId,
@@ -682,7 +685,7 @@ export async function updateArticleFolderWithUploader(
 
 	// 使用 SDK 的 generateFolder 生成 manifest
 	const manifest = await generateArticleFolderManifest(uploader, files, ARTICLE_INDEX_FILE);
-	
+
 	// Debug: 显示生成的 manifest 内容
 	console.log('Generated manifest:', JSON.stringify(manifest, null, 2));
 
@@ -706,9 +709,9 @@ export async function updateArticleFolderWithUploader(
 	// 使用 uploadUpdatedManifest 添加 Root-TX 标签
 	const { uploadUpdatedManifest } = await import('./folder');
 	const newManifestTxId = await uploadUpdatedManifestWithPayer(
-		uploader, 
-		manifest, 
-		originalManifestId, 
+		uploader,
+		manifest,
+		originalManifestId,
 		manifestTags,
 		paidBy
 	);
@@ -718,13 +721,13 @@ export async function updateArticleFolderWithUploader(
 	console.log(`  - New Manifest TX: ${newManifestTxId}`);
 	console.log(`  - New Index TX: ${indexTxId}`);
 	console.log(`  - Mutable URL: https://gateway.irys.xyz/mutable/${originalManifestId}`);
-	
+
 	// 验证步骤：对比直接获取和 mutable URL 获取的 manifest
 	try {
 		const { getArweaveGateways } = await import('$lib/config');
 		const gateways = getArweaveGateways();
 		const gateway = gateways[0];
-		
+
 		// 1. 直接获取新上传的 manifest
 		const directUrl = `${gateway}/${newManifestTxId}`;
 		console.log(`Verifying: fetching new manifest directly from ${directUrl}`);
@@ -735,7 +738,7 @@ export async function updateArticleFolderWithUploader(
 			const directManifest = await directResponse.json();
 			console.log(`Direct manifest index.md TX:`, directManifest.paths?.['index.md']?.id);
 		}
-		
+
 		// 2. 通过 mutable URL 获取 manifest
 		const mutableUrl = `${gateway}/mutable/${originalManifestId}?_t=${Date.now()}`;
 		console.log(`Verifying: fetching via mutable URL ${mutableUrl}`);
@@ -746,7 +749,7 @@ export async function updateArticleFolderWithUploader(
 		if (mutableResponse.ok) {
 			const mutableManifest = await mutableResponse.json();
 			console.log(`Mutable manifest index.md TX:`, mutableManifest.paths?.['index.md']?.id);
-			
+
 			// 对比是否相同
 			const directIndexId = (await (await fetch(directUrl, { headers: { 'Accept': 'application/x.irys-manifest+json' } })).json()).paths?.['index.md']?.id;
 			if (directIndexId === mutableManifest.paths?.['index.md']?.id) {
@@ -777,8 +780,8 @@ async function uploadUpdatedManifestWithPayer(
 	customTags: IrysTag[] = [],
 	paidBy?: string
 ): Promise<string> {
-	const appName = getAppName();
-	const appVersion = getAppVersion();
+	const appName = getConfig().appName;
+	const appVersion = getConfig().appVersion;
 	const manifestData = JSON.stringify(manifest);
 	const dataSize = new TextEncoder().encode(manifestData).length;
 
@@ -794,7 +797,7 @@ async function uploadUpdatedManifestWithPayer(
 		{ name: 'App-Version', value: appVersion },
 		...customTags
 	];
-	
+
 	// Debug: 显示上传的标签
 	console.log('Manifest upload tags:', tags.map(t => `${t.name}=${t.value}`).join(', '));
 	console.log('Manifest data being uploaded:', manifestData);

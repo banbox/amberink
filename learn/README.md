@@ -1141,3 +1141,5 @@ Claude：已完成
 help.md frontend\src\lib\chain.ts frontend\src\lib\stores\config.svelte.ts 这两个文件中都配置了很多链和相关的地址等，后者的配置更详细些。我希望集中在一个地方维护这些配置，这样当新增或删除链ID及其配置时，只需修改一个地方。请帮我考虑在哪里集中维护比较合适，然后帮我进行修改，使用链ID配置更为详细的版本  
 Claude：已完成
 
+### 2025-12-25 11:00  删除getAppName和getAppVersion
+@help.md 在整个前端 frontend 中搜索getAppName和getAppVersion，删除对这两个函数的引用，改为直接使用getConfig().appName和getConfig().appVersion，减少代码冗余  

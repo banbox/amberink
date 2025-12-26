@@ -15,7 +15,7 @@
 	import { getAvatarUrl } from '$lib/arweave';
 	import { shortAddress, formatDate } from '$lib/utils';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
-	import { getAppName } from '$lib/config';
+	import { getConfig } from '$lib/config';
 
 	const PAGE_SIZE = 20;
 
@@ -142,7 +142,7 @@
 </script>
 
 <svelte:head>
-	<title>{user?.nickname || shortAddress(authorId)} - {getAppName()}</title>
+	<title>{user?.nickname || shortAddress(authorId)} - {getConfig().appName}</title>
 </svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8">

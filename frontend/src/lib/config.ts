@@ -33,6 +33,7 @@ import {
 
 // Re-export store functions for settings page
 export {
+	getConfig,
 	getUserConfig,
 	setConfigValue,
 	updateConfig,
@@ -71,14 +72,6 @@ export function getChainId(): number {
 
 export function getIrysNetwork(): 'mainnet' | 'devnet' {
 	return getConfig().irysNetwork;
-}
-
-export function getAppName(): string {
-	return defaults.appName;
-}
-
-export function getAppVersion(): string {
-	return defaults.appVersion;
 }
 
 export function getArweaveGateways(): string[] {

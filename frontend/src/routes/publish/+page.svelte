@@ -6,7 +6,7 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
 	import { usdToWei } from '$lib/priceService';
-	import { getDefaultCollectPriceUsd, getAppName } from '$lib/config';
+	import { getDefaultCollectPriceUsd, getConfig } from '$lib/config';
 
 	// Helper function to get category label
 	function getCategoryLabel(key: string): string {
@@ -265,7 +265,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.publish_article()} - {getAppName()}</title>
+	<title>{m.publish_article()} - {getConfig().appName}</title>
 </svelte:head>
 
 <div class="min-h-screen bg-white">
@@ -275,7 +275,13 @@
 			<p class="text-gray-500">{m.share_thoughts()}</p>
 		</header>
 
-		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-8">
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				handleSubmit();
+			}}
+			class="space-y-8"
+		>
 			{#key resetImageKey}
 				<ArticleEditor
 					bind:formData

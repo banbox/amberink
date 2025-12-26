@@ -15,7 +15,7 @@
 	import { updateProfile } from '$lib/contracts';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import { getAvatarUrl, uploadImage } from '$lib/arweave';
-	import { getIrysNetwork, getAppName } from '$lib/config';
+	import { getIrysNetwork, getConfig } from '$lib/config';
 	import { shortAddress, formatDate } from '$lib/utils';
 	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 
@@ -277,14 +277,24 @@
 </script>
 
 <svelte:head>
-	<title>{m.profile ? m.profile() : 'Profile'} - {getAppName()}</title>
+	<title>{m.profile ? m.profile() : 'Profile'} - {getConfig().appName}</title>
 </svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	{#if !connected}
 		<div class="py-16 text-center">
-			<svg class="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+			<svg
+				class="mx-auto h-16 w-16 text-gray-300"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="1.5"
+					d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+				/>
 			</svg>
 			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.please_connect_wallet()}</h3>
 		</div>
@@ -294,9 +304,15 @@
 			<div class="flex items-start gap-4">
 				<!-- Avatar -->
 				{#if getAvatarUrl(user?.avatar)}
-					<img src={getAvatarUrl(user?.avatar)} alt="Avatar" class="h-20 w-20 rounded-full object-cover" />
+					<img
+						src={getAvatarUrl(user?.avatar)}
+						alt="Avatar"
+						class="h-20 w-20 rounded-full object-cover"
+					/>
 				{:else}
-					<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white">
+					<div
+						class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white"
+					>
 						{walletAddress?.slice(2, 4).toUpperCase()}
 					</div>
 				{/if}
@@ -315,7 +331,8 @@
 							<span>{user.totalFollowing} {m.following_count().toLowerCase()}</span>
 						</div>
 						<p class="mt-1 text-sm text-gray-400">
-							{m.member_since()} {formatDate(user.createdAt)}
+							{m.member_since()}
+							{formatDate(user.createdAt)}
 						</p>
 					{/if}
 				</div>
@@ -367,15 +384,28 @@
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
 								{#if getAvatarUrl(follower.avatar)}
-									<img src={getAvatarUrl(follower.avatar)} alt="" class="h-12 w-12 rounded-full object-cover" />
+									<img
+										src={getAvatarUrl(follower.avatar)}
+										alt=""
+										class="h-12 w-12 rounded-full object-cover"
+									/>
 								{:else}
-									<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
-										{follower.nickname ? follower.nickname.slice(0, 2).toUpperCase() : follower.id.slice(2, 4).toUpperCase()}
+									<div
+										class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
+									>
+										{follower.nickname
+											? follower.nickname.slice(0, 2).toUpperCase()
+											: follower.id.slice(2, 4).toUpperCase()}
 									</div>
 								{/if}
 								<div class="flex-1">
-									<p class="font-medium text-gray-900">{follower.nickname || shortAddress(follower.id)}</p>
-									<p class="text-sm text-gray-500">{follower.totalArticles} {m.articles().toLowerCase()}</p>
+									<p class="font-medium text-gray-900">
+										{follower.nickname || shortAddress(follower.id)}
+									</p>
+									<p class="text-sm text-gray-500">
+										{follower.totalArticles}
+										{m.articles().toLowerCase()}
+									</p>
 								</div>
 							</a>
 						{/if}
@@ -397,15 +427,28 @@
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
 								{#if getAvatarUrl(followingUser.avatar)}
-									<img src={getAvatarUrl(followingUser.avatar)} alt="" class="h-12 w-12 rounded-full object-cover" />
+									<img
+										src={getAvatarUrl(followingUser.avatar)}
+										alt=""
+										class="h-12 w-12 rounded-full object-cover"
+									/>
 								{:else}
-									<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
-										{followingUser.nickname ? followingUser.nickname.slice(0, 2).toUpperCase() : followingUser.id.slice(2, 4).toUpperCase()}
+									<div
+										class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
+									>
+										{followingUser.nickname
+											? followingUser.nickname.slice(0, 2).toUpperCase()
+											: followingUser.id.slice(2, 4).toUpperCase()}
 									</div>
 								{/if}
 								<div class="flex-1">
-									<p class="font-medium text-gray-900">{followingUser.nickname || shortAddress(followingUser.id)}</p>
-									<p class="text-sm text-gray-500">{followingUser.totalArticles} {m.articles().toLowerCase()}</p>
+									<p class="font-medium text-gray-900">
+										{followingUser.nickname || shortAddress(followingUser.id)}
+									</p>
+									<p class="text-sm text-gray-500">
+										{followingUser.totalArticles}
+										{m.articles().toLowerCase()}
+									</p>
 								</div>
 							</a>
 						{/if}
@@ -522,7 +565,11 @@
 							{#if avatarUrl}
 								<div>
 									<p class="text-sm font-medium text-gray-500">{m.avatar()}</p>
-									<img src={avatarUrl} alt="Avatar" class="mt-2 h-24 w-24 rounded-full object-cover" />
+									<img
+										src={avatarUrl}
+										alt="Avatar"
+										class="mt-2 h-24 w-24 rounded-full object-cover"
+									/>
 								</div>
 							{/if}
 						{/if}
@@ -542,8 +589,13 @@
 			<div class="flex justify-center py-8">
 				<div class="flex items-center gap-3 text-gray-500">
 					<svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+						></circle>
+						<path
+							class="opacity-75"
+							fill="currentColor"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+						></path>
 					</svg>
 					<span>{m.loading()}</span>
 				</div>

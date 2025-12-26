@@ -6,7 +6,7 @@
 	import { client, ARTICLES_QUERY, ALL_ARTICLES_QUERY, type ArticleData } from '$lib/graphql';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import CategoryFilter from '$lib/components/CategoryFilter.svelte';
-	import { getAppName } from '$lib/config';
+	import { getConfig } from '$lib/config';
 
 	const PAGE_SIZE = 20;
 
@@ -114,7 +114,7 @@
 </script>
 
 <svelte:head>
-	<title>{getAppName()}</title>
+	<title>{getConfig().appName}</title>
 </svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8">
@@ -173,13 +173,7 @@
 		<div class="flex justify-center py-8">
 			<div class="flex items-center gap-3 text-gray-500">
 				<svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
-					<circle
-						class="opacity-25"
-						cx="12"
-						cy="12"
-						r="10"
-						stroke="currentColor"
-						stroke-width="4"
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
 					></circle>
 					<path
 						class="opacity-75"
