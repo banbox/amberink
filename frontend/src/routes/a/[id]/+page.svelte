@@ -14,7 +14,8 @@
 	import { parseEther, formatUnits } from 'viem';
 	import { client, USER_BY_ID_QUERY, type UserData } from '$lib/graphql';
 	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
-	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd } from '$lib/config';
+	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways } from '$lib/config';
+	import { getBlockExplorerTxUrl } from '$lib/chain';
 	import {
 		EvaluationScore,
 		collectArticle,
@@ -652,22 +653,42 @@
 </script>
 
 <svelte:head>
-	<title>{currentVersionMeta?.title || article.title || `Article #${article.articleId}`} - AmberInk</title>
-	<meta name="description" content={articleContent?.summary || currentVersionMeta?.title || article.title || 'AmberInk Article'} />
+	<title
+		>{currentVersionMeta?.title || article.title || `Article #${article.articleId}`} - AmberInk</title
+	>
+	<meta
+		name="description"
+		content={articleContent?.summary ||
+			currentVersionMeta?.title ||
+			article.title ||
+			'AmberInk Article'}
+	/>
 </svelte:head>
 
 <!-- Medium-style article layout -->
 <article class="mx-auto w-full max-w-[680px] px-6 py-12">
 	<!-- Old Version Banner -->
 	{#if isViewingOldVersion}
-		<div class="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+		<div
+			class="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+		>
 			<div class="flex items-center gap-2 text-amber-800">
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+				<svg
+					class="h-5 w-5"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+					/>
 				</svg>
 				<span class="text-sm font-medium">You are viewing a historical version</span>
 			</div>
-			<a 
+			<a
 				href={`/a/${article.id}`}
 				class="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-amber-700"
 			>
@@ -687,7 +708,11 @@
 			<!-- Avatar -->
 			<a href={`/u/${authorAddress}`} class="shrink-0">
 				{#if getAvatarUrl(authorAvatar)}
-					<img src={getAvatarUrl(authorAvatar)} alt="" class="h-11 w-11 rounded-full object-cover" />
+					<img
+						src={getAvatarUrl(authorAvatar)}
+						alt=""
+						class="h-11 w-11 rounded-full object-cover"
+					/>
 				{:else}
 					<div
 						class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
@@ -726,11 +751,18 @@
 					<span>·</span>
 					<!-- Originality Tag with different background colors -->
 					{#if article.originality === 0}
-						<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Original</span>
+						<span
+							class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
+							>Original</span
+						>
 					{:else if article.originality === 1}
-						<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Semi-Original</span>
+						<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+							>Semi-Original</span
+						>
 					{:else}
-						<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Reprint</span>
+						<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+							>Reprint</span
+						>
 					{/if}
 				</div>
 			</div>
@@ -738,206 +770,308 @@
 	</header>
 
 	{#snippet interactionBar(position: 'top' | 'bottom')}
-	<div class={position === 'top' ? 'mb-8' : 'mt-12'} >
-		<div class="flex items-center justify-between border-y border-gray-100 py-3">
-			<div class="flex items-center gap-5">
-				<!-- Quality Score -->
-				{#if qualityScore() !== null}
-					<span class={`text-lg font-bold ${getScoreColor(qualityScore())}`} title="Article Quality Score">
-						{qualityScore()?.toFixed(1)}
-					</span>
-				{:else}
-					<span class="text-lg font-bold text-gray-300" title="No ratings yet">--</span>
-				{/if}
-
-				<!-- Like/Tip -->
-				<button
-					type="button"
-					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-amber-500"
-					onclick={() => showTipModal = true}
-					title={m.tip({})}
-				>
-					<!-- Thumbs Up Icon -->
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V2.75a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m10.598-9.75H14.25M5.904 18.5c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 0 1-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 9.953 4.167 9.5 5 9.5h1.053c.472 0 .745.556.5.96a8.958 8.958 0 0 0-1.302 4.665c0 1.194.232 2.333.652 3.375Z" />
-					</svg>
-					<span class="text-sm">{formatTips(article.totalTips)} {nativeSymbol}</span>
-				</button>
-
-				<!-- Comments -->
-				<a
-					href="#comments"
-					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-					title={m.comments({})}
-				>
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
-						/>
-					</svg>
-					<span class="text-sm">{article.comments?.length || 0}</span>
-				</a>
-
-				<!-- Collect/Bookmark (only show when collecting is enabled) -->
-				{#if collectEnabled}
-					<button
-						type="button"
-						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-						onclick={() => showCollectModal = true}
-						title="Collect"
-					>
-						<!-- Bookmark Icon -->
-						<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
-						</svg>
-						<span class="text-sm">{localCollectCount}/{maxCollectSupply.toString()}</span>
-					</button>
-				{/if}
-
-				<!-- Dislike -->
-				<button
-					type="button"
-					class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-red-500 disabled:opacity-50"
-					onclick={() => showDislikeModal = true}
-					disabled={isDisliking}
-					title={m.dislike({})}
-				>
-					<!-- Thumbs Down Icon -->
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715a12.137 12.137 0 0 1-.068-1.285c0-2.848.992-5.464 2.649-7.521C5.287 4.247 5.886 4 6.504 4h4.016a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384m-10.253 0H4.372M18.75 5.5h-.908c-.392 0-.651.385-.575.75.076.364.183.75.183.75.591 1.2.924 2.55.924 3.977a8.96 8.96 0 0 1-.999 4.125m0-8.852c.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398-.306.78-1.086 1.233-1.919 1.233h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 0 0 .303-.54" />
-					</svg>
-					<span class="text-sm">{formatTips(localDislikeAmount)}</span>
-				</button>
-			</div>
-
-			<!-- Right side: History, Edit & Share -->
-			<div class="flex items-center gap-3">
-				<!-- History versions button -->
-				<div class="relative">
-					<button
-						type="button"
-						onclick={toggleVersionsDropdown}
-						class="flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-900"
-						title="View history versions"
-					>
-						<!-- Clock/History Icon -->
-						<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-						</svg>
-						{#if versionsLoading}
-							<svg class="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-							</svg>
-						{/if}
-					</button>
-					
-					<!-- Versions Dropdown -->
-					{#if showVersionsDropdown}
-						<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-						<div 
-							class="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
-							onclick={(e) => e.stopPropagation()}
+		<div class={position === 'top' ? 'mb-8' : 'mt-12'}>
+			<div class="flex items-center justify-between border-y border-gray-100 py-3">
+				<div class="flex items-center gap-5">
+					<!-- Quality Score -->
+					{#if qualityScore() !== null}
+						<span
+							class={`text-lg font-bold ${getScoreColor(qualityScore())}`}
+							title="Article Quality Score"
 						>
-							<div class="border-b border-gray-100 px-4 py-3">
-								<div class="flex items-center justify-between">
-									<h4 class="font-medium text-gray-900">History Versions</h4>
-									<button
-										type="button"
-										onclick={() => showVersionsDropdown = false}
-										class="text-gray-400 hover:text-gray-600"
-										aria-label="Close versions dropdown"
-									>
-										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-										</svg>
-									</button>
-								</div>
-								{#if isViewingOldVersion}
-									<a 
-										href={`/a/${article.id}`}
-										class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-									>
-										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
-										</svg>
-										Back to latest version
-									</a>
-								{/if}
-							</div>
-							<div class="max-h-64 overflow-y-auto">
-								{#if versions.length === 0}
-									<div class="px-4 py-6 text-center text-sm text-gray-500">
-										{versionsLoading ? 'Loading...' : 'No version history found'}
-									</div>
-								{:else}
-									{#each versions as version, idx}
-										<a
-											href={idx === 0 ? `/a/${article.id}` : `/a/${article.id}?v=${version.txId}`}
-											class="flex items-start gap-3 border-b border-gray-50 px-4 py-3 transition-colors hover:bg-gray-50"
-											class:bg-blue-50={versionTxId === version.txId || (idx === 0 && !versionTxId)}
-											onclick={() => showVersionsDropdown = false}
-										>
-											<div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
-												{versions.length - idx}
-											</div>
-											<div class="min-w-0 flex-1">
-												<div class="flex items-center gap-2">
-													<span class="truncate font-medium text-gray-900">
-														{version.title || article.title || 'Untitled'}
-													</span>
-													{#if idx === 0}
-														<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">Latest</span>
-													{/if}
-												</div>
-												<div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-													<span>{formatTimestamp(version.timestamp)}</span>
-													{#if version.owner}
-														<span>·</span>
-														<span>{shortAddress(version.owner)}</span>
-													{/if}
-												</div>
-											</div>
-										</a>
-									{/each}
-								{/if}
-							</div>
-						</div>
+							{qualityScore()?.toFixed(1)}
+						</span>
+					{:else}
+						<span class="text-lg font-bold text-gray-300" title="No ratings yet">--</span>
 					{/if}
+
+					<!-- Like/Tip -->
+					<button
+						type="button"
+						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-amber-500"
+						onclick={() => (showTipModal = true)}
+						title={m.tip({})}
+					>
+						<!-- Thumbs Up Icon -->
+						<svg
+							class="h-5 w-5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V2.75a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m10.598-9.75H14.25M5.904 18.5c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 0 1-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 9.953 4.167 9.5 5 9.5h1.053c.472 0 .745.556.5.96a8.958 8.958 0 0 0-1.302 4.665c0 1.194.232 2.333.652 3.375Z"
+							/>
+						</svg>
+						<span class="text-sm">{formatTips(article.totalTips)} {nativeSymbol}</span>
+					</button>
+
+					<!-- Comments -->
+					<a
+						href="#comments"
+						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+						title={m.comments({})}
+					>
+						<svg
+							class="h-5 w-5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+							/>
+						</svg>
+						<span class="text-sm">{article.comments?.length || 0}</span>
+					</a>
+
+					<!-- Collect/Bookmark (only show when collecting is enabled) -->
+					{#if collectEnabled}
+						<button
+							type="button"
+							class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+							onclick={() => (showCollectModal = true)}
+							title="Collect"
+						>
+							<!-- Bookmark Icon -->
+							<svg
+								class="h-5 w-5"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z"
+								/>
+							</svg>
+							<span class="text-sm">{localCollectCount}/{maxCollectSupply.toString()}</span>
+						</button>
+					{/if}
+
+					<!-- Dislike -->
+					<button
+						type="button"
+						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-red-500 disabled:opacity-50"
+						onclick={() => (showDislikeModal = true)}
+						disabled={isDisliking}
+						title={m.dislike({})}
+					>
+						<!-- Thumbs Down Icon -->
+						<svg
+							class="h-5 w-5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715a12.137 12.137 0 0 1-.068-1.285c0-2.848.992-5.464 2.649-7.521C5.287 4.247 5.886 4 6.504 4h4.016a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384m-10.253 0H4.372M18.75 5.5h-.908c-.392 0-.651.385-.575.75.076.364.183.75.183.75.591 1.2.924 2.55.924 3.977a8.96 8.96 0 0 1-.999 4.125m0-8.852c.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398-.306.78-1.086 1.233-1.919 1.233h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 0 0 .303-.54"
+							/>
+						</svg>
+						<span class="text-sm">{formatTips(localDislikeAmount)}</span>
+					</button>
 				</div>
 
-				<!-- Edit button (only for author) -->
-				{#if isAuthor}
-					<a
-						href={`/edit/${article.id}`}
-						class="text-gray-500 transition-colors hover:text-blue-600"
-						title={m.edit({})}
+				<!-- Right side: History, Edit & Share -->
+				<div class="flex items-center gap-3">
+					<!-- History versions button -->
+					<div class="relative">
+						<button
+							type="button"
+							onclick={toggleVersionsDropdown}
+							class="flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-900"
+							title="View history versions"
+						>
+							<!-- Clock/History Icon -->
+							<svg
+								class="h-5 w-5"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+								/>
+							</svg>
+							{#if versionsLoading}
+								<svg class="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									></circle>
+									<path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+									></path>
+								</svg>
+							{/if}
+						</button>
+
+						<!-- Versions Dropdown -->
+						{#if showVersionsDropdown}
+							<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+							<div
+								class="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
+								onclick={(e) => e.stopPropagation()}
+							>
+								<div class="border-b border-gray-100 px-4 py-3">
+									<div class="flex items-center justify-between">
+										<h4 class="font-medium text-gray-900">History Versions</h4>
+										<button
+											type="button"
+											onclick={() => (showVersionsDropdown = false)}
+											class="text-gray-400 hover:text-gray-600"
+											aria-label="Close versions dropdown"
+										>
+											<svg
+												class="h-4 w-4"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M6 18L18 6M6 6l12 12"
+												/>
+											</svg>
+										</button>
+									</div>
+									{#if isViewingOldVersion}
+										<a
+											href={`/a/${article.id}`}
+											class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+										>
+											<svg
+												class="h-3 w-3"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
+												/>
+											</svg>
+											Back to latest version
+										</a>
+									{/if}
+								</div>
+								<div class="max-h-64 overflow-y-auto">
+									{#if versions.length === 0}
+										<div class="px-4 py-6 text-center text-sm text-gray-500">
+											{versionsLoading ? 'Loading...' : 'No version history found'}
+										</div>
+									{:else}
+										{#each versions as version, idx}
+											<a
+												href={idx === 0 ? `/a/${article.id}` : `/a/${article.id}?v=${version.txId}`}
+												class="flex items-start gap-3 border-b border-gray-50 px-4 py-3 transition-colors hover:bg-gray-50"
+												class:bg-blue-50={versionTxId === version.txId ||
+													(idx === 0 && !versionTxId)}
+												onclick={() => (showVersionsDropdown = false)}
+											>
+												<div
+													class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600"
+												>
+													{versions.length - idx}
+												</div>
+												<div class="min-w-0 flex-1">
+													<div class="flex items-center gap-2">
+														<span class="truncate font-medium text-gray-900">
+															{version.title || article.title || 'Untitled'}
+														</span>
+														{#if idx === 0}
+															<span
+																class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700"
+																>Latest</span
+															>
+														{/if}
+													</div>
+													<div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+														<span>{formatTimestamp(version.timestamp)}</span>
+														{#if version.owner}
+															<span>·</span>
+															<span>{shortAddress(version.owner)}</span>
+														{/if}
+													</div>
+												</div>
+											</a>
+										{/each}
+									{/if}
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Edit button (only for author) -->
+					{#if isAuthor}
+						<a
+							href={`/edit/${article.id}`}
+							class="text-gray-500 transition-colors hover:text-blue-600"
+							title={m.edit({})}
+						>
+							<svg
+								class="h-5 w-5"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
+								/>
+							</svg>
+						</a>
+					{/if}
+					<button
+						type="button"
+						onclick={handleShare}
+						class="text-gray-500 transition-colors hover:text-gray-900"
+						title={m.share({})}
 					>
-						<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+						<svg
+							class="h-5 w-5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"
+							/>
 						</svg>
-					</a>
-				{/if}
-				<button
-					type="button"
-					onclick={handleShare}
-					class="text-gray-500 transition-colors hover:text-gray-900"
-					title={m.share({})}
-				>
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"
-						/>
-					</svg>
-				</button>
+					</button>
+				</div>
 			</div>
 		</div>
-	</div>
-{/snippet}
+	{/snippet}
 
 	<!-- Interaction Bar (Top) -->
 	{@render interactionBar('top')}
@@ -962,8 +1096,13 @@
 			<div class="flex items-center justify-center py-16">
 				<div class="flex items-center gap-3 text-gray-500">
 					<svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+						></circle>
+						<path
+							class="opacity-75"
+							fill="currentColor"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+						></path>
 					</svg>
 					<span>{m.loading_content({})}</span>
 				</div>
@@ -972,7 +1111,7 @@
 			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
 				<p class="text-red-700">{contentError}</p>
 				<a
-					href={`https://gateway.irys.xyz/${article.id}`}
+					href={`${getArweaveGateways()[0]}/${article.id}`}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="mt-3 inline-block text-sm text-red-600 underline hover:text-red-800"
@@ -982,7 +1121,11 @@
 			</div>
 		{:else if articleContent?.content}
 			<div class="prose prose-lg prose-gray max-w-none font-serif">
-				{@html DOMPurify.sanitize(marked(processContentImages(articleContent.content, versionTxId || article.id, !versionTxId)) as string)}
+				{@html DOMPurify.sanitize(
+					marked(
+						processContentImages(articleContent.content, versionTxId || article.id, !versionTxId)
+					) as string
+				)}
 			</div>
 		{:else}
 			<div class="py-8 text-center text-gray-500">
@@ -1031,7 +1174,7 @@
 			<div class="flex items-center gap-1">
 				<span class="font-medium text-gray-700">{m.transaction({})}:</span>
 				<a
-					href={`https://sepolia-optimism.etherscan.io/tx/${article.txHash}`}
+					href={getBlockExplorerTxUrl(article.txHash)}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="text-blue-600 hover:underline"
@@ -1042,7 +1185,7 @@
 			<div class="flex items-center gap-1">
 				<span class="font-medium text-gray-700">Arweave:</span>
 				<a
-					href={`https://gateway.irys.xyz/${article.id}`}
+					href={`${getArweaveGateways()[0]}/${article.id}`}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="text-blue-600 hover:underline"
@@ -1070,16 +1213,28 @@
 })}
 	{#if config.show}
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" tabindex="-1" onclick={config.onClose}>
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			onclick={config.onClose}
+		>
 			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-			<div class="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" role="document" onclick={(e) => e.stopPropagation()}>
+			<div
+				class="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+				role="document"
+				onclick={(e) => e.stopPropagation()}
+			>
 				<h3 class="mb-4 text-lg font-bold text-gray-900">{config.title}</h3>
 				{#if config.description}
 					<p class="mb-4 text-sm text-gray-500">{config.description}</p>
 				{/if}
-				
+
 				<div class="mb-4">
-					<label for={config.inputId} class="mb-2 block text-sm font-medium text-gray-700">{config.labelText}</label>
+					<label for={config.inputId} class="mb-2 block text-sm font-medium text-gray-700"
+						>{config.labelText}</label
+					>
 					<div class="flex items-center gap-2">
 						<span class="text-sm font-medium text-gray-600">$</span>
 						<input
@@ -1155,11 +1310,21 @@
 <!-- Collect Modal (only when collecting is enabled) -->
 {#if showCollectModal && collectEnabled}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" tabindex="-1" onclick={() => showCollectModal = false}>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+		onclick={() => (showCollectModal = false)}
+	>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="document" onclick={(e) => e.stopPropagation()}>
+		<div
+			class="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+			role="document"
+			onclick={(e) => e.stopPropagation()}
+		>
 			<h3 class="mb-4 text-lg font-bold text-gray-900">Collect Article</h3>
-			
+
 			<!-- Collect Stats -->
 			<div class="mb-6 grid grid-cols-3 gap-4">
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
@@ -1172,7 +1337,9 @@
 				</div>
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
 					<div class="text-2xl font-bold text-gray-900">
-						{maxCollectSupply > 0n ? (maxCollectSupply - BigInt(localCollectCount)).toString() : '∞'}
+						{maxCollectSupply > 0n
+							? (maxCollectSupply - BigInt(localCollectCount)).toString()
+							: '∞'}
 					</div>
 					<div class="text-xs text-gray-500">Remaining</div>
 				</div>
@@ -1181,7 +1348,9 @@
 			<!-- Collectors List -->
 			{#if article.collections && article.collections.length > 0}
 				<div class="mb-6">
-					<h4 class="mb-3 text-sm font-medium text-gray-700">Collectors ({article.collections.length})</h4>
+					<h4 class="mb-3 text-sm font-medium text-gray-700">
+						Collectors ({article.collections.length})
+					</h4>
 					<div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200">
 						<table class="w-full text-sm">
 							<thead class="sticky top-0 bg-gray-50">
@@ -1195,15 +1364,26 @@
 								{#each article.collections as collection}
 									<tr class="hover:bg-gray-50">
 										<td class="px-3 py-2">
-											<a href={`/u/${collection.user.id}`} class="flex items-center gap-2 hover:underline">
+											<a
+												href={`/u/${collection.user.id}`}
+												class="flex items-center gap-2 hover:underline"
+											>
 												{#if getAvatarUrl(collection.user.avatar)}
-													<img src={getAvatarUrl(collection.user.avatar)} alt="" class="h-6 w-6 rounded-full object-cover" />
+													<img
+														src={getAvatarUrl(collection.user.avatar)}
+														alt=""
+														class="h-6 w-6 rounded-full object-cover"
+													/>
 												{:else}
-													<div class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white">
+													<div
+														class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
+													>
 														{collection.user.id.slice(2, 4).toUpperCase()}
 													</div>
 												{/if}
-												<span class="truncate text-gray-700">{collection.user.nickname || shortAddress(collection.user.id)}</span>
+												<span class="truncate text-gray-700"
+													>{collection.user.nickname || shortAddress(collection.user.id)}</span
+												>
 											</a>
 										</td>
 										<td class="px-3 py-2 text-right font-medium text-emerald-600">
@@ -1228,7 +1408,7 @@
 			<div class="flex gap-3">
 				<button
 					type="button"
-					onclick={() => showCollectModal = false}
+					onclick={() => (showCollectModal = false)}
 					class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
 					disabled={isCollecting}
 				>
@@ -1256,12 +1436,12 @@
 <!-- Tip Modal -->
 {@render amountModal({
 	show: showTipModal,
-	onClose: () => showTipModal = false,
+	onClose: () => (showTipModal = false),
 	title: m.tip_author({}),
 	labelText: m.tip_in_usd({}),
 	inputId: 'tip-amount',
 	value: tipAmountUsd,
-	onValueChange: (v: string) => tipAmountUsd = v,
+	onValueChange: (v: string) => (tipAmountUsd = v),
 	isProcessing: isTipping,
 	onSubmit: handleTip,
 	submitText: m.send_tip({}),
@@ -1271,13 +1451,13 @@
 <!-- Dislike Modal -->
 {@render amountModal({
 	show: showDislikeModal,
-	onClose: () => showDislikeModal = false,
+	onClose: () => (showDislikeModal = false),
 	title: m.dislike({}),
 	description: m.dislike_description({}),
 	labelText: m.dislike_in_usd({}),
 	inputId: 'dislike-amount',
 	value: dislikeAmountUsd,
-	onValueChange: (v: string) => dislikeAmountUsd = v,
+	onValueChange: (v: string) => (dislikeAmountUsd = v),
 	isProcessing: isDisliking,
 	onSubmit: handleDislike,
 	submitText: m.send_dislike({}),

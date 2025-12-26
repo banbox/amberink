@@ -1133,3 +1133,11 @@ Claude：代码中`setFinalityConfirmation(1)`对于主网太小，建议改为7
 开发者：帮我改为使用环境变量，同时帮我审查squid中是否有其他配置也推荐作为环境变量的，方便在开发网，测试网，正式网等之间切换  
 Claude：提取FINALITY_CONFIRMATION，BLOCK_RANGE_FROM, GATEWAY_URL 三个环境变量
 
+### 2025-12-25 10:12  fix硬编码
+help.md frontend\src\routes\a\[id]\+page.svelte 975行，1034行，1045行，硬编码了这些配置，帮我改为从应用配置中读取。比如frontend\src\lib\config.ts 或 frontend\src\lib\stores\config.svelte.ts  
+Claude：已完成
+
+### 2025-12-25 10:40  集中维护配置
+help.md frontend\src\lib\chain.ts frontend\src\lib\stores\config.svelte.ts 这两个文件中都配置了很多链和相关的地址等，后者的配置更详细些。我希望集中在一个地方维护这些配置，这样当新增或删除链ID及其配置时，只需修改一个地方。请帮我考虑在哪里集中维护比较合适，然后帮我进行修改，使用链ID配置更为详细的版本  
+Claude：已完成
+

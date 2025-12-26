@@ -1,6 +1,6 @@
-import {TypeormDatabase} from '@subsquid/typeorm-store'
-import {processor} from './processor'
-import {Article, User, Evaluation, Comment, Follow, Collection} from './model'
+import { TypeormDatabase } from '@subsquid/typeorm-store'
+import { processor } from './processor'
+import { Article, User, Evaluation, Comment, Follow, Collection } from './model'
 import * as blogHub from './abi/BlogHub'
 
 // 事件签名（从生成的 ABI 类型中获取）
@@ -112,7 +112,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
 
     for (const block of ctx.blocks) {
         for (const log of block.logs) {
-            
+
             if (log.topics[0] === ARTICLE_PUBLISHED) {
                 const event = blogHub.events.ArticlePublished.decode(log)
                 const user = await ensureUser(event.author, block.header.timestamp)
@@ -123,10 +123,10 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 // 文章内容固定路径: index.md，封面图片固定路径: coverImage
                 const arweaveId = event.arweaveId
                 const articleIdNum = event.articleId
-                
+
                 // 建立 articleId -> arweaveId 的映射
                 articleIdToArweaveId.set(articleIdNum.toString(), arweaveId)
-                
+
                 let article = articlesToUpdate.get(arweaveId) || articles.find(a => a.id === arweaveId)
                 if (!article) {
                     article = new Article({
@@ -222,8 +222,8 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 let nextCommentId = nextCommentIdByArticle.get(arweaveId)
                 if (nextCommentId == null) {
                     const last = await ctx.store.findOne(Comment, {
-                        where: {article: {id: arweaveId} as any} as any,
-                        order: {commentId: 'DESC'} as any,
+                        where: { article: { id: arweaveId } as any } as any,
+                        order: { commentId: 'DESC' } as any,
                     })
                     nextCommentId = (last?.commentId ?? 0n) + 1n
                 }
@@ -254,7 +254,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 }
                 const arweaveId = article.id
                 let comment = comments.find(c => (c.article as any)?.id === arweaveId && c.commentId === event.commentId)
-                    ?? await ctx.store.findOne(Comment, { where: {article: {id: arweaveId} as any, commentId: event.commentId} as any })
+                    ?? await ctx.store.findOne(Comment, { where: { article: { id: arweaveId } as any, commentId: event.commentId } as any })
                 if (comment) {
                     comment.likes += 1
                     commentsToUpdate.set(comment.id, comment)
@@ -272,7 +272,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
 
                 const followId = `${event.follower.toLowerCase()}-${event.target.toLowerCase()}`
                 let follow = await ctx.store.get(Follow, followId)
-                
+
                 // 更新用户关注统计
                 if (!follow && event.isFollowing) {
                     // 新关注
@@ -288,7 +288,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         targetUser.totalFollowers = Math.max(0, targetUser.totalFollowers - 1)
                     }
                 }
-                
+
                 if (!follow) {
                     follow = new Follow({
                         id: followId,
