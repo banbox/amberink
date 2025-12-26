@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { CATEGORY_KEYS, type CategoryKey } from '$lib/data';
 	import * as m from '$lib/paraglide/messages';
+	import { ChevronUpIcon, ChevronDownIcon } from './icons';
 
 	interface Props {
 		selectedCategory: number | null;
@@ -94,14 +95,10 @@
 		>
 			{#if showAll}
 				<span>{m.show_less()}</span>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-				</svg>
+				<ChevronUpIcon size={16} />
 			{:else}
 				<span>{m.show_more()}</span>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-				</svg>
+				<ChevronDownIcon size={16} />
 			{/if}
 		</button>
 	</div>

@@ -16,6 +16,7 @@
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import { getConfig } from '$lib/config';
+	import { LockIcon, BookmarkIcon, SpinnerIcon } from '$lib/components/icons';
 
 	type TabType = 'published' | 'liked' | 'disliked' | 'collected' | 'commented';
 
@@ -162,19 +163,7 @@
 
 	{#if !connected}
 		<div class="py-16 text-center">
-			<svg
-				class="mx-auto h-16 w-16 text-gray-300"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="1.5"
-					d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-				/>
-			</svg>
+			<LockIcon size={64} class="mx-auto text-gray-300" />
 			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.please_connect_wallet()}</h3>
 		</div>
 	{:else}
@@ -208,19 +197,7 @@
 			</div>
 		{:else if !loading}
 			<div class="py-16 text-center">
-				<svg
-					class="mx-auto h-16 w-16 text-gray-300"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="1.5"
-						d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-					/>
-				</svg>
+				<BookmarkIcon size={64} class="mx-auto text-gray-300" />
 				<h3 class="mt-4 text-lg font-medium text-gray-900">{m.empty_list()}</h3>
 			</div>
 		{/if}
@@ -229,15 +206,7 @@
 		{#if loading}
 			<div class="flex justify-center py-8">
 				<div class="flex items-center gap-3 text-gray-500">
-					<svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-						></circle>
-						<path
-							class="opacity-75"
-							fill="currentColor"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-						></path>
-					</svg>
+					<SpinnerIcon size={24} />
 					<span>{m.loading()}</span>
 				</div>
 			</div>

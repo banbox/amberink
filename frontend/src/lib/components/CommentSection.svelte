@@ -6,6 +6,7 @@
 	import { getMinActionValue } from '$lib/config';
 	import { getAvatarUrl } from '$lib/arweave';
 	import { shortAddress, ZERO_ADDRESS } from '$lib/utils';
+	import { HeartOutlineIcon, BoldIcon, ItalicIcon } from './icons';
 
 	interface Props {
 		articleId: string;
@@ -178,15 +179,24 @@
 					<div class="flex items-center gap-3">
 						<a href={`/u/${comment.user.id}`} class="shrink-0">
 							{#if getAvatarUrl(comment.user.avatar)}
-								<img src={getAvatarUrl(comment.user.avatar)} alt="" class="h-10 w-10 rounded-full object-cover" />
+								<img
+									src={getAvatarUrl(comment.user.avatar)}
+									alt=""
+									class="h-10 w-10 rounded-full object-cover"
+								/>
 							{:else}
-								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white">
+								<div
+									class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
+								>
 									{getUserInitials(comment.user)}
 								</div>
 							{/if}
 						</a>
 						<div class="flex flex-col">
-							<a href={`/u/${comment.user.id}`} class="text-sm font-medium text-gray-900 hover:underline">
+							<a
+								href={`/u/${comment.user.id}`}
+								class="text-sm font-medium text-gray-900 hover:underline"
+							>
 								{getUserDisplay(comment.user)}
 							</a>
 							<time class="text-xs text-gray-500" datetime={comment.createdAt}>
@@ -210,9 +220,7 @@
 							onclick={() => handleLikeComment(comment)}
 							disabled={!walletAddress || likingCommentIds.has(comment.id)}
 						>
-							<svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-							</svg>
+							<HeartOutlineIcon size={18} />
 							<span>{comment.likes}</span>
 						</button>
 						<button type="button" class="hover:text-gray-700 transition-colors">
@@ -235,7 +243,9 @@
 			{#if userAvatarUrl}
 				<img src={userAvatarUrl} alt="" class="h-8 w-8 rounded-full object-cover" />
 			{:else}
-				<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white">
+				<div
+					class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
+				>
 					{userInitials}
 				</div>
 			{/if}
@@ -245,7 +255,12 @@
 		</div>
 
 		<!-- Comment Input -->
-		<div class="rounded-lg p-3" class:flex={!isInputFocused} class:items-center={!isInputFocused} style="background-color: #F2F2F2;">
+		<div
+			class="rounded-lg p-3"
+			class:flex={!isInputFocused}
+			class:items-center={!isInputFocused}
+			style="background-color: #F2F2F2;"
+		>
 			<textarea
 				bind:this={inputRef}
 				bind:value={commentText}
@@ -254,23 +269,23 @@
 				class="w-full resize-none rounded-lg border-0 text-[15px] text-gray-700 placeholder-gray-400 transition-all duration-200 focus:border-gray-300 focus:outline-none"
 				class:bg-transparent={isInputFocused}
 				disabled={isCommenting}
-				onfocus={() => isInputFocused = true}
+				onfocus={() => (isInputFocused = true)}
 			></textarea>
 
 			<!-- Actions Row (visible when focused) -->
 			{#if isInputFocused}
-				<div class="flex items-center justify-between mt-3 animate-in fade-in slide-in-from-top-1 duration-200">
-				<!-- Left: Formatting buttons -->
+				<div
+					class="flex items-center justify-between mt-3 animate-in fade-in slide-in-from-top-1 duration-200"
+				>
+					<!-- Left: Formatting buttons -->
 					<div class="flex items-center gap-1">
-					<button
+						<button
 							type="button"
 							onclick={() => insertFormatting('bold')}
 							class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
 							title={m.bold({})}
 						>
-							<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6V4zm0 8h9a4 4 0 014 4 4 4 0 01-4 4H6v-8zm3-5v2h5a1 1 0 000-2H9zm0 8v2h6a1 1 0 000-2H9z"/>
-							</svg>
+							<BoldIcon size={16} />
 						</button>
 						<button
 							type="button"
@@ -278,15 +293,13 @@
 							class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
 							title={m.italic({})}
 						>
-							<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M10 4v2h2.21l-3.42 12H6v2h8v-2h-2.21l3.42-12H18V4h-8z"/>
-							</svg>
+							<ItalicIcon size={16} />
 						</button>
 					</div>
 
 					<!-- Right: Cancel and Reply -->
 					<div class="flex items-center gap-3">
-					<button
+						<button
 							type="button"
 							onclick={handleCancel}
 							class="text-sm text-gray-500 hover:text-gray-700 transition-colors"

@@ -11,6 +11,7 @@
 		MIN_DEFAULT_GAS_FEE_MULTIPLIER,
 		type UserConfigKey
 	} from '$lib/config';
+	import { CloseIcon, PlusIcon, ResetIcon } from '$lib/components/icons';
 
 	// Local form state
 	let formValues = $state<Record<string, string | number | string[]>>({});
@@ -177,12 +178,12 @@
 								</span>
 							{/if}
 						</label>
-						
+
 						{#if field.type === 'text'}
 							<input
 								type="text"
 								id={field.key}
-								value={formValues[field.key] as string || ''}
+								value={(formValues[field.key] as string) || ''}
 								placeholder={field.placeholder}
 								oninput={(e) => handleChange(field.key, e.currentTarget.value)}
 								onblur={() => saveField(field.key)}
@@ -192,7 +193,7 @@
 							<input
 								type="number"
 								id={field.key}
-								value={formValues[field.key] as number || ''}
+								value={(formValues[field.key] as number) || ''}
 								placeholder={field.placeholder}
 								oninput={(e) => handleChange(field.key, e.currentTarget.value)}
 								onblur={() => saveField(field.key)}
@@ -201,7 +202,7 @@
 						{:else if field.type === 'select'}
 							<select
 								id={field.key}
-								value={formValues[field.key] as string || ''}
+								value={(formValues[field.key] as string) || ''}
 								onchange={(e) => {
 									handleChange(field.key, e.currentTarget.value);
 									saveField(field.key);
@@ -214,7 +215,7 @@
 							</select>
 						{:else if field.type === 'array'}
 							<div class="mt-2 space-y-2">
-								{#each (formValues[field.key] as string[] || []) as item, index}
+								{#each (formValues[field.key] as string[]) || [] as item, index}
 									<div class="flex gap-2">
 										<input
 											type="text"
@@ -233,9 +234,7 @@
 											class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50"
 											title={getLabel('remove')}
 										>
-											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-											</svg>
+											<CloseIcon size={16} />
 										</button>
 									</div>
 								{/each}
@@ -244,9 +243,7 @@
 									onclick={() => addArrayItem(field.key)}
 									class="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
 								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-									</svg>
+									<PlusIcon size={16} />
 									{getLabel('add_gateway')}
 								</button>
 							</div>
@@ -254,11 +251,9 @@
 
 						<!-- Env default hint -->
 						<p class="mt-1 text-xs text-gray-500">
-							{getLabel('default_value')}: {
-								field.type === 'array' 
-									? (getEnvDefault(field.key) as string[]).join(', ')
-									: getEnvDefault(field.key)
-							}
+							{getLabel('default_value')}: {field.type === 'array'
+								? (getEnvDefault(field.key) as string[]).join(', ')
+								: getEnvDefault(field.key)}
 						</p>
 					</div>
 
@@ -270,9 +265,7 @@
 							class="ml-4 rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
 							title={getLabel('reset_default')}
 						>
-							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-							</svg>
+							<ResetIcon size={16} />
 						</button>
 					{/if}
 				</div>
@@ -291,7 +284,7 @@
 				<div class="flex gap-2">
 					<button
 						type="button"
-						onclick={() => showResetConfirm = false}
+						onclick={() => (showResetConfirm = false)}
 						class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-red-100"
 					>
 						{getLabel('cancel')}
@@ -307,7 +300,7 @@
 			{:else}
 				<button
 					type="button"
-					onclick={() => showResetConfirm = true}
+					onclick={() => (showResetConfirm = true)}
 					class="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-100"
 				>
 					{getLabel('reset_all')}

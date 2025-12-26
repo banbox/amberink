@@ -7,6 +7,7 @@
 	import { untrack } from 'svelte';
 	import SearchButton from './SearchButton.svelte';
 	import ArticleSearch from './ArticleSearch.svelte';
+	import { HomeIcon, BookmarkIcon, UserIcon, PencilIcon, SpinnerIcon } from './icons';
 
 	interface Props {
 		walletAddress?: string | null;
@@ -98,7 +99,9 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<aside class="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-gray-200 bg-white">
+<aside
+	class="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-gray-200 bg-white"
+>
 	<!-- Logo -->
 	<div class="flex h-16 items-center border-b border-gray-100 px-6">
 		<a href="/" class="flex items-center gap-2" title={m.slogan()}>
@@ -126,17 +129,11 @@
 						class:hover:text-gray-900={!isActive(item.href)}
 					>
 						{#if item.icon === 'home'}
-							<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-							</svg>
+							<HomeIcon size={20} />
 						{:else if item.icon === 'library'}
-							<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-							</svg>
+							<BookmarkIcon size={20} />
 						{:else if item.icon === 'profile'}
-							<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-							</svg>
+							<UserIcon size={20} />
 						{/if}
 						<span>{getLabel(item.labelKey)}</span>
 					</a>
@@ -150,9 +147,7 @@
 				href="/publish"
 				class="flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
 			>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-				</svg>
+				<PencilIcon size={16} />
 				<span>{m.write()}</span>
 			</a>
 		</div>
@@ -160,17 +155,14 @@
 		<!-- Following Users -->
 		<div class="mt-6 border-t border-gray-200 pt-6">
 			<h3 class="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-			{m.following_list()}
-		</h3>
+				{m.following_list()}
+			</h3>
 
-				{#if !walletAddress}
+			{#if !walletAddress}
 				<p class="px-3 text-sm text-gray-400">{m.please_connect_wallet()}</p>
 			{:else if loadingFollowing}
 				<div class="flex items-center justify-center py-4">
-					<svg class="h-5 w-5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-					</svg>
+					<SpinnerIcon size={20} class="text-gray-400" />
 				</div>
 			{:else if followingUsers.length === 0}
 				<p class="px-3 text-sm text-gray-400">{m.no_following()}</p>
@@ -185,13 +177,21 @@
 									class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-gray-50"
 								>
 									{#if getAvatarUrl(user.avatar)}
-										<img src={getAvatarUrl(user.avatar)} alt="" class="h-6 w-6 rounded-full object-cover" />
+										<img
+											src={getAvatarUrl(user.avatar)}
+											alt=""
+											class="h-6 w-6 rounded-full object-cover"
+										/>
 									{:else}
-										<div class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white">
+										<div
+											class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
+										>
 											{user.id.slice(2, 4).toUpperCase()}
 										</div>
 									{/if}
-									<span class="truncate text-gray-700">{user.nickname || shortAddress(user.id)}</span>
+									<span class="truncate text-gray-700"
+										>{user.nickname || shortAddress(user.id)}</span
+									>
 								</a>
 							</li>
 						{/if}

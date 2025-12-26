@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
+	import { CloseIcon, ChevronDownIcon } from '$lib/components/icons';
 
 	export interface SelectOption {
 		key: string | number;
@@ -171,14 +172,7 @@
 						removeOption(opt.value);
 					}}
 				>
-					<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M6 18L18 6M6 6l12 12"
-						/>
-					</svg>
+					<CloseIcon size={12} />
 				</button>
 			</span>
 		{/each}
@@ -212,19 +206,10 @@
 						clearSelection();
 					}}
 				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M6 18L18 6M6 6l12 12"
-						/>
-					</svg>
+					<CloseIcon size={16} />
 				</button>
 			{/if}
-			<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-			</svg>
+			<ChevronDownIcon size={16} class="text-gray-400" />
 		</div>
 	</div>
 	<!-- Dropdown -->
@@ -245,14 +230,7 @@
 					}}
 				>
 					<span class="flex items-center gap-1">
-						<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M6 18L18 6M6 6l12 12"
-							/>
-						</svg>
+						<CloseIcon size={12} />
 						{m.clear_selection()}
 					</span>
 				</div>

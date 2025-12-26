@@ -12,6 +12,7 @@
 		fundSessionKey
 	} from '$lib/sessionKey';
 	import { getNativeTokenSymbol } from '$lib/priceService';
+	import { CheckIcon } from './icons';
 
 	let hasSessionKey = $state(false);
 	let validUntil = $state<Date | null>(null);
@@ -103,20 +104,23 @@
 
 	{#if hasSessionKey}
 		<p class="mb-2 flex items-center gap-1 text-green-600">
-			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-			</svg>
+			<CheckIcon size={16} />
 			{m.seamless_enabled()}
 		</p>
 		<p class="mb-2 text-sm text-gray-500">
 			{m.seamless_valid_until()}: {formattedValidUntil}
 		</p>
-		
+
 		<!-- Balance display -->
 		<div class="mb-4 flex items-center gap-2">
 			<span class="text-sm text-gray-500">{m.balance()}:</span>
-			<span class={isBalanceSufficient ? 'text-sm text-gray-700' : 'text-sm font-medium text-orange-600'}>
-				{formattedBalance} {getNativeTokenSymbol()}
+			<span
+				class={isBalanceSufficient
+					? 'text-sm text-gray-700'
+					: 'text-sm font-medium text-orange-600'}
+			>
+				{formattedBalance}
+				{getNativeTokenSymbol()}
 			</span>
 			{#if !isBalanceSufficient}
 				<span class="text-xs text-orange-500">({m.low_balance()})</span>
@@ -129,7 +133,7 @@
 				</button>
 			{/if}
 		</div>
-		
+
 		<button
 			class="rounded px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
 			disabled={isLoading}

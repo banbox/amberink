@@ -13,6 +13,7 @@
 		ensureSessionKeyReady,
 		type StoredSessionKey
 	} from '$lib/sessionKey';
+	import { SpinnerIcon } from '$lib/components/icons';
 
 	let { data }: { data: PageData } = $props();
 	const article = data.article;
@@ -323,10 +324,7 @@
 		{:else if isLoadingContent}
 			<div class="flex items-center justify-center py-16">
 				<div class="flex items-center gap-3 text-gray-500">
-					<svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-					</svg>
+					<SpinnerIcon size={20} class="text-gray-500" />
 					<span>{m.loading_content({})}</span>
 				</div>
 			</div>
@@ -335,7 +333,13 @@
 				<p class="text-red-800">{loadError}</p>
 			</div>
 		{:else}
-			<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-8">
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					handleSubmit();
+				}}
+				class="space-y-8"
+			>
 				<ArticleEditor
 					bind:formData
 					disabled={isSubmitting}
@@ -363,7 +367,9 @@
 					</button>
 					<a
 						href={`/a/${article.id}`}
-						class="rounded-lg border border-gray-200 px-6 py-3 font-medium text-gray-900 transition-colors hover:bg-gray-50 {isSubmitting ? 'pointer-events-none opacity-50' : ''}"
+						class="rounded-lg border border-gray-200 px-6 py-3 font-medium text-gray-900 transition-colors hover:bg-gray-50 {isSubmitting
+							? 'pointer-events-none opacity-50'
+							: ''}"
 					>
 						{m.cancel({})}
 					</a>

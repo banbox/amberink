@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { getNativeTokenPriceUsd, getNativeTokenSymbol } from '$lib/priceService';
 	import { getDefaultCollectPriceUsd } from '$lib/config';
+	import { CloseIcon } from '$lib/components/icons';
 
 	/**
 	 * Article Editor Component
@@ -278,9 +279,9 @@
 			<div class="mb-4">
 				<p class="mb-2 text-sm text-gray-500">{m.current_cover()}</p>
 				<div class="relative inline-block">
-					<img 
-						src={existingCoverUrl} 
-						alt="Current cover" 
+					<img
+						src={existingCoverUrl}
+						alt="Current cover"
 						class="max-h-48 rounded-lg object-cover"
 						onerror={(e) => {
 							const target = e.currentTarget as HTMLImageElement;
@@ -289,14 +290,14 @@
 					/>
 					<button
 						type="button"
-						onclick={() => { keepExistingCover = false; }}
+						onclick={() => {
+							keepExistingCover = false;
+						}}
 						class="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
 						title={m.remove_cover()}
 						{disabled}
 					>
-						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-						</svg>
+						<CloseIcon size={16} />
 					</button>
 				</div>
 			</div>
@@ -304,8 +305,12 @@
 
 		{#key resetKey}
 			<ImageProcessor
-				label={mode === 'edit' 
-					? (formData.coverImageFile ? m.new_cover() : (keepExistingCover ? m.replace_cover() : m.upload_cover()))
+				label={mode === 'edit'
+					? formData.coverImageFile
+						? m.new_cover()
+						: keepExistingCover
+							? m.replace_cover()
+							: m.upload_cover()
 					: m.cover()}
 				aspectRatio={16 / 9}
 				maxOutputWidth={1200}
@@ -357,7 +362,7 @@
 			></textarea>
 		</div>
 	{/if}
-	
+
 	<!-- Summary -->
 	<div>
 		<label for="summary" class="mb-2 block text-sm font-medium text-gray-700">
@@ -366,7 +371,9 @@
 		<textarea
 			id="summary"
 			bind:value={formData.summary}
-			placeholder={mode === 'edit' ? m.optional_summary() : 'Brief summary of the article (max 512 bytes)'}
+			placeholder={mode === 'edit'
+				? m.optional_summary()
+				: 'Brief summary of the article (max 512 bytes)'}
 			rows="2"
 			class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 			{disabled}

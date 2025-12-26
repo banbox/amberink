@@ -5,6 +5,7 @@
 	import { formatEth } from '$lib/utils';
 	import { client } from '$lib/graphql';
 	import { gql } from '@urql/svelte';
+	import { CloseIcon, SearchIcon, SpinnerIcon } from '$lib/components/icons';
 
 	interface Props {
 		open: boolean;
@@ -215,14 +216,7 @@
 				class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
 				aria-label={m.close()}
 			>
-				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M6 18L18 6M6 6l12 12"
-					/>
-				</svg>
+				<CloseIcon size={20} />
 			</button>
 		</div>
 
@@ -231,19 +225,7 @@
 			<!-- Search Input -->
 			<div class="mb-4 flex gap-2">
 				<div class="relative flex-1">
-					<svg
-						class="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-						/>
-					</svg>
+					<SearchIcon size={20} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
 					<input
 						bind:this={inputRef}
 						type="text"
@@ -398,37 +380,13 @@
 				{/if}
 			{:else if hasSearched && !isSearching && !searchError}
 				<div class="py-12 text-center text-gray-500">
-					<svg
-						class="mx-auto mb-4 h-12 w-12 text-gray-300"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-						/>
-					</svg>
+					<SearchIcon size={48} class="mx-auto mb-4 text-gray-300" />
 					<p class="text-sm">{m.no_results()}</p>
 					<p class="mt-1 text-xs text-gray-400">{m.try_different_keywords()}</p>
 				</div>
 			{:else if !hasSearched}
 				<div class="py-12 text-center text-gray-400">
-					<svg
-						class="mx-auto mb-4 h-12 w-12 text-gray-300"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-						/>
-					</svg>
+					<SearchIcon size={48} class="mx-auto mb-4 text-gray-300" />
 					<p class="text-sm">{m.search_placeholder()}</p>
 				</div>
 			{/if}
@@ -436,21 +394,7 @@
 			<!-- Loading State -->
 			{#if isSearching}
 				<div class="flex items-center justify-center py-12">
-					<svg class="h-8 w-8 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
-						<circle
-							class="opacity-25"
-							cx="12"
-							cy="12"
-							r="10"
-							stroke="currentColor"
-							stroke-width="4"
-						></circle>
-						<path
-							class="opacity-75"
-							fill="currentColor"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-						></path>
-					</svg>
+					<SpinnerIcon size={32} class="text-blue-600" />
 				</div>
 			{/if}
 		</div>

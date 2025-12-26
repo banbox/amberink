@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { getIrysFreeUploadLimit } from '$lib/config';
+	import { PlusIcon, CloseIcon } from '$lib/components/icons';
 
 	interface Props {
 		/** Aspect ratio (width/height). e.g., 16/9, 1, 4/3. If undefined, free crop */
@@ -483,7 +484,9 @@
 		<!-- Preview mode -->
 		<div class="space-y-3">
 			<div
-				class="relative overflow-hidden rounded-lg bg-gray-100 {circular ? 'mx-auto aspect-square w-32' : previewHeightClass}"
+				class="relative overflow-hidden rounded-lg bg-gray-100 {circular
+					? 'mx-auto aspect-square w-32'
+					: previewHeightClass}"
 			>
 				<img
 					src={previewUrl}
@@ -518,11 +521,11 @@
 	{:else}
 		<!-- Upload mode -->
 		<label
-			class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 px-6 py-10 transition-colors hover:border-gray-300 {disabled ? 'cursor-not-allowed opacity-50' : ''}"
+			class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 px-6 py-10 transition-colors hover:border-gray-300 {disabled
+				? 'cursor-not-allowed opacity-50'
+				: ''}"
 		>
-			<svg class="mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-			</svg>
+			<PlusIcon size={32} class="mb-2 text-gray-400" />
 			<p class="text-sm font-medium text-gray-700">{m.upload()}</p>
 			{#if helpText}
 				<p class="text-xs text-gray-500">{helpText}</p>
@@ -557,14 +560,8 @@
 				<!-- Header -->
 				<div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
 					<h3 class="text-lg font-medium text-gray-900">{m.crop_image()}</h3>
-					<button
-						type="button"
-						class="text-gray-400 hover:text-gray-600"
-						onclick={cancelCrop}
-					>
-						<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-						</svg>
+					<button type="button" class="text-gray-400 hover:text-gray-600" onclick={cancelCrop}>
+						<CloseIcon size={24} />
 					</button>
 				</div>
 
@@ -616,25 +613,37 @@
 								class="absolute -left-1.5 -top-1.5 h-3 w-3 cursor-nw-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'nw'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'nw');
+								}}
 							></div>
 							<div
 								class="absolute -right-1.5 -top-1.5 h-3 w-3 cursor-ne-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'ne'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'ne');
+								}}
 							></div>
 							<div
 								class="absolute -bottom-1.5 -left-1.5 h-3 w-3 cursor-sw-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'sw'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'sw');
+								}}
 							></div>
 							<div
 								class="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'se'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'se');
+								}}
 							></div>
 
 							<!-- Edges -->
@@ -642,25 +651,37 @@
 								class="absolute -top-1 left-1/2 h-2 w-6 -translate-x-1/2 cursor-n-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'n'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'n');
+								}}
 							></div>
 							<div
 								class="absolute -bottom-1 left-1/2 h-2 w-6 -translate-x-1/2 cursor-s-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 's'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 's');
+								}}
 							></div>
 							<div
 								class="absolute -left-1 top-1/2 h-6 w-2 -translate-y-1/2 cursor-w-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'w'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'w');
+								}}
 							></div>
 							<div
 								class="absolute -right-1 top-1/2 h-6 w-2 -translate-y-1/2 cursor-e-resize bg-white shadow"
 								role="button"
 								tabindex="0"
-								onmousedown={(e) => { e.stopPropagation(); handleMouseDown(e, 'e'); }}
+								onmousedown={(e) => {
+									e.stopPropagation();
+									handleMouseDown(e, 'e');
+								}}
 							></div>
 						</div>
 					</div>

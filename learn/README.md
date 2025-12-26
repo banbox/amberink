@@ -1143,3 +1143,8 @@ Claude：已完成
 
 ### 2025-12-25 11:00  删除getAppName和getAppVersion
 @help.md 在整个前端 frontend 中搜索getAppName和getAppVersion，删除对这两个函数的引用，改为直接使用getConfig().appName和getConfig().appVersion，减少代码冗余  
+Claude：已完成
+
+### 2025-12-25 11:00  icons组件化
+@help.md 当前前端 frontend 中很多地方直接硬编码svg，可能有重复的，且不方便维护。请在 frontend 下搜索 `<svg `，找到所有硬编码的图标，然后帮我在 frontend\src\lib\components 下创建单独的icons组件集中维护，每个图标默认宽高相同，外部使用方要求不同规格、颜色等属性时，传入参数控制。请帮我梳理所有图标，并完成重构  
+Claude：已完成

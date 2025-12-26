@@ -16,6 +16,7 @@
 	import { shortAddress, formatDate } from '$lib/utils';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import { getConfig } from '$lib/config';
+	import { SpinnerIcon, DocumentIcon } from '$lib/components/icons';
 
 	const PAGE_SIZE = 20;
 
@@ -229,19 +230,7 @@
 		</div>
 	{:else if !loading}
 		<div class="py-16 text-center">
-			<svg
-				class="mx-auto h-16 w-16 text-gray-300"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="1.5"
-					d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-				/>
-			</svg>
+			<DocumentIcon size={64} class="mx-auto text-gray-300" />
 			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_articles()}</h3>
 		</div>
 	{/if}
@@ -250,15 +239,7 @@
 	{#if loading}
 		<div class="flex justify-center py-8">
 			<div class="flex items-center gap-3 text-gray-500">
-				<svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
-					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-					></circle>
-					<path
-						class="opacity-75"
-						fill="currentColor"
-						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-					></path>
-				</svg>
+				<SpinnerIcon size={24} class="text-gray-500" />
 				<span>{m.loading()}</span>
 			</div>
 		</div>
