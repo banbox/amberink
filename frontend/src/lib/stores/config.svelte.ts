@@ -18,8 +18,16 @@ import {
 import * as publicEnv from '$env/static/public';
 const PUBLIC_MIN_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_MIN_GAS_FEE_MULTIPLIER'] || '';
 const PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER'] || '';
+const PUBLIC_ENV_NAME = (publicEnv as Record<string, string>)['PUBLIC_ENV_NAME'] || 'dev';
 
-const CONFIG_STORAGE_KEY = 'amberink_user_config';
+// Environment name for localStorage key isolation (dev, test, prod)
+export const envName = PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod';
+
+// Dynamic localStorage key based on environment to avoid conflicts when switching environments
+const CONFIG_STORAGE_KEY_PREFIX = 'amberink_user_config';
+function getConfigStorageKey(): string {
+	return `${CONFIG_STORAGE_KEY_PREFIX}_${envName}`;
+}
 
 // Import chain configuration from centralized file (for local use and re-export)
 import {
@@ -213,7 +221,8 @@ export const configFields: ConfigFieldMeta[] = [
 function loadUserConfig(): UserConfig {
 	if (!browser) return {};
 	try {
-		const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+		const storageKey = getConfigStorageKey();
+		const stored = localStorage.getItem(storageKey);
 		if (stored) {
 			return JSON.parse(stored);
 		}
@@ -227,7 +236,8 @@ function loadUserConfig(): UserConfig {
 function saveUserConfig(config: UserConfig): void {
 	if (!browser) return;
 	try {
-		localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+		const storageKey = getConfigStorageKey();
+		localStorage.setItem(storageKey, JSON.stringify(config));
 	} catch (e) {
 		console.warn('Failed to save user config to localStorage:', e);
 	}

@@ -438,12 +438,8 @@ cast balance $(cast wallet address --private-key $PRIVATE_KEY) --rpc-url $ETHERS
 cd contracts
 
 # 部署所有合约
-forge script script/Deploy.s.sol \
-  --rpc-url $ETHERSCAN_RPC \
-  --broadcast \
-  --verify \
-  --etherscan-api-key $ETHERSCAN_API_KEY \  # optional
-  --tc DeployScript
+forge script script/Deploy.s.sol --rpc-url $ETHERSCAN_RPC --broadcast --verify --tc DeployScript
+# 如果ETHERSCAN_RPC需要api key，则传入--etherscan-api-key $ETHERSCAN_API_KEY
 
 # 配置 Paymaster
 PAYMASTER=<deployed_paymaster_address> \
@@ -454,6 +450,12 @@ forge script script/Deploy.s.sol \
   --rpc-url $ETHERSCAN_RPC \
   --broadcast \
   --tc ConfigurePaymaster
+```
+升级合约：
+```bash
+# 升级代理
+export BLOG_HUB_PROXY=<PROXY_ADDRESS>
+forge script script/Deploy.s.sol --rpc-url $ETHERSCAN_RPC --broadcast --tc UpgradeBlogHub
 ```
 
 ### 6.3 验证部署
@@ -493,9 +495,8 @@ sessionKeyMaxDuration = 7 days;
 
 ```bash
 # 1. 验证合约源码
-forge verify-contract <CONTRACT_ADDRESS> <CONTRACT_NAME> \
-  --chain optimism \
-  --etherscan-api-key $ETHERSCAN_API_KEY
+forge verify-contract <CONTRACT_ADDRESS> <CONTRACT_NAME> --chain optimism
+#  --etherscan-api-key $ETHERSCAN_API_KEY
 
 # 2. 转移 Owner 权限到多签
 cast send <BLOG_HUB_PROXY> \
@@ -564,23 +565,6 @@ cast call <PAYMASTER> \
   "getUserInfo(address,address)(uint256,uint256)" \
   <SPONSOR> <SPENDER> \
   --rpc-url <RPC_URL>
-```
-
-### 8.4 升级合约
-
-```bash
-# 部署新实现
-forge script script/Deploy.s.sol \
-  --rpc-url <RPC_URL> \
-  --broadcast \
-  --tc DeployBlogHub
-
-# 升级代理
-BLOG_HUB_PROXY=<PROXY_ADDRESS> \
-forge script script/Deploy.s.sol \
-  --rpc-url <RPC_URL> \
-  --broadcast \
-  --tc UpgradeBlogHub
 ```
 
 ---

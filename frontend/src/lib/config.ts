@@ -12,6 +12,7 @@ import {
 	getConfig,
 	defaults,
 	envDefaults,
+	envName,
 	getUserConfig,
 	setConfigValue,
 	updateConfig,
@@ -34,6 +35,7 @@ import {
 // Re-export store functions for settings page
 export {
 	getConfig,
+	envName,
 	getUserConfig,
 	setConfigValue,
 	updateConfig,
