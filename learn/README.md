@@ -1233,4 +1233,19 @@ Claude：好了。
 开发者：把“状态”移到右侧，和过期时间放在同一行。另外把地址放在余额上面  
 Claude：改好了，这次不错。
 
+### 2025-12-27 14:29  /profile 代币从配置读取
+frontend\src\routes\profile\+page.svelte 中有若干处直接硬编码了ETH，当前dapp支持多链，代币不一定是ETH。请参考 frontend\src\lib\components\ArticleEditor.svelte 71-79行，加载当前区块链的代币；注意，try-catch可能不需要  
+Claude：修改完成  
+
+### 2025-12-27 14:56  /profile 延期失败
+@help.md 当前的对Session Key延期功能有问题，弹出的Metamask批准后，console输出：
+Session key reauthorized: 0xAD07E2287F5071a0B1aeED4f985980F91a3565B9
+Network页签也没有错误，但过了几秒，桌面右下角弹出通知，transaction dropped or replaced。请帮我排查问题原因并解决。  
+Claude: 已修复，reauthorizeSessionKey仅适用于已过期情况，新增了extendSessionKey用于延期。 
+
+### 2025-12-27 14:56  /profile 没有Session Key时不显示最近交易
+@help.md frontend\src\routes\profile\+page.svelte 当前在Session Key这个页签，显示有最近交易记录，查询数据时应该按当前用户钱包查询，不应该用Session Key地址查询，因为Session Key是临时的，且squid中已经记录了用户的地址。请了解相关信息，帮我更新这里逻辑。且即使没有Session Key，也应当显示最近交易记录  
+Claude: 修改完成，遗留旧代码未删除，手动清理
+
+
 

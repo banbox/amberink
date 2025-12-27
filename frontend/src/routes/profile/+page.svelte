@@ -8,7 +8,7 @@
 		ARTICLES_BY_AUTHOR_QUERY,
 		USER_FOLLOWERS_QUERY,
 		USER_FOLLOWING_QUERY,
-		SESSION_KEY_TRANSACTIONS_QUERY,
+		USER_TRANSACTIONS_QUERY,
 		type ArticleData,
 		type UserData,
 		type FollowData,
@@ -27,6 +27,7 @@
 		isSessionKeyExpired, 
 		getSessionKeyBalance,
 		reauthorizeSessionKey,
+		extendSessionKey,
 		revokeSessionKey,
 		withdrawAllFromSessionKey,
 		createNewSessionKey,
@@ -34,6 +35,7 @@
 	} from '$lib/sessionKey';
 	import { formatEthDisplay } from '$lib/data';
 	import { getBlockExplorerTxUrl } from '$lib/chain';
+	import { getNativeTokenSymbol } from '$lib/priceService';
 
 	type TabType = 'articles' | 'followers' | 'following' | 'about' | 'sessionkey';
 
@@ -75,6 +77,7 @@
 	let transactionsOffset = $state(0);
 	let hasMoreTransactions = $state(true);
 	const TRANSACTIONS_PAGE_SIZE = 10;
+	let nativeSymbol = $state('ETH');
 
 	const tabs: { key: TabType; label: () => string }[] = [
 		{ key: 'articles', label: () => m.articles() },
@@ -209,15 +212,12 @@
 				sessionKey = sk;
 				const balance = await getSessionKeyBalance(sk.address);
 				sessionKeyBalance = balance;
-				// Reset transactions and fetch first page
-				await fetchSessionKeyTransactions(true);
 			} else {
 				sessionKey = null;
 				sessionKeyBalance = 0n;
-				sessionKeyTransactions = [];
-				transactionsOffset = 0;
-				hasMoreTransactions = true;
 			}
+			// Always fetch transactions by user wallet address
+			await fetchUserTransactions(true);
 		} catch (e) {
 			console.error('Failed to fetch session key info:', e);
 		} finally {
@@ -225,16 +225,16 @@
 		}
 	}
 
-	async function fetchSessionKeyTransactions(reset = false) {
-		if (!sessionKey || loadingTransactions) return;
+	async function fetchUserTransactions(reset = false) {
+		if (!walletAddress || loadingTransactions) return;
 
 		loadingTransactions = true;
 		const currentOffset = reset ? 0 : transactionsOffset;
 
 		try {
 			const result = await client
-				.query(SESSION_KEY_TRANSACTIONS_QUERY, {
-					sessionKey: sessionKey.address.toLowerCase(),
+				.query(USER_TRANSACTIONS_QUERY, {
+					userId: walletAddress.toLowerCase(),
 					limit: TRANSACTIONS_PAGE_SIZE,
 					offset: currentOffset
 				})
@@ -252,7 +252,7 @@
 
 			hasMoreTransactions = newTransactions.length === TRANSACTIONS_PAGE_SIZE;
 		} catch (e) {
-			console.error('Failed to fetch session key transactions:', e);
+			console.error('Failed to fetch user transactions:', e);
 		} finally {
 			loadingTransactions = false;
 		}
@@ -284,7 +284,7 @@
 			return;
 		}
 
-		if (!confirm(`Withdraw all balance (${formatEthDisplay(balance)} ETH) from Session Key to your main wallet?`)) {
+		if (!confirm(`Withdraw all balance (${formatEthDisplay(balance)} ${nativeSymbol}) from Session Key to your main wallet?`)) {
 			return;
 		}
 
@@ -343,7 +343,7 @@
 		sessionKeyError = '';
 
 		try {
-			const updated = await reauthorizeSessionKey(sessionKey);
+			const updated = await extendSessionKey(sessionKey);
 			sessionKey = updated;
 			await fetchSessionKeyInfo();
 		} catch (e) {
@@ -454,7 +454,9 @@
 		});
 	});
 
-	onMount(() => {
+	onMount(async () => {
+		nativeSymbol = getNativeTokenSymbol();
+		
 		const handleScroll = () => {
 			if (loading || !hasMore || activeTab === 'about') return;
 
@@ -823,7 +825,7 @@
 											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Balance</p>
 											<p class="text-2xl font-bold text-gray-900">
 												{formatEthDisplay(sessionKeyBalance)}
-												<span class="ml-1 text-base font-normal text-gray-500">ETH</span>
+												<span class="ml-1 text-base font-normal text-gray-500">{nativeSymbol}</span>
 											</p>
 										</div>
 									</div>
@@ -911,68 +913,6 @@
 									</div>
 								</div>
 							</div>
-
-							<!-- Recent Transactions -->
-							<div class="rounded-lg border border-gray-200 bg-white p-6">
-								<h3 class="mb-4 text-lg font-semibold text-gray-900">Recent Transactions</h3>
-
-								{#if sessionKeyTransactions.length > 0}
-									<div class="divide-y divide-gray-100">
-										{#each sessionKeyTransactions as tx}
-											{@const viewUrl = getBlockExplorerTxUrl(tx.txHash)}
-											<div class="py-3">
-												<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-													<div class="flex items-center gap-2">
-														<span class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
-															{tx.method}
-														</span>
-														<span class="font-semibold text-gray-900">
-															{formatEthDisplay(BigInt(tx.value))} ETH
-														</span>
-													</div>
-													<div class="flex items-center justify-between gap-4 md:justify-end">
-														<span class="text-xs text-gray-500">
-															Fee: {formatEthDisplay(BigInt(tx.feeAmount))} ETH
-														</span>
-														{#if viewUrl}
-															<a
-																href={viewUrl}
-																target="_blank"
-																rel="noopener noreferrer"
-																class="whitespace-nowrap text-sm text-blue-600 hover:text-blue-700"
-															>
-																View →
-															</a>
-														{/if}
-													</div>
-													<div class="text-xs text-gray-500">
-														Contract: {shortAddress(tx.target)}
-													</div>
-													<div class="text-xs text-gray-400 md:text-right">
-														{new Date(tx.createdAt).toLocaleString()}
-													</div>
-												</div>
-											</div>
-										{/each}
-									</div>
-
-									<!-- Load More Button -->
-									{#if hasMoreTransactions}
-										<div class="mt-4 text-center">
-											<button
-												type="button"
-												onclick={() => fetchSessionKeyTransactions(false)}
-												disabled={loadingTransactions}
-												class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-											>
-												{loadingTransactions ? 'Loading...' : 'Load More'}
-											</button>
-										</div>
-									{/if}
-								{:else}
-									<p class="text-sm text-gray-500">No transactions found</p>
-								{/if}
-							</div>
 						{:else}
 							<!-- No Session Key -->
 							<div class="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
@@ -990,6 +930,68 @@
 								</button>
 							</div>
 						{/if}
+
+						<!-- Recent Transactions (always shown) -->
+						<div class="rounded-lg border border-gray-200 bg-white p-6">
+							<h3 class="mb-4 text-lg font-semibold text-gray-900">Recent Transactions</h3>
+
+							{#if sessionKeyTransactions.length > 0}
+								<div class="divide-y divide-gray-100">
+									{#each sessionKeyTransactions as tx}
+										{@const viewUrl = getBlockExplorerTxUrl(tx.txHash)}
+										<div class="py-3">
+											<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+												<div class="flex items-center gap-2">
+													<span class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+														{tx.method}
+													</span>
+													<span class="font-semibold text-gray-900">
+														{formatEthDisplay(BigInt(tx.value))} {nativeSymbol}
+													</span>
+												</div>
+												<div class="flex items-center justify-between gap-4 md:justify-end">
+													<span class="text-xs text-gray-500">
+														Fee: {formatEthDisplay(BigInt(tx.feeAmount))} {nativeSymbol}
+													</span>
+													{#if viewUrl}
+														<a
+															href={viewUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="whitespace-nowrap text-sm text-blue-600 hover:text-blue-700"
+														>
+															View →
+														</a>
+													{/if}
+												</div>
+												<div class="text-xs text-gray-500">
+													Contract: {shortAddress(tx.target)}
+												</div>
+												<div class="text-xs text-gray-400 md:text-right">
+													{new Date(tx.createdAt).toLocaleString()}
+												</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+
+								<!-- Load More Button -->
+								{#if hasMoreTransactions}
+									<div class="mt-4 text-center">
+										<button
+											type="button"
+											onclick={() => fetchUserTransactions(false)}
+											disabled={loadingTransactions}
+											class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+										>
+											{loadingTransactions ? 'Loading...' : 'Load More'}
+										</button>
+									</div>
+								{/if}
+							{:else}
+								<p class="text-sm text-gray-500">No transactions found</p>
+							{/if}
+						</div>
 					</div>
 				{/if}
 			</div>

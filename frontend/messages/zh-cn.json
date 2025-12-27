@@ -142,7 +142,7 @@
 	"no_comments": "暂无评论，来发表第一条评论吧！",
 	"blockchain_info": "区块链信息",
 	"dislike": "不喜欢",
-	"dislike_description": "通过质押 ETH 表达对这篇文章的不满。质押金额越高，对质量评分的影响越大。",
+	"dislike_description": "通过赞赏平台表达对这篇文章的不满。",
 	"dislike_amount": "不喜欢金额",
 	"send_dislike": "发送不喜欢",
 	"clap": "赞赏",

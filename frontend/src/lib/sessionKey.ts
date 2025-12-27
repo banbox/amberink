@@ -334,6 +334,9 @@ export async function createSessionKey(options?: {
  * Reauthorize an existing session key with extended validity period.
  * This is useful when a Session Key has expired but still has funds in it.
  * Instead of creating a new key and losing access to funds, we re-register the same key.
+ * 
+ * NOTE: This only works for EXPIRED session keys. For active keys, use extendSessionKey().
+ * 
  * @param existingSessionKey - Existing session key to reauthorize
  * @returns Updated session key data with new validity period
  */
@@ -371,7 +374,12 @@ export async function reauthorizeSessionKey(
 			DEFAULT_SPENDING_LIMIT
 		]
 	});
-	await publicClient.waitForTransactionReceipt({ hash: txHash });
+	const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+	
+	// Check if transaction was successful
+	if (receipt.status === 'reverted') {
+		throw new Error('Transaction reverted: session key may still be active. Use extend instead.');
+	}
 
 	// Update localStorage with new validity period
 	const updatedSessionKey: StoredSessionKey = {
@@ -380,6 +388,83 @@ export async function reauthorizeSessionKey(
 	};
 	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(updatedSessionKey));
 	console.log(`Session key reauthorized: ${existingSessionKey.address}`);
+
+	return updatedSessionKey;
+}
+
+/**
+ * Extend an active session key's validity period.
+ * This requires revoking the existing key first, then re-registering it.
+ * The smart contract prevents re-registering an active key directly.
+ * 
+ * NOTE: This only works for ACTIVE (non-expired) session keys. For expired keys, use reauthorizeSessionKey().
+ * 
+ * @param existingSessionKey - Existing active session key to extend
+ * @returns Updated session key data with new validity period
+ */
+export async function extendSessionKey(
+	existingSessionKey: StoredSessionKey
+): Promise<StoredSessionKey> {
+	const account = await getEthereumAccount();
+	const sessionKeyManager = getSessionKeyManagerAddress();
+	const blogHub = getBlogHubContractAddress();
+
+	// Verify ownership
+	if (account.toLowerCase() !== existingSessionKey.owner.toLowerCase()) {
+		throw new Error('Cannot extend session key: owner mismatch');
+	}
+
+	const publicClient = getPublicClient();
+	const walletClient = await getWalletClient();
+
+	// Step 1: Revoke the existing session key on-chain
+	console.log(`Revoking existing session key: ${existingSessionKey.address}`);
+	const revokeTxHash = await walletClient.writeContract({
+		address: sessionKeyManager,
+		abi: SESSION_KEY_MANAGER_ABI,
+		functionName: 'revokeSessionKey',
+		args: [existingSessionKey.address as `0x${string}`]
+	});
+	const revokeReceipt = await publicClient.waitForTransactionReceipt({ hash: revokeTxHash });
+	
+	if (revokeReceipt.status === 'reverted') {
+		throw new Error('Failed to revoke existing session key');
+	}
+	console.log(`Session key revoked: ${existingSessionKey.address}`);
+
+	// Step 2: Set new validity period (use chain timestamp to avoid local/chain time drift)
+	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
+	const validAfter = Number(latestBlock.timestamp);
+	const validUntil = validAfter + SESSION_KEY_DURATION;
+
+	// Step 3: Re-register the same session key with new validity period
+	console.log(`Re-registering session key: ${existingSessionKey.address}`);
+	const registerTxHash = await walletClient.writeContract({
+		address: sessionKeyManager,
+		abi: SESSION_KEY_MANAGER_ABI,
+		functionName: 'registerSessionKey',
+		args: [
+			existingSessionKey.address as `0x${string}`,
+			validAfter,
+			validUntil,
+			blogHub,
+			ALLOWED_SELECTORS,
+			DEFAULT_SPENDING_LIMIT
+		]
+	});
+	const registerReceipt = await publicClient.waitForTransactionReceipt({ hash: registerTxHash });
+	
+	if (registerReceipt.status === 'reverted') {
+		throw new Error('Failed to re-register session key after revocation');
+	}
+
+	// Update localStorage with new validity period
+	const updatedSessionKey: StoredSessionKey = {
+		...existingSessionKey,
+		validUntil
+	};
+	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(updatedSessionKey));
+	console.log(`Session key extended: ${existingSessionKey.address}`);
 
 	return updatedSessionKey;
 }
@@ -722,55 +807,4 @@ export interface SessionKeyTransaction {
 	selector?: string;
 	gasUsed?: bigint;
 	gasPrice?: bigint;
-}
-
-/**
- * Get recent transactions for a Session Key address from Subsquid GraphQL
- * Note: This function is deprecated and kept for backward compatibility.
- * Use the GraphQL client directly in components for better pagination control.
- * @param address - Session Key address
- * @param limit - Maximum number of transactions to fetch (default: 10)
- * @param offset - Offset for pagination (default: 0)
- * @returns Array of transaction records
- */
-export async function getSessionKeyTransactions(
-	address: string,
-	limit: number = 10,
-	offset: number = 0
-): Promise<SessionKeyTransaction[]> {
-	try {
-		// Import dynamically to avoid circular dependencies
-		const { client, SESSION_KEY_TRANSACTIONS_QUERY } = await import('$lib/graphql');
-		
-		const result = await client
-			.query(SESSION_KEY_TRANSACTIONS_QUERY, {
-				sessionKey: address.toLowerCase(),
-				limit,
-				offset
-			})
-			.toPromise();
-		
-		if (!result.data?.transactions) {
-			return [];
-		}
-		
-		// Transform GraphQL data to SessionKeyTransaction format
-		const transactions: SessionKeyTransaction[] = result.data.transactions.map((tx: any) => ({
-			hash: tx.txHash,
-			from: tx.user.id,
-			to: tx.target,
-			value: BigInt(tx.value),
-			timestamp: Math.floor(new Date(tx.createdAt).getTime() / 1000),
-			blockNumber: BigInt(tx.blockNumber),
-			isIncoming: false, // Session Key transactions are always outgoing
-			selector: tx.selector,
-			gasUsed: tx.gasUsed ? BigInt(tx.gasUsed) : undefined,
-			gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined
-		}));
-		
-		return transactions;
-	} catch (error) {
-		console.error('Failed to fetch session key transactions from Subsquid:', error);
-		return [];
-	}
 }

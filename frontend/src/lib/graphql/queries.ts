@@ -592,15 +592,15 @@ export interface CommentWithArticle {
 // ============================================================
 
 /**
- * Get Session Key transactions with pagination
+ * Get transactions by user wallet address with pagination
  */
-export const SESSION_KEY_TRANSACTIONS_QUERY = gql`
-	query SessionKeyTransactions($sessionKey: String!, $limit: Int!, $offset: Int!) {
+export const USER_TRANSACTIONS_QUERY = gql`
+	query UserTransactions($userId: String!, $limit: Int!, $offset: Int!) {
 		transactions(
 			orderBy: createdAt_DESC
 			limit: $limit
 			offset: $offset
-			where: { sessionKey_eq: $sessionKey }
+			where: { user: { id_eq: $userId } }
 		) {
 			id
 			user {
