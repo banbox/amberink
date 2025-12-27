@@ -121,7 +121,7 @@
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<!-- Page Header -->
 	<div class="mb-8">
-		<h1 class="text-2xl font-bold text-gray-900">{m.home_page()}</h1>
+		<h1 class="text-2xl font-bold text-gray-900">{m.home()}</h1>
 		<p class="mt-1 text-gray-600">{m.tagline()}</p>
 	</div>
 
@@ -152,8 +152,8 @@
 	{:else if !loading}
 		<div class="py-16 text-center">
 			<ArticleIcon size={64} class="mx-auto text-gray-300" />
-			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_articles()}</h3>
-			<p class="mt-2 text-gray-500">{m.be_first_to_publish()}</p>
+			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_items({ items: m.articles() })}</h3>
+			<p class="mt-2 text-gray-500">{m.be_first()}</p>
 		</div>
 	{/if}
 
@@ -170,7 +170,7 @@
 	<!-- End of List -->
 	{#if !hasMore && articles.length > 0 && !loading}
 		<div class="py-8 text-center text-gray-500">
-			<p>{m.no_more_articles()}</p>
+			<p>{m.no_more({ items: m.articles() })}</p>
 		</div>
 	{/if}
 </div>

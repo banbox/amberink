@@ -103,7 +103,7 @@
 
 		<!-- Summary/Description placeholder - could be fetched from Arweave -->
 		<p class="mb-3 line-clamp-2 text-sm text-gray-600">
-			{article.title ? '' : 'Decentralized article stored on Arweave'}
+			{article.title ? '' : m.decentralized_article_description()}
 		</p>
 
 		<!-- Interaction Bar -->

@@ -152,18 +152,18 @@
 			// Update status for cover upload
 			if (formData.coverImageFile) {
 				submitStatus = 'uploadingCover';
-				statusMessage = m.uploading_cover();
+				statusMessage = m.uploading();
 			}
 
 			// Update status for content images upload
 			if (formData.contentImages.length > 0) {
 				submitStatus = 'uploadingImages';
-				statusMessage = m.uploading_images ? m.uploading_images() : 'Uploading images...';
+				statusMessage = m.uploading();
 			}
 
 			// Update status for article upload
 			submitStatus = 'uploadingArticle';
-			statusMessage = m.uploading_to_arweave();
+			statusMessage = m.uploading_to({ destination: m.arweave() });
 
 			let collectPrice = 0n;
 			try {
@@ -175,14 +175,14 @@
 				}
 			} catch {
 				throw new Error(
-					`Invalid collect price: expected a non-negative number in USD (example: 0, 1.00, 5.00). Got: "${String(formData.collectPriceUsd ?? '').trim()}"`
+					m.invalid_collect_price({ value: String(formData.collectPriceUsd ?? '').trim() })
 				);
 			}
 
 			const maxSupplyTrimmed = String(formData.maxCollectSupply ?? '0').trim();
 			if (!/^(0|[1-9]\d*)$/.test(maxSupplyTrimmed)) {
 				throw new Error(
-					`Invalid max collect supply: expected a non-negative integer (example: 0, 1, 1000). Got: "${maxSupplyTrimmed}"`
+					m.invalid_max_supply({ value: maxSupplyTrimmed })
 				);
 			}
 			const maxSupply = BigInt(maxSupplyTrimmed);
@@ -190,7 +190,7 @@
 			const originalityNum = Number.parseInt(formData.originality, 10);
 			if (![0, 1, 2].includes(originalityNum)) {
 				throw new Error(
-					`Invalid originality: expected one of 0, 1, 2. Got: "${formData.originality}"`
+					m.invalid_originality({ value: formData.originality })
 				);
 			}
 
@@ -227,7 +227,7 @@
 				statusMessage = typeof errorFn === 'function' ? (errorFn as () => string)() : String(error.message);
 			} else {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				statusMessage = m.publish_failed({ error: errorMessage });
+				statusMessage = m.failed({ error: errorMessage });
 			}
 		} finally {
 			isSubmitting = false;
@@ -236,18 +236,18 @@
 
 	// Button text based on submit status
 	let submitButtonText = $derived.by(() => {
-		if (!isSubmitting) return m.publish_article();
+		if (!isSubmitting) return m.publish();
 		switch (submitStatus) {
 			case 'uploadingCover':
-				return m.uploading_cover();
+				return m.uploading();
 			case 'uploadingImages':
-				return m.uploading_images ? m.uploading_images() : 'Uploading images...';
+				return m.uploading();
 			case 'uploadingArticle':
-				return m.uploading_to_arweave();
+				return m.uploading_to({ destination: m.arweave() });
 			case 'publishingContract':
-				return m.publishing_to_blockchain();
+				return m.publishing_to({ destination: 'blockchain' });
 			default:
-				return m.publish_article();
+				return m.publish();
 		}
 	});
 

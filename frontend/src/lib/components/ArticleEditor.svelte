@@ -234,7 +234,7 @@
 			id="title"
 			bind:value={formData.title}
 			type="text"
-			placeholder={m.input_article_title()}
+			placeholder={m.enter_title()}
 			class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 			{disabled}
 		/>
@@ -294,7 +294,7 @@
 							keepExistingCover = false;
 						}}
 						class="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-						title={m.remove_cover()}
+						title={m.remove()}
 						{disabled}
 					>
 						<CloseIcon size={16} />
@@ -309,8 +309,8 @@
 					? formData.coverImageFile
 						? m.new_cover()
 						: keepExistingCover
-							? m.replace_cover()
-							: m.upload_cover()
+							? m.replace()
+							: m.upload()
 					: m.cover()}
 				aspectRatio={16 / 9}
 				maxOutputWidth={1200}
@@ -331,7 +331,7 @@
 			id="content"
 			bind:this={contentTextarea}
 			bind:value={formData.content}
-			placeholder={m.write_article_here()}
+			placeholder={m.write_here()}
 			rows="12"
 			class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-mono text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 			{disabled}
@@ -355,7 +355,7 @@
 			<textarea
 				id="postscript"
 				bind:value={formData.postscript}
-				placeholder={m.optional_postscript()}
+				placeholder={m.optional_note()}
 				rows="4"
 				class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 				{disabled}
@@ -371,9 +371,7 @@
 		<textarea
 			id="summary"
 			bind:value={formData.summary}
-			placeholder={mode === 'edit'
-				? m.optional_summary()
-				: 'Brief summary of the article (max 512 bytes)'}
+			placeholder={m.brief_summary()}
 			rows="2"
 			class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 			{disabled}
@@ -404,7 +402,7 @@
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<label for="collectPrice" class="mb-2 block text-sm font-medium text-gray-700">
-					{m.collect_price_usd({})}
+					{m.price()} (USD)
 				</label>
 				<div class="flex items-center gap-2">
 					<span class="text-sm font-medium text-gray-600">$</span>
@@ -421,7 +419,7 @@
 				<!-- Show approximate native token amount -->
 				<div class="mt-1 text-xs text-gray-500">
 					{#if priceLoading}
-						{m.price_loading({})}
+						{m.price_loading()}
 					{:else if nativeTokenPrice && formData.collectPriceUsd}
 						≈ {getApproxNativeAmount(formData.collectPriceUsd)} {nativeSymbol}
 					{/if}
@@ -447,10 +445,10 @@
 	<!-- Edit mode info box -->
 	{#if mode === 'edit'}
 		<div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-			<p class="font-medium">{m.edit_note_title()}</p>
+			<p class="font-medium">{m.note_title()}</p>
 			<ul class="mt-2 list-inside list-disc space-y-1">
-				<li>{m.edit_note_content()}</li>
-				<li>{m.edit_note_nft()}</li>
+				<li>{m.note_content()}</li>
+				<li>{m.note_nft()}</li>
 			</ul>
 		</div>
 	{/if}

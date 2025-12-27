@@ -83,9 +83,9 @@
 	const tabs: { key: TabType; label: () => string }[] = [
 		{ key: 'articles', label: () => m.articles() },
 		{ key: 'followers', label: () => m.followers() },
-		{ key: 'following', label: () => m.following_count() },
-		{ key: 'about', label: () => m.about_me() },
-		{ key: 'sessionkey', label: () => 'Session Key' }
+		{ key: 'following', label: () => m.following_list() },
+		{ key: 'about', label: () => m.bio() },
+		{ key: 'sessionkey', label: () => m.session_key() }
 	];
 
 	async function fetchUserProfile() {
@@ -281,7 +281,7 @@
 		
 		const balance = sessionKeyBalance;
 		if (balance === 0n) {
-			sessionKeyError = 'No balance to withdraw';
+			sessionKeyError = m.no_balance();
 			return;
 		}
 
@@ -326,7 +326,7 @@
 	}
 
 	async function handleRevoke() {
-		if (!sessionKey || !confirm('Are you sure you want to revoke this Session Key? This action cannot be undone.')) return;
+		if (!sessionKey || !confirm(m.confirm_revoke())) return;
 		sessionKeyError = '';
 
 		try {
@@ -485,7 +485,7 @@
 	{#if !connected}
 		<div class="py-16 text-center">
 			<LockIcon size={64} class="mx-auto text-gray-300" />
-			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.please_connect_wallet()}</h3>
+			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.connect_wallet_first()}</h3>
 		</div>
 	{:else}
 		<!-- Profile Header -->
@@ -517,7 +517,7 @@
 						<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
 							<span>{user.totalArticles} {m.articles().toLowerCase()}</span>
 							<span>{user.totalFollowers} {m.followers().toLowerCase()}</span>
-							<span>{user.totalFollowing} {m.following_count().toLowerCase()}</span>
+							<span>{user.totalFollowing} {m.following().toLowerCase()}</span>
 						</div>
 						<p class="mt-1 text-sm text-gray-400">
 							{m.member_since()}
@@ -559,7 +559,7 @@
 				</div>
 			{:else if !loading}
 				<div class="py-16 text-center">
-					<p class="text-gray-500">{m.no_articles()}</p>
+					<p class="text-gray-500">{m.no_items({ items: m.articles() })}</p>
 				</div>
 			{/if}
 		{:else if activeTab === 'followers'}
@@ -602,7 +602,7 @@
 				</div>
 			{:else if !loading}
 				<div class="py-16 text-center">
-					<p class="text-gray-500">{m.no_following()}</p>
+					<p class="text-gray-500">{m.no_items({ items: 'following' })}</p>
 				</div>
 			{/if}
 		{:else if activeTab === 'following'}
@@ -645,13 +645,13 @@
 				</div>
 			{:else if !loading}
 				<div class="py-16 text-center">
-					<p class="text-gray-500">{m.no_following()}</p>
+					<p class="text-gray-500">{m.no_items({ items: 'following' })}</p>
 				</div>
 			{/if}
 		{:else if activeTab === 'about'}
 			<div class="py-4">
 				<div class="mb-6 flex items-center justify-between">
-					<h3 class="text-lg font-medium text-gray-900">{m.about_me()}</h3>
+					<h3 class="text-lg font-medium text-gray-900">{m.bio()}</h3>
 					{#if !editingProfile}
 						<button
 							type="button"
@@ -675,7 +675,7 @@
 								type="text"
 								bind:value={nicknameInput}
 								class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-								placeholder={m.nickname_placeholder()}
+								placeholder={m.enter_nickname()}
 								maxlength="64"
 							/>
 							<p class="mt-1 text-xs text-gray-400">{m.max_chars({ count: 64 })}</p>
@@ -800,14 +800,14 @@
 							<!-- Session Key Info -->
 							<div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
 								<div class="mb-6 flex items-center justify-between">
-									<h3 class="text-lg font-semibold text-gray-900">Session Key Information</h3>
+									<h3 class="text-lg font-semibold text-gray-900">{m.information()}</h3>
 									<button
 										type="button"
 										onclick={handleCreateNewKey}
 										disabled={creatingNewKey}
 										class="text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50"
 									>
-										{creatingNewKey ? 'Creating...' : 'Create New'}
+										{creatingNewKey ? m.creating() : m.create_new()}
 									</button>
 								</div>
 
@@ -817,7 +817,7 @@
 									<div class="space-y-4">
 										<!-- Address -->
 										<div>
-											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Address</p>
+											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{m.address()}</p>
 											<p class="break-all font-mono text-xs text-gray-700">{sessionKey.address}</p>
 										</div>
 
@@ -837,16 +837,16 @@
 										<div class="flex items-start justify-between gap-4">
 											<!-- Status Badge -->
 											<div>
-												<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Status</p>
+												<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{m.status()}</p>
 												{#if isSessionKeyExpired(sessionKey)}
 													<span class="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800">
 														<svg class="h-2 w-2 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg>
-														Expired
+														{m.expired()}
 													</span>
 												{:else}
 													<span class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800">
 														<svg class="h-2 w-2 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg>
-														Active
+														{m.active()}
 													</span>
 												{/if}
 											</div>
@@ -854,7 +854,7 @@
 											<!-- Expiry Time -->
 											<div class="text-right">
 												<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-													{isSessionKeyExpired(sessionKey) ? 'Expired At' : 'Expires At'}
+													{isSessionKeyExpired(sessionKey) ? m.expired_at() : m.expires_at()}
 												</p>
 												<p class="text-sm text-gray-700">
 													{new Date(sessionKey.validUntil * 1000).toLocaleDateString('en-US', {
@@ -881,7 +881,7 @@
 													disabled={extending}
 													class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 												>
-													{extending ? '...' : '延期'}
+													{extending ? m.dots() : m.extend()}
 												</button>
 											{:else}
 												<button
@@ -890,7 +890,7 @@
 													disabled={reauthorizing}
 													class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 												>
-													{reauthorizing ? '...' : '重授权'}
+													{reauthorizing ? m.dots() : m.reauthorize()}
 												</button>
 											{/if}
 
@@ -900,7 +900,7 @@
 												disabled={withdrawing || sessionKeyBalance === 0n}
 												class="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
 											>
-												{withdrawing ? '...' : '提现'}
+												{withdrawing ? m.dots() : m.withdraw()}
 											</button>
 
 											<button
@@ -908,7 +908,7 @@
 												onclick={handleRevoke}
 												class="flex-1 rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
 											>
-												撤销
+												{m.revoke()}
 											</button>
 										</div>
 									</div>
@@ -917,9 +917,9 @@
 						{:else}
 							<!-- No Session Key -->
 							<div class="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
-								<p class="text-gray-600">No Session Key found</p>
+								<p class="text-gray-600">{m.no_session_found()}</p>
 								<p class="mt-2 text-sm text-gray-500">
-									Session Keys are automatically created when you perform actions like publishing articles or commenting.
+									{m.session_auto_create()}
 								</p>
 								<button
 									type="button"
@@ -927,14 +927,14 @@
 									disabled={creatingNewKey}
 									class="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 								>
-									{creatingNewKey ? 'Creating...' : 'Create Session Key Now'}
+									{creatingNewKey ? m.creating() : m.create_now()}
 								</button>
 							</div>
 						{/if}
 
 						<!-- Recent Transactions (always shown) -->
 						<div class="rounded-lg border border-gray-200 bg-white p-6">
-							<h3 class="mb-4 text-lg font-semibold text-gray-900">Recent Transactions</h3>
+							<h3 class="mb-4 text-lg font-semibold text-gray-900">{m.recent_transactions()}</h3>
 
 							{#if sessionKeyTransactions.length > 0}
 								<div class="divide-y divide-gray-100">
@@ -952,7 +952,7 @@
 												</div>
 												<div class="flex items-center justify-between gap-4 md:justify-end">
 													<span class="text-xs text-gray-500">
-														Fee: {formatEthDisplay(BigInt(tx.feeAmount))} {nativeSymbol}
+														{m.fee()}: {formatEthDisplay(BigInt(tx.feeAmount))} {nativeSymbol}
 													</span>
 													{#if viewUrl}
 														<a
@@ -961,12 +961,12 @@
 															rel="noopener noreferrer"
 															class="whitespace-nowrap text-sm text-blue-600 hover:text-blue-700"
 														>
-															View →
+															→
 														</a>
 													{/if}
 												</div>
 												<div class="text-xs text-gray-500">
-													Contract: {shortAddress(tx.target)}
+													{m.contract()}: {shortAddress(tx.target)}
 												</div>
 												<div class="text-xs text-gray-400 md:text-right">
 													{new Date(tx.createdAt).toLocaleString()}

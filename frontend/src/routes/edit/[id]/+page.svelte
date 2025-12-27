@@ -185,23 +185,23 @@
 			// Get or create valid session key with balance check
 			const sessionKey = await ensureSessionKeyReady({ requiredSelector: EDIT_ARTICLE_SELECTOR });
 			if (!sessionKey) {
-				throw new Error('Failed to prepare session key. Please try again.');
+				throw new Error(m.failed_prepare());
 			}
 
 			// Update status
 			if (formData.coverImageFile) {
 				submitStatus = 'uploadingCover';
-				statusMessage = m.uploading_cover();
+				statusMessage = m.uploading();
 			}
 
 			// Update status for content images upload
 			if (formData.contentImages.length > 0) {
 				submitStatus = 'uploadingImages';
-				statusMessage = m.uploading_images ? m.uploading_images() : 'Uploading images...';
+				statusMessage = m.uploading();
 			}
 
 			submitStatus = 'uploadingArticle';
-			statusMessage = m.edit_uploading_to_arweave();
+			statusMessage = m.uploading_to({ destination: m.arweave() });
 
 			// Prepare update params
 			console.log('Edit page cover state:', {
@@ -230,7 +230,7 @@
 
 			// Update on-chain metadata (title, author, category, originality)
 			submitStatus = 'updatingContract';
-			statusMessage = m.edit_updating_contract ? m.edit_updating_contract() : 'Updating on-chain metadata...';
+			statusMessage = m.updating_onchain();
 
 			// Get article's chain ID and call editArticle contract function
 			const chainArticleId = BigInt(article.articleId);
@@ -264,7 +264,7 @@
 		} catch (error) {
 			submitStatus = 'error';
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			statusMessage = m.edit_failed({ error: errorMessage });
+			statusMessage = m.failed({ error: errorMessage });
 		} finally {
 			isSubmitting = false;
 		}
@@ -275,13 +275,13 @@
 		if (!isSubmitting) return m.save_changes();
 		switch (submitStatus) {
 			case 'uploadingCover':
-				return m.uploading_cover();
+				return m.uploading();
 			case 'uploadingImages':
-				return m.uploading_images ? m.uploading_images() : 'Uploading images...';
+				return m.uploading();
 			case 'uploadingArticle':
-				return m.edit_uploading_to_arweave();
+				return m.uploading_to({ destination: m.arweave() });
 			case 'updatingContract':
-				return m.edit_updating_contract ? m.edit_updating_contract() : 'Updating on-chain...';
+				return m.updating_onchain();
 			default:
 				return m.save_changes();
 		}
@@ -308,25 +308,25 @@
 	<div class="mx-auto max-w-3xl px-6 py-12">
 		<header class="mb-12">
 			<h1 class="mb-2 text-4xl font-light tracking-tight">{m.edit_article()}</h1>
-			<p class="text-gray-500">{m.edit_article_description()}</p>
+			<p class="text-gray-500">{m.edit_description()}</p>
 		</header>
 
 		{#if !walletAddress}
 			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
-				<p class="text-yellow-800">{m.please_connect_wallet({})}</p>
+				<p class="text-yellow-800">{m.connect_wallet_first()}</p>
 			</div>
 		{:else if !isAuthorized}
 			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-				<p class="text-red-800">{m.not_article_author()}</p>
+				<p class="text-red-800">{m.not_author()}</p>
 				<a href={localizeHref(`/a/${article.id}`)} class="mt-4 inline-block text-blue-600 hover:underline">
-					{m.back_to_article()}
+					{m.back_to({ destination: m.article() })}
 				</a>
 			</div>
 		{:else if isLoadingContent}
 			<div class="flex items-center justify-center py-16">
 				<div class="flex items-center gap-3 text-gray-500">
 					<SpinnerIcon size={20} class="text-gray-500" />
-					<span>{m.loading_content({})}</span>
+					<span>{m.loading_content()}</span>
 				</div>
 			</div>
 		{:else if loadError}
@@ -372,7 +372,7 @@
 							? 'pointer-events-none opacity-50'
 							: ''}"
 					>
-						{m.cancel({})}
+						{m.cancel()}
 					</a>
 				</div>
 

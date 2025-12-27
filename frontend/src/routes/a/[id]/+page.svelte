@@ -94,7 +94,7 @@
 		if (!requireWallet() || isCollecting) return;
 		// Security check: prevent self-collect
 		if (isAuthor) {
-			showFeedback('error', m.cannot_self_collect({}));
+			showFeedback('error', m.cannot_action_own({ action: m.collect(), item: m.article() }));
 			showCollectModal = false;
 			return;
 		}
@@ -102,11 +102,11 @@
 		const maxSupply = BigInt(article.maxCollectSupply);
 		const currentCount = BigInt(localCollectCount);
 		if (maxSupply === 0n) {
-			showFeedback('error', 'Collect not enabled');
+			showFeedback('error', m.collect_not_enabled());
 			return;
 		}
 		if (currentCount >= maxSupply) {
-			showFeedback('error', 'Sold out');
+			showFeedback('error', m.sold_out());
 			return;
 		}
 
@@ -120,7 +120,7 @@
 				() => collectArticle(chainArticleId, ZERO_ADDRESS, priceWei)
 			);
 			localCollectCount = (BigInt(localCollectCount) + 1n).toString();
-			showFeedback('success', 'Collected');
+			showFeedback('success', m.success({ action: m.collect() }));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
 		} finally {
@@ -167,7 +167,7 @@
 			});
 		} else {
 			navigator.clipboard.writeText(window.location.href);
-			showFeedback('success', m.link_copied({}));
+			showFeedback('success', m.link_copied());
 		}
 	}
 
@@ -182,7 +182,7 @@
 	// Check wallet and show error if not connected, returns true if wallet is connected
 	function requireWallet(): boolean {
 		if (!walletAddress) {
-			showFeedback('error', m.please_connect_wallet({}));
+			showFeedback('error', m.connect_wallet_first());
 			return false;
 		}
 		return true;
@@ -234,17 +234,17 @@
 	function getErrorMessage(error: unknown): string {
 		if (error instanceof ContractError) {
 			const errorMessages: Record<string, string> = {
-				user_rejected: m.user_rejected({}),
-				insufficient_funds: m.insufficient_funds({}),
-				network_error: m.network_error({}),
-				contract_reverted: m.contract_reverted({}),
-				gas_estimation_failed: m.gas_estimation_failed({}),
-				nonce_too_low: m.nonce_too_low({}),
-				replacement_underpriced: m.replacement_underpriced({}),
-				wallet_not_connected: m.wallet_not_connected({}),
-				wrong_network: m.wrong_network({}),
-				timeout: m.timeout({}),
-				unknown_error: m.unknown_error({})
+				user_rejected: m.user_rejected(),
+				insufficient_funds: m.insufficient_funds(),
+				network_error: m.network_error(),
+				contract_reverted: m.contract_reverted(),
+				gas_estimation_failed: m.gas_estimation_failed(),
+				nonce_too_low: m.nonce_too_low(),
+				replacement_underpriced: m.replacement_underpriced(),
+				wallet_not_connected: m.wallet_not_connected(),
+				wrong_network: m.wrong_network(),
+				timeout: m.timeout(),
+				unknown_error: m.unknown_error()
 			};
 			return errorMessages[error.code] || error.message;
 		}
@@ -294,7 +294,7 @@
 		}
 		const amount = parseFloat(dislikeAmountUsd);
 		if (isNaN(amount) || amount <= 0) {
-			showFeedback('error', 'Invalid amount');
+			showFeedback('error', m.invalid_amount());
 			return;
 		}
 		isDisliking = true;
@@ -310,7 +310,7 @@
 			localDislikeAmount = (BigInt(localDislikeAmount) + dislikeWei).toString();
 			showDislikeModal = false;
 			dislikeAmountUsd = getDefaultDislikeAmountUsd();
-			showFeedback('success', m.dislike_success({}));
+			showFeedback('success', m.success({ action: m.dislike() }));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
 		} finally {
@@ -323,7 +323,7 @@
 		if (!requireWallet()) return;
 		// Security check: prevent self-follow
 		if (isAuthor) {
-			showFeedback('error', m.cannot_self_follow({}));
+			showFeedback('error', m.cannot_self_action({ action: m.follow() }));
 			return;
 		}
 		isFollowing = true;
@@ -333,7 +333,7 @@
 				(sk) => followUserWithSessionKey(sk, targetAddress, true),
 				() => followUser(targetAddress, true)
 			);
-			showFeedback('success', m.follow_success({}));
+			showFeedback('success', m.success({ action: m.follow() }));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
 		} finally {
@@ -346,13 +346,13 @@
 		if (!requireWallet()) return;
 		// Security check: prevent self-evaluation
 		if (isAuthor) {
-			showFeedback('error', m.cannot_self_evaluate({}));
+			showFeedback('error', m.cannot_self_action({ action: 'evaluate' }));
 			showTipModal = false;
 			return;
 		}
 		const amount = parseFloat(tipAmountUsd);
 		if (isNaN(amount) || amount <= 0) {
-			showFeedback('error', 'Invalid tip amount');
+			showFeedback('error', m.invalid_amount());
 			return;
 		}
 		isTipping = true;
@@ -367,7 +367,7 @@
 			);
 			showTipModal = false;
 			tipAmountUsd = getDefaultTipAmountUsd();
-			showFeedback('success', m.tip_success({}));
+			showFeedback('success', m.success({ action: m.tip() }));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
 		} finally {
@@ -676,13 +676,13 @@
 		>
 			<div class="flex items-center gap-2 text-amber-800">
 				<ClockIcon size={20} />
-				<span class="text-sm font-medium">You are viewing a historical version</span>
+				<span class="text-sm font-medium">{m.viewing_historical_version()}</span>
 			</div>
 			<a
 				href={localizeHref(`/a/${article.id}`)}
 				class="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-amber-700"
 			>
-				View Latest
+				{m.view_latest()}
 			</a>
 		</div>
 	{/if}
@@ -767,12 +767,12 @@
 					{#if qualityScore() !== null}
 						<span
 							class={`text-lg font-bold ${getScoreColor(qualityScore())}`}
-							title="Article Quality Score"
+							title={m.article_quality_score()}
 						>
 							{qualityScore()?.toFixed(1)}
 						</span>
 					{:else}
-						<span class="text-lg font-bold text-gray-300" title="No ratings yet">--</span>
+						<span class="text-lg font-bold text-gray-300" title={m.no_ratings()}>--</span>
 					{/if}
 
 					<!-- Like/Tip -->
@@ -803,7 +803,7 @@
 							type="button"
 							class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
 							onclick={() => (showCollectModal = true)}
-							title="Collect"
+							title={m.collect()}
 						>
 							<!-- Bookmark Icon -->
 							<BookmarkIcon size={20} />
@@ -833,7 +833,7 @@
 							type="button"
 							onclick={toggleVersionsDropdown}
 							class="flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-900"
-							title="View history versions"
+							title={m.view_history_versions()}
 						>
 							<!-- Clock/History Icon -->
 							<ClockIcon size={20} />
@@ -851,12 +851,12 @@
 							>
 								<div class="border-b border-gray-100 px-4 py-3">
 									<div class="flex items-center justify-between">
-										<h4 class="font-medium text-gray-900">History Versions</h4>
+										<h4 class="font-medium text-gray-900">{m.history_versions()}</h4>
 										<button
 											type="button"
 											onclick={() => (showVersionsDropdown = false)}
 											class="text-gray-400 hover:text-gray-600"
-											aria-label="Close versions dropdown"
+											aria-label={m.close_versions_dropdown()}
 										>
 											<CloseIcon size={16} />
 										</button>
@@ -867,14 +867,14 @@
 											class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
 										>
 											<BackIcon size={12} />
-											Back to latest version
+											{m.back_to_latest_version()}
 										</a>
 									{/if}
 								</div>
 								<div class="max-h-64 overflow-y-auto">
 									{#if versions.length === 0}
 										<div class="px-4 py-6 text-center text-sm text-gray-500">
-											{versionsLoading ? 'Loading...' : 'No version history found'}
+											{versionsLoading ? m.loading() : m.no_history()}
 										</div>
 									{:else}
 										{#each versions as version, idx}
@@ -893,12 +893,12 @@
 												<div class="min-w-0 flex-1">
 													<div class="flex items-center gap-2">
 														<span class="truncate font-medium text-gray-900">
-															{version.title || article.title || 'Untitled'}
+															{version.title || article.title || m.untitled()}
 														</span>
 														{#if idx === 0}
 															<span
 																class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700"
-																>Latest</span
+																>{m.latest()}</span
 															>
 														{/if}
 													</div>
@@ -989,7 +989,7 @@
 			</div>
 		{:else}
 			<div class="py-8 text-center text-gray-500">
-				<p>{m.no_content({})}</p>
+				<p>{m.no_items({ items: m.content() })}</p>
 			</div>
 		{/if}
 	</div>
@@ -1043,7 +1043,7 @@
 				</a>
 			</div>
 			<div class="flex items-center gap-1">
-				<span class="font-medium text-gray-700">Arweave:</span>
+				<span class="font-medium text-gray-700">{m.arweave()}:</span>
 				<a
 					href={`${getArweaveGateways()[0]}/${article.id}`}
 					target="_blank"
@@ -1183,17 +1183,17 @@
 			role="document"
 			onclick={(e) => e.stopPropagation()}
 		>
-			<h3 class="mb-4 text-lg font-bold text-gray-900">Collect Article</h3>
+			<h3 class="mb-4 text-lg font-bold text-gray-900">{m.collect_article()}</h3>
 
 			<!-- Collect Stats -->
 			<div class="mb-6 grid grid-cols-3 gap-4">
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
 					<div class="text-2xl font-bold text-gray-900">{localCollectCount}</div>
-					<div class="text-xs text-gray-500">Collected</div>
+					<div class="text-xs text-gray-500">{m.collected_count()}</div>
 				</div>
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
 					<div class="text-2xl font-bold text-emerald-600">{formatTips(article.collectPrice)}</div>
-					<div class="text-xs text-gray-500">Price ({nativeSymbol})</div>
+					<div class="text-xs text-gray-500">{m.price_label()} ({nativeSymbol})</div>
 				</div>
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
 					<div class="text-2xl font-bold text-gray-900">
@@ -1201,7 +1201,7 @@
 							? (maxCollectSupply - BigInt(localCollectCount)).toString()
 							: '∞'}
 					</div>
-					<div class="text-xs text-gray-500">Remaining</div>
+					<div class="text-xs text-gray-500">{m.remaining()}</div>
 				</div>
 			</div>
 
@@ -1209,15 +1209,15 @@
 			{#if article.collections && article.collections.length > 0}
 				<div class="mb-6">
 					<h4 class="mb-3 text-sm font-medium text-gray-700">
-						Collectors ({article.collections.length})
+						{m.collectors()} ({article.collections.length})
 					</h4>
 					<div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200">
 						<table class="w-full text-sm">
 							<thead class="sticky top-0 bg-gray-50">
 								<tr class="text-left text-xs text-gray-500">
-									<th class="px-3 py-2">Address</th>
-									<th class="px-3 py-2 text-right">Amount</th>
-									<th class="px-3 py-2 text-right">Time</th>
+									<th class="px-3 py-2">{m.address()}</th>
+									<th class="px-3 py-2 text-right">{m.amount()}</th>
+									<th class="px-3 py-2 text-right">{m.time()}</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-100">
@@ -1260,7 +1260,7 @@
 				</div>
 			{:else}
 				<div class="mb-6 rounded-lg border border-gray-200 p-4 text-center text-sm text-gray-500">
-					No collectors yet. Be the first!
+					{m.no_items({ items: m.collectors() })}
 				</div>
 			{/if}
 
@@ -1283,9 +1283,9 @@
 					{#if isCollecting}
 						{m.processing({})}
 					{:else if !collectAvailable}
-						Sold Out
+						{m.sold_out()}
 					{:else}
-						Collect for {formatTips(article.collectPrice)} {nativeSymbol}
+						{m.collect_for({ price: formatTips(article.collectPrice), symbol: nativeSymbol })}
 					{/if}
 				</button>
 			</div>

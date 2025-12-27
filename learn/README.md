@@ -1284,3 +1284,20 @@ Claude: 增加data-sveltekit-reload解决
 @help.md 当前项目支持了多语言，但很多地方并未生效，原因是在 `<a href=""` 时使用了原始URL，应该使用localizeHref得到本地化url才对，请帮我检查前端所有的svelte组件和页面，帮我找到不规范的地方并修正  
 Claude: 已完成
 
+### 2025-12-27 17:15  无用代码删除
+@help.md 当前项目分为若干个部分，经过了很多次修改，目前可能有很多文件或函数是弃用的或未被引用的，这些都需要删除。请帮我分批阅读所有的相关代码文件，包括：智能合约contracts、索引squid、前端frontend。包括前后端sol, ts, svelte等代码文件。针对每个函数，在项目下搜索其引用检查是否被使用。未被使用则删除。前端的相关组件也需要检查。务必分批进行，内容太多。跳过 node_modules squid/lib 等这些在gitignore中忽略的文件。  
+Claude sonnet 4.5：误找出BlogPaymaster.sol，BlogTokenPaymaster.sol未被使用，真正冗余的如`weiToUsd`并未找到，可能windsurf的windows版尚不支持文件夹下搜索代码片段？
+
+### 2025-12-27 17:45  硬编码文本改多语言
+@help.md 当前项目 frontend 使用paraglide多语言，目前大部分页面已经支持。不过部分组件和页面并未使用多语言key，而是直接硬编码了文本。请逐个检查前端的所有svelte文件，包括组件和页面，找出其中是否有硬编码的文本，提取为多语言key维护到 frontend\messages 下的json文件中。先暂时维护到一个地方，然后批量更新到json中。  
+Claude: 修改若干页面
+
+### 2025-12-27 16:25  多语言key优化
+@help.md 当前项目使用paraglide多语言，相关key维护在frontend\messages下的json文件中。目前多语言的key非常多，可能有些是冗余重复不必要的，或许有些可以合并。
+所有多语言的key应该都直接从其内容直接推导生成，不应该根据其使用位置进行定义；这样确保通用的内容可以被重复使用，减少多语言文件的复杂程度，方便维护；
+比如“Running”应该直接对应"running"这个key，而不是"job_bt_status_running"有很多前缀；
+重复3次及以上的相似key，且较长的可提取为带参数的key；(短的不应拆分，比如publish_article/edit_article)
+注意引用多语言的代码中不要有任何fallback文本，如果获取失败，直接返回错误信息即可。
+以其中一个语言的json进行优化，然后对照翻译其他语言即可。
+最后根据key的修改前后对应关系，在所有相关引用代码中，更正为修改后的key  
+Claude: 修改完成

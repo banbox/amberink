@@ -73,7 +73,7 @@
 		if (likingCommentIds.has(comment.id)) return;
 		// Security check: prevent liking own comment
 		if (walletAddress.toLowerCase() === comment.user.id.toLowerCase()) {
-			alert(m.cannot_like_own_comment({}));
+			alert(m.cannot_action_own({ action: 'like', item: 'comment' }));
 			return;
 		}
 
@@ -117,7 +117,7 @@
 			comments = comments.map((c) => (c.id === comment.id ? { ...c, likes: c.likes + 1 } : c));
 		} catch (e) {
 			console.error('Failed to like comment:', e);
-			alert(m.interaction_failed({ error: getErrorMessage(e) }));
+			alert(m.operation_failed());
 		} finally {
 			const next = new Set(likingCommentIds);
 			next.delete(comment.id);
@@ -225,7 +225,7 @@
 							<span>{comment.likes}</span>
 						</button>
 						<button type="button" class="hover:text-gray-700 transition-colors">
-							{m.reply({})}
+							{m.reply()}
 						</button>
 					</div>
 				</article>
@@ -233,7 +233,7 @@
 		</div>
 	{:else}
 		<div class="py-4 text-center mb-8 text-gray-500">
-			<p>{m.no_comments({})}</p>
+			<p>{m.no_comments()}</p>
 		</div>
 	{/if}
 
@@ -251,7 +251,7 @@
 				</div>
 			{/if}
 			<span class="text-sm font-medium text-gray-900">
-				{userDisplay || m.anonymous({})}
+				{userDisplay || m.anonymous()}
 			</span>
 		</div>
 
@@ -265,7 +265,7 @@
 			<textarea
 				bind:this={inputRef}
 				bind:value={commentText}
-				placeholder={m.write_comment({})}
+				placeholder={m.write_comment()}
 				rows={isInputFocused ? 3 : 1}
 				class="w-full resize-none rounded-lg border-0 text-[15px] text-gray-700 placeholder-gray-400 transition-all duration-200 focus:border-gray-300 focus:outline-none"
 				class:bg-transparent={isInputFocused}
@@ -306,7 +306,7 @@
 							class="text-sm text-gray-500 hover:text-gray-700 transition-colors"
 							disabled={isCommenting}
 						>
-							{m.cancel({})}
+							{m.cancel()}
 						</button>
 						<button
 							type="button"
@@ -314,16 +314,16 @@
 							disabled={isCommenting || !commentText.trim() || !walletAddress}
 							class="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
 						>
-							{isCommenting ? m.posting({}) : m.reply({})}
+							{isCommenting ? m.posting() : m.post()}
 						</button>
 					</div>
 				</div>
 
 				<!-- Hint -->
 				{#if !walletAddress}
-					<p class="mt-2 text-xs text-gray-400">{m.please_connect_wallet({})}</p>
+					<p class="mt-2 text-xs text-gray-400">{m.connect_wallet_first()}</p>
 				{:else if !hasValidSessionKey}
-					<p class="mt-2 text-xs text-amber-600">{m.enable_seamless_for_interaction({})}</p>
+					<p class="mt-2 text-xs text-amber-600">{m.enable_seamless_hint()}</p>
 				{/if}
 			{/if}
 		</div>

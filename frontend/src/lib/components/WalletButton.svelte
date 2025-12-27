@@ -119,6 +119,6 @@
 		disabled={isLoading}
 		onclick={handleConnect}
 	>
-		{isLoading ? '...' : m.connect_wallet()}
+		{isLoading ? m.loading_dots() : m.connect_wallet()}
 	</button>
 {/if}

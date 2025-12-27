@@ -202,7 +202,7 @@
 					<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
 						<span>{user.totalArticles} {m.articles().toLowerCase()}</span>
 						<span>{user.totalFollowers} {m.followers().toLowerCase()}</span>
-						<span>{user.totalFollowing} {m.following_count().toLowerCase()}</span>
+						<span>{user.totalFollowing} {m.following().toLowerCase()}</span>
 					</div>
 					<p class="mt-1 text-sm text-gray-400">
 						{m.member_since()}
@@ -231,7 +231,7 @@
 	{:else if !loading}
 		<div class="py-16 text-center">
 			<DocumentIcon size={64} class="mx-auto text-gray-300" />
-			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_articles()}</h3>
+			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_items({ items: m.articles() })}</h3>
 		</div>
 	{/if}
 
@@ -248,7 +248,7 @@
 	<!-- End of List -->
 	{#if !hasMore && articles.length > 0 && !loading}
 		<div class="py-8 text-center text-gray-500">
-			<p>{m.no_more_articles()}</p>
+			<p>{m.no_more({ items: m.articles() })}</p>
 		</div>
 	{/if}
 </div>

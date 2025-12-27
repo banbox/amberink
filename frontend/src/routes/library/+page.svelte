@@ -164,7 +164,7 @@
 	{#if !connected}
 		<div class="py-16 text-center">
 			<LockIcon size={64} class="mx-auto text-gray-300" />
-			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.please_connect_wallet()}</h3>
+			<h3 class="mt-4 text-lg font-medium text-gray-900">{m.connect_wallet_first()}</h3>
 		</div>
 	{:else}
 		<!-- Tabs -->
@@ -198,7 +198,7 @@
 		{:else if !loading}
 			<div class="py-16 text-center">
 				<BookmarkIcon size={64} class="mx-auto text-gray-300" />
-				<h3 class="mt-4 text-lg font-medium text-gray-900">{m.empty_list()}</h3>
+				<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_items({ items: m.articles() })}</h3>
 			</div>
 		{/if}
 
@@ -215,7 +215,7 @@
 		<!-- End of List -->
 		{#if !hasMore && articles.length > 0 && !loading}
 			<div class="py-8 text-center text-gray-500">
-				<p>{m.no_more_articles()}</p>
+				<p>{m.no_more({ items: m.articles() })}</p>
 			</div>
 		{/if}
 	{/if}
