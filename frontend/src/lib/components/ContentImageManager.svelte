@@ -88,7 +88,7 @@
 		compressionStatus = '';
 
 		if (images.length >= maxImages) {
-			error = m.max_images_reached ? m.max_images_reached({ max: maxImages }) : `Maximum ${maxImages} images allowed`;
+			error = m.max_images_reached({ max: maxImages });
 			return;
 		}
 
@@ -217,7 +217,7 @@
 <div class="content-image-manager">
 	<div class="mb-2 flex items-center justify-between">
 		<label class="block text-sm font-medium text-gray-700">
-			{m.content_images ? m.content_images() : 'Content Images'}
+			{m.content_images()}
 		</label>
 		<span class="text-xs text-gray-500">
 			{images.length}/{maxImages}
@@ -237,7 +237,7 @@
 				<span class="text-blue-600">{compressionStatus}</span>
 			{:else}
 				<PlusIcon size={20} class="text-gray-400" />
-				<span class="text-gray-600">{m.add_image ? m.add_image() : 'Add Image'}</span>
+				<span class="text-gray-600">{m.add_image()}</span>
 			{/if}
 			<input
 				bind:this={fileInput}
@@ -289,7 +289,7 @@
 						<button
 							type="button"
 							class="rounded p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
-							title={m.insert_markdown ? m.insert_markdown() : 'Insert Markdown'}
+							title={m.insert_markdown()}
 							{disabled}
 							onclick={() => insertImageMarkdown(image)}
 						>
@@ -301,7 +301,7 @@
 						<button
 							type="button"
 							class="rounded p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
-							title={m.image_size ? m.image_size() : 'Image Size'}
+							title={m.image_size()}
 							{disabled}
 							onclick={() => openSizeSettings(image)}
 						>
@@ -339,9 +339,7 @@
 
 	<!-- Help text -->
 	<p class="mt-2 text-xs text-gray-500">
-		{m.content_images_help
-			? m.content_images_help()
-			: 'Click image name to insert markdown. Use size button to set dimensions.'}
+		{m.content_images_help()}
 	</p>
 </div>
 
@@ -354,7 +352,7 @@
 	>
 		<div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
 			<h3 class="mb-4 text-lg font-medium text-gray-900">
-				{m.image_size_settings ? m.image_size_settings() : 'Image Size Settings'}
+				{m.image_size_settings()}
 			</h3>
 			<p class="mb-4 text-sm text-gray-500">
 				{editingImage.id}.{editingImage.extension}
@@ -363,7 +361,7 @@
 			<div class="mb-4 grid grid-cols-2 gap-4">
 				<div>
 					<label for="img-width" class="mb-1 block text-sm font-medium text-gray-700">
-						{m.width ? m.width() : 'Width'}
+						{m.width()}
 					</label>
 					<input
 						id="img-width"
@@ -376,7 +374,7 @@
 				</div>
 				<div>
 					<label for="img-height" class="mb-1 block text-sm font-medium text-gray-700">
-						{m.height ? m.height() : 'Height'}
+						{m.height()}
 					</label>
 					<input
 						id="img-height"
@@ -390,9 +388,7 @@
 			</div>
 
 			<p class="mb-4 text-xs text-gray-500">
-				{m.image_size_help
-					? m.image_size_help()
-					: 'Leave empty for auto size. Uses HTML img tag when size is set.'}
+				{m.image_size_help()}
 			</p>
 
 			<div class="flex justify-end gap-3">

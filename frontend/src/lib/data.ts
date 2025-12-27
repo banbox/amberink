@@ -42,7 +42,7 @@ export const CATEGORY_KEYS = [
 	'literature', // 36 - 文学
 	'comics', // 37 - 动漫
 	'digital_life', // 38 - 数码
-	'home', // 39 - 家居
+	'home_living', // 39 - 家居
 	'agriculture' // 40 - 农业
 ] as const;
 

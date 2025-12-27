@@ -1292,7 +1292,7 @@ Claude sonnet 4.5：误找出BlogPaymaster.sol，BlogTokenPaymaster.sol未被使
 @help.md 当前项目 frontend 使用paraglide多语言，目前大部分页面已经支持。不过部分组件和页面并未使用多语言key，而是直接硬编码了文本。请逐个检查前端的所有svelte文件，包括组件和页面，找出其中是否有硬编码的文本，提取为多语言key维护到 frontend\messages 下的json文件中。先暂时维护到一个地方，然后批量更新到json中。  
 Claude: 修改若干页面
 
-### 2025-12-27 16:25  多语言key优化
+### 2025-12-27 18:25  多语言key优化
 @help.md 当前项目使用paraglide多语言，相关key维护在frontend\messages下的json文件中。目前多语言的key非常多，可能有些是冗余重复不必要的，或许有些可以合并。
 所有多语言的key应该都直接从其内容直接推导生成，不应该根据其使用位置进行定义；这样确保通用的内容可以被重复使用，减少多语言文件的复杂程度，方便维护；
 比如“Running”应该直接对应"running"这个key，而不是"job_bt_status_running"有很多前缀；
@@ -1301,3 +1301,6 @@ Claude: 修改若干页面
 以其中一个语言的json进行优化，然后对照翻译其他语言即可。
 最后根据key的修改前后对应关系，在所有相关引用代码中，更正为修改后的key  
 Claude: 修改完成
+
+### 2025-12-27 19:25  若干多语言key丢失
+@help.md 当前项目使用paraglide作为多语言，目前对 frontend\messages 下的多语言key文件进行了更新，和之前的很多key不一样了。前端其他svelte文件中可能依然使用的是旧的，或者有些并未记录到多语言key中。请你在frontend下搜索所有svelte文件，包括组件和页面，可使用正则"\bm\.\w+\(\)"找到相关的key，然后检查哪些未在多语言json中注册，考虑是否有已有的合适的，有则改为已有的，否则注册到多语言中，遵循现有的key命名规范。  

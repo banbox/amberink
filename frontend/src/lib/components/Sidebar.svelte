@@ -168,7 +168,7 @@
 			</h3>
 
 			{#if !walletAddress}
-				<p class="px-3 text-sm text-gray-400">{m.please_connect_wallet()}</p>
+				<p class="px-3 text-sm text-gray-400">{m.connect_wallet_first()}</p>
 			{:else if loadingFollowing}
 				<div class="flex items-center justify-center py-4">
 					<SpinnerIcon size={20} class="text-gray-400" />

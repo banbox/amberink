@@ -92,7 +92,7 @@
 			>
 			{#if categoryName}
 				<span class="text-gray-300">·</span>
-				<span class="text-gray-500">{m.in_category()} {categoryName}</span>
+				<span class="text-gray-500">{m.in()} {categoryName}</span>
 			{/if}
 		</div>
 
@@ -103,7 +103,7 @@
 
 		<!-- Summary/Description placeholder - could be fetched from Arweave -->
 		<p class="mb-3 line-clamp-2 text-sm text-gray-600">
-			{article.title ? '' : m.decentralized_article_description()}
+			{'no summary'}
 		</p>
 
 		<!-- Interaction Bar -->
