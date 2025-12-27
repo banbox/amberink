@@ -32,7 +32,7 @@
 		createNewSessionKey,
 		type StoredSessionKey
 	} from '$lib/sessionKey';
-	import { formatEther } from 'viem';
+	import { formatEthDisplay } from '$lib/data';
 	import { getBlockExplorerTxUrl } from '$lib/chain';
 
 	type TabType = 'articles' | 'followers' | 'following' | 'about' | 'sessionkey';
@@ -283,7 +283,7 @@
 			return;
 		}
 
-		if (!confirm(`Withdraw all balance (${formatEther(balance)} ETH) from Session Key to your main wallet?`)) {
+		if (!confirm(`Withdraw all balance (${formatEthDisplay(balance)} ETH) from Session Key to your main wallet?`)) {
 			return;
 		}
 
@@ -800,7 +800,7 @@
 							<div class="mb-4">
 								<p class="text-sm font-medium text-gray-500">Balance</p>
 								<p class="mt-1 text-lg font-semibold text-gray-900">
-									{formatEther(sessionKeyBalance)} ETH
+									{formatEthDisplay(sessionKeyBalance)} ETH
 								</p>
 							</div>
 
@@ -863,27 +863,32 @@
 							{#if sessionKeyTransactions.length > 0}
 								<div class="divide-y divide-gray-100">
 									{#each sessionKeyTransactions as tx}
+										{@const viewUrl = getBlockExplorerTxUrl(tx.txHash)}
 										<div class="py-3">
 											<div class="flex items-center justify-between">
 												<div class="flex-1">
 													<div class="flex items-center gap-2">
 														<span class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
-															TX
+															{tx.method}
 														</span>
 														<span class="font-semibold text-gray-900">
-															{formatEther(BigInt(tx.value))} ETH
+															{formatEthDisplay(BigInt(tx.value))} ETH
 														</span>
 													</div>
 													<p class="mt-1 text-xs text-gray-500">
 														Contract: {shortAddress(tx.target)}
 													</p>
+													<p class="mt-1 text-xs text-gray-500">
+														Fee: {formatEthDisplay(BigInt(tx.feeAmount))} ETH
+													</p>
 													<p class="mt-1 text-xs text-gray-400">
 														{new Date(tx.createdAt).toLocaleString()}
 													</p>
 												</div>
+												{#if viewUrl}
 												<div>
 													<a
-														href={getBlockExplorerTxUrl(tx.txHash)}
+														href={viewUrl}
 														target="_blank"
 														rel="noopener noreferrer"
 														class="text-sm text-blue-600 hover:text-blue-700"
@@ -891,6 +896,7 @@
 														View →
 													</a>
 												</div>
+												{/if}
 											</div>
 										</div>
 									{/each}

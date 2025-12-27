@@ -21,16 +21,13 @@ export class Transaction {
     target!: string
 
     @StringColumn_({nullable: false})
-    selector!: string
+    method!: string
 
     @BigIntColumn_({nullable: false})
     value!: bigint
 
-    @BigIntColumn_({nullable: true})
-    gasUsed!: bigint | undefined | null
-
-    @BigIntColumn_({nullable: true})
-    gasPrice!: bigint | undefined | null
+    @BigIntColumn_({nullable: false})
+    feeAmount!: bigint
 
     @IntColumn_({nullable: false})
     blockNumber!: number

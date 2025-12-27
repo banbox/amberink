@@ -4,6 +4,9 @@ import { Article, User, Evaluation, Comment, Follow, Collection, Transaction } f
 import * as blogHub from './abi/BlogHub'
 import * as sessionKeyManager from './abi/SessionKeyManager'
 import { LessThan } from 'typeorm'
+import * as fs from 'fs'
+import * as path from 'path'
+import keccak256 from 'keccak256'
 
 // 事件签名（从生成的 ABI 类型中获取）
 const ARTICLE_PUBLISHED = blogHub.events.ArticlePublished.topic
@@ -24,6 +27,73 @@ const COLLECTOR_TOKEN_OFFSET = 1n << 250n
 // Session Key 交易记录限制
 const MAX_TRANSACTIONS_PER_USER = 500 // 每个用户最多保存500条交易记录
 const MAX_TRANSACTION_AGE_MS = 90 * 24 * 60 * 60 * 1000 // 3个月
+
+// 函数选择器到函数名称的缓存映射
+const selectorToFunctionName = new Map<string, string>()
+
+/**
+ * 从 ABI JSON 文件中读取并解析函数选择器
+ * @param abiFilePath ABI JSON 文件路径
+ */
+function loadABIFromFile(abiFilePath: string) {
+    const fileContent = fs.readFileSync(abiFilePath, 'utf-8')
+    const abiData = JSON.parse(fileContent)
+    const abi = abiData.abi || abiData // 支持两种格式
+    
+    for (const item of abi) {
+        if (item.type === 'function' && item.name) {
+            // 构建函数签名: functionName(type1,type2,...)
+            const inputTypes = item.inputs.map((input: any) => input.type).join(',')
+            const signature = `${item.name}(${inputTypes})`
+            
+            // 计算选择器: keccak256(signature) 的前 4 字节
+            const hashBuffer = keccak256(signature)
+            const selector = '0x' + hashBuffer.toString('hex').slice(0, 8)
+            
+            // 存储映射
+            selectorToFunctionName.set(selector.toLowerCase(), item.name)
+        }
+    }
+}
+
+/**
+ * 从 ABI 中提取函数选择器和名称的映射
+ */
+function buildSelectorCache() {
+    // __dirname 在编译后指向 lib/，需要访问 src/abi/
+    // 从 lib/ 返回到项目根目录，再进入 src/abi/
+    const abiDir = path.join(__dirname, '..', 'src', 'abi')
+    
+    // 读取所有需要的 ABI 文件
+    const abiFiles = [
+        path.join(abiDir, 'BlogHub.json'),
+        path.join(abiDir, 'SessionKeyManager.json'),
+    ]
+    
+    // 从每个 ABI 文件中加载函数选择器
+    for (const abiFile of abiFiles) {
+        if (fs.existsSync(abiFile)) {
+            loadABIFromFile(abiFile)
+        } else {
+            console.error("abi file not found:", abiFile)
+        }
+    }
+    
+    console.log(`Loaded ${selectorToFunctionName.size} function selectors from ABI files`)
+}
+
+/**
+ * 根据选择器获取函数名称
+ * @param selector 函数选择器 (bytes4, 如 "0x12345678")
+ * @returns 函数名称，如果未找到则返回原选择器
+ */
+function getFunctionNameFromSelector(selector: string): string {
+    const normalized = selector.toLowerCase()
+    return selectorToFunctionName.get(normalized) || selector
+}
+
+// 初始化选择器缓存
+buildSelectorCache()
 
 processor.run(new TypeormDatabase(), async (ctx) => {
     const articles: Article[] = []
@@ -385,23 +455,32 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 const event = sessionKeyManager.events.SessionKeyUsed.decode(log)
                 const user = await ensureUser(event.owner, block.header.timestamp)
                 
-                // 获取交易的 gas 信息
-                let gasUsed: bigint | null = null
-                let gasPrice: bigint | null = null
-                if (log.transaction) {
-                    gasUsed = log.transaction.gasUsed ?? null
-                    gasPrice = log.transaction.gasPrice ?? null
+                // 计算实际消耗的手续费
+                let feeAmount = 0n
+                // 从 block.transactions 中查找对应的交易
+                const txData = log.transaction;
+                if (txData) {
+                    const gasUsed = txData.gasUsed ?? 0n
+                    const gasPrice = txData.gasPrice ?? 0n
+                    const l1Fee = txData.l1Fee ?? 0n
+                    
+                    // L2 执行费 + L1 数据费（如果存在）
+                    feeAmount = (gasUsed * gasPrice) + l1Fee
+                } else {
+                    console.log('no transaction found for hash:', log.transactionHash)
                 }
+
+                // 从选择器解析函数名称（使用缓存的 ABI 映射）
+                const method = getFunctionNameFromSelector(event.selector)
 
                 const transaction = new Transaction({
                     id: `${log.transactionHash}-${log.logIndex}`,
                     user: user,
                     sessionKey: event.sessionKey.toLowerCase(),
                     target: event.target.toLowerCase(),
-                    selector: event.selector,
+                    method: method,
                     value: event.value,
-                    gasUsed: gasUsed,
-                    gasPrice: gasPrice,
+                    feeAmount: feeAmount,
                     blockNumber: block.header.height,
                     createdAt: new Date(block.header.timestamp),
                     txHash: log.transactionHash

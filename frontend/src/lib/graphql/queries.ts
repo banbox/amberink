@@ -608,10 +608,9 @@ export const SESSION_KEY_TRANSACTIONS_QUERY = gql`
 			}
 			sessionKey
 			target
-			selector
+			method
 			value
-			gasUsed
-			gasPrice
+			feeAmount
 			blockNumber
 			createdAt
 			txHash
@@ -629,10 +628,9 @@ export interface TransactionData {
 	};
 	sessionKey: string;
 	target: string;
-	selector: string;
+	method: string;
 	value: string;
-	gasUsed: string | null;
-	gasPrice: string | null;
+	feeAmount: string;
 	blockNumber: number;
 	createdAt: string;
 	txHash: string;

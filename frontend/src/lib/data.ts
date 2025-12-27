@@ -47,3 +47,15 @@ export const CATEGORY_KEYS = [
 ] as const;
 
 export type CategoryKey = (typeof CATEGORY_KEYS)[number];
+
+/**
+ * Format ETH amount for display to users with 8 decimal places (rounded)
+ * For logs and calculations, use formatEther directly for full precision
+ * @param wei - Amount in wei
+ * @returns Formatted string with up to 8 decimal places
+ */
+export function formatEthDisplay(wei: bigint): string {
+	const ethString = (Number(wei) / 1e18).toFixed(8);
+	// Remove trailing zeros after decimal point
+	return ethString.replace(/\.?0+$/, '') || '0';
+}

@@ -69,9 +69,11 @@ export const processor = processorBuilder
             hash: true,
             gasUsed: true,
             gasPrice: true,
+            l1Fee: true,
         },
         log: {
             transactionHash: true,
+            transaction: true,
         },
     })
     .setBlockRange({
@@ -89,6 +91,7 @@ export const processor = processorBuilder
             blogHub.events.UserProfileUpdated.topic,
             blogHub.events.ArticleEdited.topic,
         ],
+        transaction: true
     })
     .addLog({
         address: [SESSION_KEY_MANAGER_ADDRESS],
@@ -97,6 +100,7 @@ export const processor = processorBuilder
             sessionKeyManager.events.SessionKeyRevoked.topic,
             sessionKeyManager.events.SessionKeyUsed.topic,
         ],
+        transaction: true
     })
 
 export type Fields = EvmBatchProcessorFields<typeof processor>

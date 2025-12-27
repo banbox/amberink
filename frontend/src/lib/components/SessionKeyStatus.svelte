@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatEther } from 'viem';
+	import { formatEthDisplay } from '$lib/data';
 	import * as m from '$lib/paraglide/messages';
 	import {
 		getStoredSessionKey,
@@ -24,7 +24,7 @@
 	let errorMessage = $state('');
 
 	let formattedValidUntil = $derived(validUntil ? validUntil.toLocaleDateString() : '');
-	let formattedBalance = $derived(balance ? formatEther(balance).slice(0, 8) : '0');
+	let formattedBalance = $derived(balance ? formatEthDisplay(balance) : '0');
 
 	async function checkSessionKey() {
 		const sk = getStoredSessionKey();
