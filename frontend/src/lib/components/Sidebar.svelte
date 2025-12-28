@@ -48,7 +48,7 @@
 
 	// Navigation items
 	const navItems = [
-		{ href: '/', icon: 'home', labelKey: 'home_page' },
+		{ href: '/', icon: 'home', labelKey: 'home' },
 		{ href: '/library', icon: 'library', labelKey: 'library' },
 		{ href: '/profile', icon: 'profile', labelKey: 'profile' }
 	];

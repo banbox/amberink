@@ -188,7 +188,7 @@
 				onfocus={handleInputFocus}
 				onblur={handleInputBlur}
 			/>
-		{:else if isMaxReached && !disabled}
+		{:else if isMaxReached && !disabled && maxSelection > 1}
 			<!-- Max reached indicator -->
 			<span class="flex-1 text-sm text-gray-400">
 				{m.max_selection_reached()}
