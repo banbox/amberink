@@ -324,7 +324,7 @@
 				<div class="space-y-3">
 					{#each searchResults as article}
 						<a
-							href="/a/{article.id}"
+							href="/a?id={article.id}"
 							onclick={handleClose}
 							class="block rounded-lg border border-gray-200 p-3 transition-colors hover:border-blue-300 hover:bg-blue-50/50"
 						>

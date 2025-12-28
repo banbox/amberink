@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { PageData } from './$types';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
@@ -15,9 +14,11 @@
 		type StoredSessionKey
 	} from '$lib/sessionKey';
 	import { SpinnerIcon } from '$lib/components/icons';
+	import { page } from '$app/stores';
+	import { client } from '$lib/graphql/client';
+	import { ARTICLE_BY_ID_QUERY, type ArticleDetailData } from '$lib/graphql/queries';
 
-	let { data }: { data: PageData } = $props();
-	const article = data.article;
+	let article = $state<ArticleDetailData | null>(null);
 
 	// Helper function to get category label
 	function getCategoryLabel(key: string): string {
@@ -67,12 +68,12 @@
 		return labels[key]?.() ?? key;
 	}
 
-	// Form state - initialized with article data
+	// Form state - will be initialized once article is loaded
 	let formData = $state<ArticleFormData>({
-		title: article.title || '',
+		title: '',
 		summary: '',
-		categoryId: BigInt(article.categoryId),
-		author: article.originalAuthor || '',
+		categoryId: 0n,
+		author: '',
 		content: '',
 		postscript: '',
 		coverImageFile: null,
@@ -87,7 +88,8 @@
 	let existingCoverUrl = $state<string | null>(null);
 
 	// Loading state
-	let isLoadingContent = $state(true);
+	let isLoadingArticle = $state(true);
+	let isLoadingContent = $state(false);
 	let loadError = $state<string | null>(null);
 
 	// Submit state
@@ -108,25 +110,62 @@
 	let walletAddress = $state<string | null>(null);
 	let isAuthorized = $state(false);
 
-	// Load article content from Arweave
+	// Load article data and content
 	onMount(async () => {
+		// Get article ID from URL
+		const articleId = $page.url.searchParams.get('id');
+		
+		if (!articleId) {
+			loadError = 'Article ID is required';
+			isLoadingArticle = false;
+			return;
+		}
+
 		// Check wallet connection
 		await checkWalletConnection();
 
-		// Load existing cover image URL
-		existingCoverUrl = getCoverImageUrl(article.id, true);
-
-		// Load article content from Arweave
+		// Load article metadata from GraphQL
 		try {
+			const result = await client.query(ARTICLE_BY_ID_QUERY, { id: articleId }, { requestPolicy: 'network-only' }).toPromise();
+
+			if (result.error) {
+				loadError = result.error.message;
+				isLoadingArticle = false;
+				return;
+			}
+
+			const loadedArticle: ArticleDetailData | null = result.data?.articleById;
+
+			if (!loadedArticle) {
+				loadError = 'Article not found';
+				isLoadingArticle = false;
+				return;
+			}
+
+			article = loadedArticle;
+			
+			// Initialize form data with article metadata
+			formData.title = article.title || '';
+			formData.categoryId = BigInt(article.categoryId);
+			formData.author = article.originalAuthor || '';
+			
+			// Load existing cover image URL
+			existingCoverUrl = getCoverImageUrl(article.id, true);
+			
+			isLoadingArticle = false;
+			isLoadingContent = true;
+
+			// Load article content from Arweave
 			const articleContent = await getArticleWithCache(article.id);
 			if (articleContent) {
 				formData.content = articleContent.content || '';
 				formData.summary = articleContent.summary || '';
 			}
+			isLoadingContent = false;
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : 'Failed to load article content';
-			console.error('Failed to load article content:', e);
-		} finally {
+			loadError = e instanceof Error ? e.message : 'Failed to load article';
+			console.error('Failed to load article:', e);
+			isLoadingArticle = false;
 			isLoadingContent = false;
 		}
 	});
@@ -139,7 +178,7 @@
 			if (accounts.length > 0) {
 				walletAddress = accounts[0].toLowerCase();
 				// Check if user is the author
-				const articleAuthor = (article.author?.id || '').toLowerCase();
+				const articleAuthor = (article?.author?.id || '').toLowerCase();
 				isAuthorized = walletAddress === articleAuthor;
 			}
 		} catch (e) {
@@ -163,7 +202,7 @@
 
 	// Handle form submission
 	async function handleSubmit() {
-		if (isSubmitting || !isAuthorized) return;
+		if (isSubmitting || !isAuthorized || !article) return;
 
 		try {
 			isSubmitting = true;
@@ -258,8 +297,9 @@
 			console.log('New index TX ID:', result.indexTxId);
 
 			// Redirect to article page after 2 seconds
+			const goUrl = `/a?id=${article.id}`;
 			setTimeout(() => {
-				goto(`/a/${article.id}`);
+				goto(goUrl);
 			}, 2000);
 		} catch (error) {
 			submitStatus = 'error';
@@ -301,39 +341,51 @@
 </script>
 
 <svelte:head>
-	<title>{m.edit_article()} - {article.title} - AmberInk</title>
+	<title>{m.edit_article()} - {article?.title || ''} - AmberInk</title>
 </svelte:head>
 
 <div class="min-h-screen bg-white">
 	<div class="mx-auto max-w-3xl px-6 py-12">
-		<header class="mb-12">
-			<h1 class="mb-2 text-4xl font-light tracking-tight">{m.edit_article()}</h1>
-			<p class="text-gray-500">{m.edit_description()}</p>
-		</header>
 
-		{#if !walletAddress}
-			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
-				<p class="text-yellow-800">{m.connect_wallet_first()}</p>
-			</div>
-		{:else if !isAuthorized}
-			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-				<p class="text-red-800">{m.not_author()}</p>
-				<a href={localizeHref(`/a/${article.id}`)} class="mt-4 inline-block text-blue-600 hover:underline">
-					{m.back_to({ destination: m.article() })}
-				</a>
-			</div>
-		{:else if isLoadingContent}
-			<div class="flex items-center justify-center py-16">
-				<div class="flex items-center gap-3 text-gray-500">
-					<SpinnerIcon size={20} class="text-gray-500" />
-					<span>{m.loading_content()}</span>
-				</div>
-			</div>
-		{:else if loadError}
-			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-				<p class="text-red-800">{loadError}</p>
-			</div>
-		{:else}
+    {#if isLoadingArticle}
+      <div class="flex items-center justify-center py-16">
+        <div class="flex items-center gap-3 text-gray-500">
+          <SpinnerIcon size={20} class="text-gray-500" />
+          <span>{m.loading()}</span>
+        </div>
+      </div>
+    {:else if loadError}
+      <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+        <p class="text-red-800">{loadError}</p>
+      </div>
+    {:else if !article}
+      <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+        <p class="text-red-800">{m.article_not_found()}</p>
+      </div>
+    {:else if !walletAddress}
+      <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
+        <p class="text-yellow-800">{m.connect_wallet_first()}</p>
+      </div>
+    {:else if !isAuthorized}
+      <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+        <p class="text-red-800">{m.not_author()}</p>
+        <a href={localizeHref(`/a?id=${article.id}`)} class="mt-4 inline-block text-blue-600 hover:underline">
+          {m.back_to({ destination: m.article() })}
+        </a>
+      </div>
+    {:else if isLoadingContent}
+      <div class="flex items-center justify-center py-16">
+        <div class="flex items-center gap-3 text-gray-500">
+          <SpinnerIcon size={20} class="text-gray-500" />
+          <span>{m.loading_content()}</span>
+        </div>
+      </div>
+    {:else}
+			<header class="mb-12">
+				<h1 class="mb-2 text-4xl font-light tracking-tight">{m.edit_article()}</h1>
+				<p class="text-gray-500">{m.edit_description()}</p>
+			</header>
+			
 			<form
 				onsubmit={(e) => {
 					e.preventDefault();
@@ -367,7 +419,7 @@
 						{submitButtonText}
 					</button>
 					<a
-						href={localizeHref(`/a/${article.id}`)}
+						href={localizeHref(`/a?id=${article.id}`)}
 						class="rounded-lg border border-gray-200 px-6 py-3 font-medium text-gray-900 transition-colors hover:bg-gray-50 {isSubmitting
 							? 'pointer-events-none opacity-50'
 							: ''}"

@@ -381,6 +381,8 @@
 	"settings_saved": "Settings saved successfully",
 	"found_articles": "Found {count} articles",
 	"view_on_arweave": "View on Arweave",
+	"article_not_found": "Article not found",
+	"data_empty": "Data is empty",
 	"tip_in_usd": "Tip Amount (USD)",
 	"send_tip": "Send Tip",
 	"dislike_in_usd": "Dislike Amount (USD)",

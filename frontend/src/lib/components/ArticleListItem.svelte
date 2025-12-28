@@ -72,7 +72,7 @@
 	});
 </script>
 
-<a href={localizeHref(`/a/${article.id}`)} class="group flex gap-4 border-b border-gray-100 py-5 transition-colors">
+<a href={localizeHref(`/a?id=${article.id}`)} class="group flex gap-4 border-b border-gray-100 py-5 transition-colors">
 	<!-- Left: Text Content -->
 	<div class="min-w-0 flex-1">
 		<!-- Category & Author -->

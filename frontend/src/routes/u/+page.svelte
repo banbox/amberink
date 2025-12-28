@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { page } from '$app/state';
+	import { page } from '$app/stores';
 	import * as m from '$lib/paraglide/messages';
 	import {
 		client,
@@ -20,7 +20,7 @@
 
 	const PAGE_SIZE = 20;
 
-	let authorId = $derived(page.params.id?.toLowerCase() || '');
+	let authorId = $state('');
 	let user = $state<UserData | null>(null);
 	let articles = $state<ArticleData[]>([]);
 	let loading = $state(false);
@@ -125,6 +125,9 @@
 	});
 
 	onMount(() => {
+		// Read authorId from URL search params
+		authorId = $page.url.searchParams.get('id')?.toLowerCase() || '';
+		
 		const handleScroll = () => {
 			if (loading || !hasMore) return;
 

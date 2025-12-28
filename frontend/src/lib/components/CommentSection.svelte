@@ -178,7 +178,7 @@
 				<article class="comment-item">
 					<!-- Row 1: Avatar + Nickname + Date -->
 					<div class="flex items-center gap-3">
-						<a href={localizeHref(`/u/${comment.user.id}`)} class="shrink-0">
+						<a href={localizeHref(`/u?id=${comment.user.id}`)} class="shrink-0">
 							{#if getAvatarUrl(comment.user.avatar)}
 								<img
 									src={getAvatarUrl(comment.user.avatar)}
@@ -195,7 +195,7 @@
 						</a>
 						<div class="flex flex-col">
 							<a
-								href={localizeHref(`/u/${comment.user.id}`)}
+								href={localizeHref(`/u?id=${comment.user.id}`)}
 								class="text-sm font-medium text-gray-900 hover:underline"
 							>
 								{getUserDisplay(comment.user)}

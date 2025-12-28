@@ -437,15 +437,6 @@
 			if (addr) {
 				fetchUserProfile();
 				fetchArticles(true);
-				
-				// Check URL parameter for tab
-				const urlTab = $page.url.searchParams.get('tab');
-				if (urlTab && ['articles', 'followers', 'following', 'about', 'sessionkey'].includes(urlTab)) {
-					activeTab = urlTab as TabType;
-					if (urlTab === 'sessionkey') {
-						fetchSessionKeyInfo();
-					}
-				}
 			} else {
 				user = null;
 				articles = [];
@@ -457,6 +448,15 @@
 
 	onMount(() => {
 		nativeSymbol = getNativeTokenSymbol();
+		
+		// Check URL parameter for tab
+		const urlTab = $page.url.searchParams.get('tab');
+		if (urlTab && ['articles', 'followers', 'following', 'about', 'sessionkey'].includes(urlTab)) {
+			activeTab = urlTab as TabType;
+			if (urlTab === 'sessionkey') {
+				fetchSessionKeyInfo();
+			}
+		}
 		
 		const handleScroll = () => {
 			if (loading || !hasMore || activeTab === 'about') return;
@@ -569,7 +569,7 @@
 						{@const follower = follow.follower}
 						{#if follower}
 							<a
-								href={localizeHref(`/u/${follower.id}`)}
+								href={localizeHref(`/u?id=${follower.id}`)}
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
 								{#if getAvatarUrl(follower.avatar)}
@@ -602,7 +602,7 @@
 				</div>
 			{:else if !loading}
 				<div class="py-16 text-center">
-					<p class="text-gray-500">{m.no_items({ items: 'following' })}</p>
+					<p class="text-gray-500">{m.no_items({ items: 'followers' })}</p>
 				</div>
 			{/if}
 		{:else if activeTab === 'following'}
@@ -612,7 +612,7 @@
 						{@const followingUser = follow.following}
 						{#if followingUser}
 							<a
-								href={localizeHref(`/u/${followingUser.id}`)}
+								href={localizeHref(`/u?id=${followingUser.id}`)}
 								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
 							>
 								{#if getAvatarUrl(followingUser.avatar)}
@@ -823,7 +823,7 @@
 
 										<!-- Balance -->
 										<div>
-											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Balance</p>
+											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{m.balance()}</p>
 											<p class="text-2xl font-bold text-gray-900">
 												{formatEthDisplay(sessionKeyBalance)}
 												<span class="ml-1 text-base font-normal text-gray-500">{nativeSymbol}</span>
@@ -990,7 +990,7 @@
 									</div>
 								{/if}
 							{:else}
-								<p class="text-sm text-gray-500">No transactions found</p>
+								<p class="text-sm text-gray-500">{m.data_empty()}</p>
 							{/if}
 						</div>
 					</div>

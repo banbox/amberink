@@ -1318,3 +1318,23 @@ Gemini：https://docs.ethswarm.org/docs/desktop/publish-a-website/
 frontend\src\routes\a\[id]\+page.svelte  
 ...   
 Claude: 已完成
+
+### 2025-12-28 19:20  动态路由转静态
+@help.md  遇到下面错误，我是生成静态网站，误使用了sveltekit的[id]动态路由，请帮我改为静态的页面，然后使用query parameters解析参数
+```log
+@sveltejs/adapter-static: all routes must be fully prerenderable, but found the following routes that are dynamic:
+    - src\routes/a/[id]
+    - src\routes/edit/[id]
+    - src\routes/u/[id]
+```
+Claude Sonnet 4.5 Think：把prerendering改为了false，这不是官方推荐做法，官方建议在`onMount`中使用`url.searchParams`
+开发者：Error: Cannot access url.searchParams on a page with prerendering enabled
+@doc/help.md 前端项目我执行 npm run build 出现上面错误，当前是使用sveltekit的adapter-static生成静态网站。官方文档建议这种情况应该把对url.searchParams    的访问移动到onMount中。不应该使用load  函数加载数据。请帮我删除下面页面中不必要的ts文件，并在svelte的onMount中新增对应根据Search Parameters的参数加载数据逻辑。
+```text
+frontend\src\routes\edit\+page.ts:14
+frontend\src\routes\profile\+page.svelte:442
+frontend\src\routes\u\+page.svelte:23
+frontend\src\routes\u\+page.ts
+```
+Claude：已完成
+

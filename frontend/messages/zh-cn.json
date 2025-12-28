@@ -380,6 +380,8 @@
 	"irys_network": "Irys 网络",
 	"settings_saved": "设置保存成功",
 	"found_articles": "找到 {count} 篇文章",
+	"article_not_found": "文章未找到",
+	"data_empty": "数据为空",
 	"view_on_arweave": "在 Arweave 上查看",
 	"tip_in_usd": "打赏金额（美元）",
 	"send_tip": "发送打赏",

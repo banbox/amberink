@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { PageData } from './$types';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
@@ -12,7 +11,8 @@
 	import DOMPurify from 'dompurify';
 	import CommentSection from '$lib/components/CommentSection.svelte';
 	import { parseEther, formatUnits } from 'viem';
-	import { client, USER_BY_ID_QUERY, type UserData } from '$lib/graphql';
+	import { client, USER_BY_ID_QUERY, ARTICLE_BY_ID_QUERY, type UserData, type ArticleDetailData } from '$lib/graphql';
+	import { page } from '$app/stores';
 	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
 	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways } from '$lib/config';
 	import { getBlockExplorerTxUrl } from '$lib/chain';
@@ -41,9 +41,10 @@
 	let priceLoading = $state(false);
 	let nativeSymbol = $state('ETH');
 
-	let { data }: { data: PageData } = $props();
-	const article = data.article;
-	const versionTxId = data.versionTxId;
+	let article = $state<ArticleDetailData | null>(null);
+	let versionTxId = $state<string | null>(null);
+	let articleLoading = $state(true);
+	let articleError = $state<string | null>(null);
 
 	// Article content from Arweave
 	let articleContent = $state<ArticleMetadata | null>(null);
@@ -87,11 +88,11 @@
 	let currentVersionMeta = $state<{ title?: string; owner?: string; timestamp?: number } | null>(null);
 
 	// Local counts (optimistic updates)
-	let localDislikeAmount = $state(article.dislikeAmount);
-	let localCollectCount = $state(article.collectCount);
+	let localDislikeAmount = $state('0');
+	let localCollectCount = $state(0);
 
 	async function handleCollect() {
-		if (!requireWallet() || isCollecting) return;
+		if (!requireWallet() || isCollecting || !article) return;
 		// Security check: prevent self-collect
 		if (isAuthor) {
 			showFeedback('error', m.cannot_action_own({ action: m.collect(), item: m.article() }));
@@ -119,7 +120,7 @@
 				(sk) => collectArticleWithSessionKey(sk, chainArticleId, ZERO_ADDRESS, priceWei),
 				() => collectArticle(chainArticleId, ZERO_ADDRESS, priceWei)
 			);
-			localCollectCount = (BigInt(localCollectCount) + 1n).toString();
+			localCollectCount = localCollectCount + 1;
 			showFeedback('success', m.success({ action: m.collect() }));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
@@ -160,6 +161,7 @@
 
 	// Share article
 	function handleShare() {
+		if (!article) return;
 		if (navigator.share) {
 			navigator.share({
 				title: article.title,
@@ -270,7 +272,7 @@
 	
 	// Fetch current user data for comment section
 	async function fetchCurrentUserData(address: string) {
-		if (!address) return;
+		if (!article) return;
 		try {
 			const result = await client
 				.query(USER_BY_ID_QUERY, { id: address.toLowerCase() }, { requestPolicy: 'cache-first' })
@@ -285,7 +287,7 @@
 
 	// Handle Dislike
 	async function handleDislike() {
-		if (!requireWallet()) return;
+		if (!requireWallet() || !article) return;
 		// Security check: prevent self-evaluation
 		if (isAuthor) {
 			showFeedback('error', m.cannot_self_evaluate({}));
@@ -320,7 +322,7 @@
 
 	// Handle Follow
 	async function handleFollow() {
-		if (!requireWallet()) return;
+		if (!requireWallet() || isFollowing || !article) return;
 		// Security check: prevent self-follow
 		if (isAuthor) {
 			showFeedback('error', m.cannot_self_action({ action: m.follow() }));
@@ -343,7 +345,7 @@
 
 	// Handle Tip
 	async function handleTip() {
-		if (!requireWallet()) return;
+		if (!requireWallet() || !article) return;
 		// Security check: prevent self-evaluation
 		if (isAuthor) {
 			showFeedback('error', m.cannot_self_action({ action: 'evaluate' }));
@@ -377,7 +379,7 @@
 
 	// Handle Comment
 	async function handleComment(commentText: string) {
-		if (!requireWallet() || !commentText.trim()) return;
+		if (!requireWallet() || !commentText.trim() || !article) return;
 		isCommenting = true;
 		try {
 			// Use articleId for contract interaction (not arweaveId)
@@ -422,21 +424,21 @@
 
 	// Get author ID from article data
 	const articleAuthorId = $derived(
-		(article.author?.id || '').toLowerCase()
+		(article?.author?.id || '').toLowerCase()
 	);
 
 	// Use fetched authorData if available, fallback to article.author
-	const author = $derived(authorData ?? article.author ?? { id: '', nickname: null, avatar: null });
+	const author = $derived(authorData ?? article?.author ?? { id: '', nickname: null, avatar: null });
 	const authorId = $derived(author.id || articleAuthorId || '');
 
 	// article.id is now arweaveId (primary key)
-	const coverUrl = $derived(getCoverUrl(article.id));
-	const categoryName = $derived(getCategoryName(article.categoryId));
+	const coverUrl = $derived(article ? getCoverUrl(article.id) : '');
+	const categoryName = $derived(article ? getCategoryName(article.categoryId) : '');
 	// Display author name: prefer fetched nickname > article.author.nickname > originalAuthor > short address
 	const displayAuthor = $derived(
 		authorData?.nickname ||
 		author.nickname ||
-		article.originalAuthor ||
+		article?.originalAuthor ||
 		shortAddress(authorId) ||
 		'Anonymous'
 	);
@@ -446,7 +448,7 @@
 	const authorInitials = $derived(
 		(authorData?.nickname || author.nickname)
 			? (authorData?.nickname || author.nickname || '').slice(0, 2).toUpperCase()
-			: (article.originalAuthor
+			: (article?.originalAuthor
 				? article.originalAuthor.slice(0, 2).toUpperCase()
 				: (authorId ? authorId.slice(2, 4).toUpperCase() : '??'))
 	);
@@ -454,14 +456,15 @@
 	const readingTime = $derived(articleContent?.content ? getReadingTime(articleContent.content) : 0);
 	// Check if current user is the article author (for edit button)
 	const isAuthor = $derived(
-		walletAddress && walletAddress.toLowerCase() === authorId.toLowerCase()
+		walletAddress && article && walletAddress.toLowerCase() === authorId.toLowerCase()
 	);
-	const maxCollectSupply = $derived(BigInt(article.maxCollectSupply));
+	const maxCollectSupply = $derived(article ? BigInt(article.maxCollectSupply) : 0n);
 	const collectEnabled = $derived(maxCollectSupply > 0n);
-	const collectAvailable = $derived(collectEnabled && BigInt(localCollectCount) < maxCollectSupply);
+	const collectAvailable = $derived(collectEnabled && localCollectCount < Number(maxCollectSupply));
 	
 	// Article quality score: round(likeAmount*10/(likeAmount+dislikeAmount*2), 1)
 	const qualityScore = $derived(() => {
+		if (!article) return null;
 		const like = BigInt(article.totalTips);
 		const dislike = BigInt(localDislikeAmount) * 2n;
 		const total = like + dislike;
@@ -483,6 +486,7 @@
 
 	// Fetch author data separately (SubSquid relation resolution has issues)
 	async function fetchAuthorData() {
+		if (!article) return;
 		const targetAuthorId = articleAuthorId;
 		if (!targetAuthorId || targetAuthorId === '0x0000000000000000000000000000000000000000') return;
 		
@@ -501,7 +505,7 @@
 
 	// Load article history versions
 	async function loadVersions() {
-		if (versionsLoaded || versionsLoading) return;
+		if (versionsLoaded || versionsLoading || !article) return;
 		versionsLoading = true;
 		try {
 			versions = await queryArticleVersions(article.id);
@@ -544,7 +548,7 @@
 	}
 
 	// Check if viewing a specific version (not latest)
-	const isViewingOldVersion = $derived(!!versionTxId && versionTxId !== article.id);
+	const isViewingOldVersion = $derived(!!versionTxId && article && versionTxId !== article.id);
 
 	// Get version cover URL (use static URL for specific version)
 	function getVersionCoverUrl(txId: string): string {
@@ -579,11 +583,61 @@
 			/<img\s+([^>]*?)src=["'](?!https?:\/\/)(?!\/)([^"']+)["']([^>]*?)>/gi,
 			(_, before, filename, after) => `<img ${before}src="${baseUrl}/${filename}"${after}>`
 		);
-		
+
 		return processed;
 	}
 
+	// Initialize local counts after article is loaded
+	$effect(() => {
+		if (article) {
+			localDislikeAmount = String(article.dislikeAmount);
+			localCollectCount = Number(article.collectCount);
+		}
+	});
+
+	// Load article data and content
 	onMount(async () => {
+		// Get article ID and version from URL
+		const articleId = $page.url.searchParams.get('id');
+		versionTxId = $page.url.searchParams.get('v');
+		
+		if (!articleId) {
+			articleError = 'Article ID is required';
+			articleLoading = false;
+			contentLoading = false;
+			return;
+		}
+
+		// Load article metadata from GraphQL
+		try {
+			const result = await client.query(ARTICLE_BY_ID_QUERY, { id: articleId }, { requestPolicy: 'network-only' }).toPromise();
+
+			if (result.error) {
+				articleError = result.error.message;
+				articleLoading = false;
+				contentLoading = false;
+				return;
+			}
+
+			const loadedArticle: ArticleDetailData | null = result.data?.articleById;
+
+			if (!loadedArticle) {
+				articleError = 'Article not found';
+				articleLoading = false;
+				contentLoading = false;
+				return;
+			}
+
+			article = loadedArticle;
+			articleLoading = false;
+		} catch (e) {
+			articleError = e instanceof Error ? e.message : 'Failed to load article';
+			console.error('Failed to load article:', e);
+			articleLoading = false;
+			contentLoading = false;
+			return;
+		}
+		
 		// Load native token price for USD conversion
 		loadNativeTokenPrice();
 		
@@ -656,17 +710,77 @@
 
 <svelte:head>
 	<title
-		>{currentVersionMeta?.title || article.title || `Article #${article.articleId}`} - AmberInk</title
+		>{currentVersionMeta?.title || article?.title || 'Article'} - AmberInk</title
 	>
 	<meta
 		name="description"
 		content={articleContent?.summary ||
 			currentVersionMeta?.title ||
-			article.title ||
+			article?.title ||
 			'AmberInk Article'}
 	/>
 </svelte:head>
 
+{#if articleLoading}
+	<!-- Skeleton Screen -->
+	<article class="mx-auto w-full max-w-[680px] px-6 py-12">
+		<!-- Title Skeleton -->
+		<header class="mb-8">
+			<div class="mb-6 h-20 w-full animate-pulse rounded-lg bg-gray-200"></div>
+			
+			<!-- Author Info Skeleton -->
+			<div class="flex items-center gap-3">
+				<div class="h-11 w-11 shrink-0 animate-pulse rounded-full bg-gray-200"></div>
+				<div class="flex flex-1 flex-col gap-2">
+					<div class="h-5 w-32 animate-pulse rounded bg-gray-200"></div>
+					<div class="h-4 w-48 animate-pulse rounded bg-gray-200"></div>
+				</div>
+			</div>
+		</header>
+
+		<!-- Interaction Bar Skeleton -->
+		<div class="mb-8">
+			<div class="flex items-center justify-between border-y border-gray-100 py-3">
+				<div class="flex items-center gap-5">
+					<div class="h-6 w-8 animate-pulse rounded bg-gray-200"></div>
+					<div class="h-6 w-16 animate-pulse rounded bg-gray-200"></div>
+					<div class="h-6 w-12 animate-pulse rounded bg-gray-200"></div>
+					<div class="h-6 w-12 animate-pulse rounded bg-gray-200"></div>
+				</div>
+				<div class="flex items-center gap-3">
+					<div class="h-6 w-6 animate-pulse rounded bg-gray-200"></div>
+					<div class="h-6 w-6 animate-pulse rounded bg-gray-200"></div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Cover Image Skeleton -->
+		<div class="mb-10 h-96 w-full animate-pulse rounded-lg bg-gray-200"></div>
+
+		<!-- Content Skeleton -->
+		<div class="prose prose-lg max-w-none space-y-4">
+			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
+			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
+			<div class="h-4 w-3/4 animate-pulse rounded bg-gray-200"></div>
+			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
+			<div class="h-4 w-5/6 animate-pulse rounded bg-gray-200"></div>
+			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
+			<div class="h-4 w-2/3 animate-pulse rounded bg-gray-200"></div>
+		</div>
+	</article>
+{:else if articleError}
+	<div class="mx-auto max-w-2xl px-6 py-16">
+		<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+			<p class="text-red-800">{articleError}</p>
+		</div>
+	</div>
+{:else if !article}
+	<div class="mx-auto max-w-2xl px-6 py-16">
+		<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+			<p class="text-red-800">{m.article_not_found()}</p>
+		</div>
+	</div>
+{:else}
 <!-- Medium-style article layout -->
 <article class="mx-auto w-full max-w-[680px] px-6 py-12">
 	<!-- Old Version Banner -->
@@ -679,7 +793,7 @@
 				<span class="text-sm font-medium">{m.viewing_historical_version()}</span>
 			</div>
 			<a
-				href={localizeHref(`/a/${article.id}`)}
+				href={localizeHref(`/a?id=${article.id}`)}
 				class="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-amber-700"
 			>
 				{m.view_latest()}
@@ -696,7 +810,7 @@
 		<!-- Author Info Bar -->
 		<div class="flex items-center gap-3">
 			<!-- Avatar -->
-			<a href={localizeHref(`/u/${authorAddress}`)} class="shrink-0">
+			<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
 				{#if getAvatarUrl(authorAvatar)}
 					<img
 						src={getAvatarUrl(authorAvatar)}
@@ -715,7 +829,7 @@
 			<div class="flex flex-1 flex-col">
 				<!-- Name & Follow -->
 				<div class="flex items-center gap-2">
-					<a href={localizeHref(`/u/${authorAddress}`)} class="font-medium text-gray-900 hover:underline">
+					<a href={localizeHref(`/u?id=${authorAddress}`)} class="font-medium text-gray-900 hover:underline">
 						{displayAuthor}
 					</a>
 					<span class="text-gray-300">·</span>
@@ -743,15 +857,15 @@
 					{#if article.originality === 0}
 						<span
 							class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
-							>Original</span
+							>{m.original()}</span
 						>
 					{:else if article.originality === 1}
 						<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
-							>Semi-Original</span
+							>{m.semi_original()}</span
 						>
 					{:else}
 						<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-							>Reprint</span
+							>{m.reprint()}</span
 						>
 					{/if}
 				</div>
@@ -760,6 +874,7 @@
 	</header>
 
 	{#snippet interactionBar(position: 'top' | 'bottom')}
+	{#if article}
 		<div class={position === 'top' ? 'mb-8' : 'mt-12'}>
 			<div class="flex items-center justify-between border-y border-gray-100 py-3">
 				<div class="flex items-center gap-5">
@@ -863,7 +978,7 @@
 									</div>
 									{#if isViewingOldVersion}
 										<a
-											href={`/a/${article.id}`}
+											href={`/a?id=${article.id}`}
 											class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
 										>
 											<BackIcon size={12} />
@@ -879,7 +994,7 @@
 									{:else}
 										{#each versions as version, idx}
 											<a
-												href={localizeHref(idx === 0 ? `/a/${article.id}` : `/a/${article.id}?v=${version.txId}`)}
+												href={localizeHref(idx === 0 ? `/a?id=${article.id}` : `/a?id=${article.id}&v=${version.txId}`)}
 												class="flex items-start gap-3 border-b border-gray-50 px-4 py-3 transition-colors hover:bg-gray-50"
 												class:bg-blue-50={versionTxId === version.txId ||
 													(idx === 0 && !versionTxId)}
@@ -921,7 +1036,7 @@
 					<!-- Edit button (only for author) -->
 					{#if isAuthor}
 						<a
-							href={localizeHref(`/edit/${article.id}`)}
+							href={localizeHref(`/edit?id=${article.id}`)}
 							class="text-gray-500 transition-colors hover:text-blue-600"
 							title={m.edit({})}
 						>
@@ -939,6 +1054,7 @@
 				</div>
 			</div>
 		</div>
+	{/if}
 	{/snippet}
 
 	<!-- Interaction Bar (Top) -->
@@ -970,16 +1086,18 @@
 		{:else if contentError}
 			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
 				<p class="text-red-700">{contentError}</p>
-				<a
-					href={`${getArweaveGateways()[0]}/${article.id}`}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="mt-3 inline-block text-sm text-red-600 underline hover:text-red-800"
-				>
-					{m.view_on_arweave({})}
-				</a>
+				{#if article}
+					<a
+						href={`${getArweaveGateways()[0]}/${article.id}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="mt-3 inline-block text-sm text-red-600 underline hover:text-red-800"
+					>
+						{m.view_on_arweave({})}
+					</a>
+				{/if}
 			</div>
-		{:else if articleContent?.content}
+		{:else if articleContent?.content && article}
 			<div class="prose prose-lg prose-gray max-w-none font-serif">
 				{@html DOMPurify.sanitize(
 					marked(
@@ -1168,7 +1286,7 @@
 {/snippet}
 
 <!-- Collect Modal (only when collecting is enabled) -->
-{#if showCollectModal && collectEnabled}
+{#if showCollectModal && collectEnabled && article}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -1192,7 +1310,7 @@
 					<div class="text-xs text-gray-500">{m.collected_count()}</div>
 				</div>
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
-					<div class="text-2xl font-bold text-emerald-600">{formatTips(article.collectPrice)}</div>
+					<div class="text-2xl font-bold text-emerald-600">{formatTips(article?.collectPrice || '0')}</div>
 					<div class="text-xs text-gray-500">{m.price_label()} ({nativeSymbol})</div>
 				</div>
 				<div class="rounded-lg bg-gray-50 p-3 text-center">
@@ -1206,7 +1324,7 @@
 			</div>
 
 			<!-- Collectors List -->
-			{#if article.collections && article.collections.length > 0}
+			{#if article?.collections && article.collections.length > 0}
 				<div class="mb-6">
 					<h4 class="mb-3 text-sm font-medium text-gray-700">
 						{m.collectors()} ({article.collections.length})
@@ -1225,7 +1343,7 @@
 									<tr class="hover:bg-gray-50">
 										<td class="px-3 py-2">
 											<a
-												href={localizeHref(`/u/${collection.user.id}`)}
+												href={localizeHref(`/u?id=${collection.user.id}`)}
 												class="flex items-center gap-2 hover:underline"
 											>
 												{#if getAvatarUrl(collection.user.avatar)}
@@ -1285,7 +1403,7 @@
 					{:else if !collectAvailable}
 						{m.sold_out()}
 					{:else}
-						{m.collect_for({ price: formatTips(article.collectPrice), symbol: nativeSymbol })}
+						{m.collect_for({ price: formatTips(article?.collectPrice || '0'), symbol: nativeSymbol })}
 					{/if}
 				</button>
 			</div>
@@ -1333,4 +1451,5 @@
 	>
 		<p class="text-sm font-medium text-white">{feedbackMessage.text}</p>
 	</div>
+{/if}
 {/if}

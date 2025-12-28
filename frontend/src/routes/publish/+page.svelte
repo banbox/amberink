@@ -216,7 +216,7 @@
 
 			// Redirect to article detail page after 2 seconds
 			setTimeout(() => {
-				goto(`/a/${result.arweaveId}`);
+				goto(`/a?id=${result.arweaveId}`);
 			}, 2000);
 		} catch (error) {
 			submitStatus = 'error';
