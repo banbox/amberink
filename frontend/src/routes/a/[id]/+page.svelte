@@ -732,7 +732,7 @@
 				<!-- Read time & Date & Originality Tag -->
 				<div class="flex items-center gap-2 text-sm text-gray-500">
 					{#if readingTime > 0}
-						<span>{readingTime} {m.min_read({})}</span>
+						<span>{m.min_read({ count: readingTime })}</span>
 						<span>·</span>
 					{/if}
 					<time datetime={article.createdAt}>

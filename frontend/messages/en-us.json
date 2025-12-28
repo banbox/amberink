@@ -378,5 +378,11 @@
 	"blog_hub_address": "BlogHub Address",
 	"session_manager_address": "Session Manager Address",
 	"irys_network": "Irys Network",
-	"settings_saved": "Settings saved successfully"
+	"settings_saved": "Settings saved successfully",
+	"found_articles": "Found {count} articles",
+	"view_on_arweave": "View on Arweave",
+	"tip_in_usd": "Tip Amount (USD)",
+	"send_tip": "Send Tip",
+	"dislike_in_usd": "Dislike Amount (USD)",
+	"send_dislike": "Send Dislike"
 }

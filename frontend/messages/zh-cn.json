@@ -378,5 +378,11 @@
 	"blog_hub_address": "BlogHub 地址",
 	"session_manager_address": "会话管理器地址",
 	"irys_network": "Irys 网络",
-	"settings_saved": "设置保存成功"
+	"settings_saved": "设置保存成功",
+	"found_articles": "找到 {count} 篇文章",
+	"view_on_arweave": "在 Arweave 上查看",
+	"tip_in_usd": "打赏金额（美元）",
+	"send_tip": "发送打赏",
+	"dislike_in_usd": "不喜欢金额（美元）",
+	"send_dislike": "发送不喜欢"
 }

@@ -455,7 +455,7 @@
 		});
 	});
 
-	onMount(async () => {
+	onMount(() => {
 		nativeSymbol = getNativeTokenSymbol();
 		
 		const handleScroll = () => {

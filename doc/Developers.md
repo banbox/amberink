@@ -126,7 +126,7 @@ mkdir -p src/abi
 cp ../contracts/out/BlogHub.sol/BlogHub.json src/abi/
 cp ../contracts/out/SessionKeyManager.sol/SessionKeyManager.json src/abi/
 
-# 生成类型安全的事件解码器
+# 生成类型安全的事件解码器: squid\src\abi
 npx squid-evm-typegen src/abi src/abi/BlogHub.json
 npx squid-evm-typegen src/abi src/abi/SessionKeyManager.json
 ```
@@ -138,10 +138,10 @@ npx squid-evm-typegen src/abi src/abi/SessionKeyManager.json
 ### 2.3 生成 TypeORM 实体
 
 ```bash
-# 根据 schema.graphql 生成实体类
+# 根据 schema.graphql 生成实体类: src/model/generated
 npx squid-typeorm-codegen
 
-# 编译 TypeScript 代码
+# 编译 TypeScript 代码: lib/
 npx tsc
 
 ```
@@ -212,19 +212,13 @@ sqd deploy .
 
 ```bash
 cd squid
-cp ../contracts/out/BlogHub.sol/BlogHub.json src/abi/
-cp ../contracts/out/SessionKeyManager.sol/SessionKeyManager.json src/abi/
-npx squid-evm-typegen src/abi src/abi/BlogHub.json
-npx squid-evm-typegen src/abi src/abi/SessionKeyManager.json
-
-npx squid-typeorm-codegen
-npx tsc
 cp .env.example .env.test  # or prod
 vim .env.test
 cp .env.test .env
+npx tsc
 npx squid-typeorm-migration apply
 npm run build
-pm2 start ecosystem.config.js [--env production]
+pm2 start ecosystem.config.js
 ```
 在nginx中配置4350端口到某个域名
 
