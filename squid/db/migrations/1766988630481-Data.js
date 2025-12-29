@@ -1,5 +1,5 @@
-module.exports = class Data1766141148865 {
-    name = 'Data1766141148865'
+module.exports = class Data1766988630481 {
+    name = 'Data1766988630481'
 
     async up(db) {
         await db.query(`CREATE TABLE "comment" ("id" character varying NOT NULL, "comment_id" numeric NOT NULL, "content" text NOT NULL, "parent_comment_id" numeric, "likes" integer NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text NOT NULL, "article_id" character varying, "user_id" character varying, CONSTRAINT "PK_0b0e4bbc8415ec426f87f3a88e2" PRIMARY KEY ("id"))`)
@@ -16,7 +16,9 @@ module.exports = class Data1766141148865 {
         await db.query(`CREATE TABLE "follow" ("id" character varying NOT NULL, "is_active" boolean NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL, "follower_id" character varying, "following_id" character varying, CONSTRAINT "PK_fda88bc28a84d2d6d06e19df6e5" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_e65ef3268d3d5589f94b09c237" ON "follow" ("follower_id") `)
         await db.query(`CREATE INDEX "IDX_7e66760f06ef2ca5eb43109d1c" ON "follow" ("following_id") `)
-        await db.query(`CREATE TABLE "user" ("id" character varying NOT NULL, "nickname" text, "avatar" text, "bio" text, "total_articles" integer NOT NULL, "total_followers" integer NOT NULL, "total_following" integer NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "profile_updated_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_cace4a159ff9f2512dd42373760" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "user" ("id" character varying NOT NULL, "nickname" text, "avatar" text, "bio" text, "total_articles" integer NOT NULL, "total_followers" integer NOT NULL, "total_following" integer NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "profile_updated_at" TIMESTAMP WITH TIME ZONE, "session_key" text, CONSTRAINT "PK_cace4a159ff9f2512dd42373760" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "transaction" ("id" character varying NOT NULL, "session_key" text NOT NULL, "target" text NOT NULL, "method" text NOT NULL, "value" numeric NOT NULL, "fee_amount" numeric NOT NULL, "block_number" integer NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text NOT NULL, "user_id" character varying, CONSTRAINT "PK_89eadb93a89810556e1cbcd6ab9" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE INDEX "IDX_b4a3d92d5dde30f3ab5c34c586" ON "transaction" ("user_id") `)
         await db.query(`ALTER TABLE "comment" ADD CONSTRAINT "FK_03a590c26b0910b0bb49682b1e3" FOREIGN KEY ("article_id") REFERENCES "article"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "comment" ADD CONSTRAINT "FK_bbfe153fa60aa06483ed35ff4a7" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "evaluation" ADD CONSTRAINT "FK_677620ead71939863f7450a37a8" FOREIGN KEY ("article_id") REFERENCES "article"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
@@ -26,6 +28,7 @@ module.exports = class Data1766141148865 {
         await db.query(`ALTER TABLE "article" ADD CONSTRAINT "FK_16d4ce4c84bd9b8562c6f396262" FOREIGN KEY ("author_id") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "follow" ADD CONSTRAINT "FK_e65ef3268d3d5589f94b09c2373" FOREIGN KEY ("follower_id") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "follow" ADD CONSTRAINT "FK_7e66760f06ef2ca5eb43109d1cc" FOREIGN KEY ("following_id") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "transaction" ADD CONSTRAINT "FK_b4a3d92d5dde30f3ab5c34c5862" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
     }
 
     async down(db) {
@@ -44,6 +47,8 @@ module.exports = class Data1766141148865 {
         await db.query(`DROP INDEX "public"."IDX_e65ef3268d3d5589f94b09c237"`)
         await db.query(`DROP INDEX "public"."IDX_7e66760f06ef2ca5eb43109d1c"`)
         await db.query(`DROP TABLE "user"`)
+        await db.query(`DROP TABLE "transaction"`)
+        await db.query(`DROP INDEX "public"."IDX_b4a3d92d5dde30f3ab5c34c586"`)
         await db.query(`ALTER TABLE "comment" DROP CONSTRAINT "FK_03a590c26b0910b0bb49682b1e3"`)
         await db.query(`ALTER TABLE "comment" DROP CONSTRAINT "FK_bbfe153fa60aa06483ed35ff4a7"`)
         await db.query(`ALTER TABLE "evaluation" DROP CONSTRAINT "FK_677620ead71939863f7450a37a8"`)
@@ -53,5 +58,6 @@ module.exports = class Data1766141148865 {
         await db.query(`ALTER TABLE "article" DROP CONSTRAINT "FK_16d4ce4c84bd9b8562c6f396262"`)
         await db.query(`ALTER TABLE "follow" DROP CONSTRAINT "FK_e65ef3268d3d5589f94b09c2373"`)
         await db.query(`ALTER TABLE "follow" DROP CONSTRAINT "FK_7e66760f06ef2ca5eb43109d1cc"`)
+        await db.query(`ALTER TABLE "transaction" DROP CONSTRAINT "FK_b4a3d92d5dde30f3ab5c34c5862"`)
     }
 }

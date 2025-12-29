@@ -1355,3 +1355,7 @@ Claude: 是editArticle签名更新了，前端依然用旧的导致，已更新�
 开发者：尝试重新签发Session Key，依然是这个错误；再次发上面内容给Claude  
 Claude：frontend\src\lib\sessionKey.ts中ALLOWED_SELECTORS更新。
 
+### 2025-12-29 13:10  abi解析优化
+@help.md squid\src\main.ts 当前在启动Subsquid的processer时会从abi的json文件解析。实际是没必要的，帮我改为从squid\src\abi\BlogHub.ts squid\src\abi\SessionKeyManager.ts 这两个解析后的ts文件中直接加载  
+Claude: 修改完成
+
