@@ -4,9 +4,6 @@ import { Article, User, Evaluation, Comment, Follow, Collection, Transaction } f
 import * as blogHub from './abi/BlogHub'
 import * as sessionKeyManager from './abi/SessionKeyManager'
 import { LessThan } from 'typeorm'
-import * as fs from 'fs'
-import * as path from 'path'
-import keccak256 from 'keccak256'
 
 // 事件签名（从生成的 ABI 类型中获取）
 const ARTICLE_PUBLISHED = blogHub.events.ArticlePublished.topic
@@ -32,54 +29,28 @@ const MAX_TRANSACTION_AGE_MS = 90 * 24 * 60 * 60 * 1000 // 3个月
 const selectorToFunctionName = new Map<string, string>()
 
 /**
- * 从 ABI JSON 文件中读取并解析函数选择器
- * @param abiFilePath ABI JSON 文件路径
+ * 从 TypeScript ABI 模块中提取函数选择器
+ * @param functions 函数定义对象
  */
-function loadABIFromFile(abiFilePath: string) {
-    const fileContent = fs.readFileSync(abiFilePath, 'utf-8')
-    const abiData = JSON.parse(fileContent)
-    const abi = abiData.abi || abiData // 支持两种格式
-    
-    for (const item of abi) {
-        if (item.type === 'function' && item.name) {
-            // 构建函数签名: functionName(type1,type2,...)
-            const inputTypes = item.inputs.map((input: any) => input.type).join(',')
-            const signature = `${item.name}(${inputTypes})`
-            
-            // 计算选择器: keccak256(signature) 的前 4 字节
-            const hashBuffer = keccak256(signature)
-            const selector = '0x' + hashBuffer.toString('hex').slice(0, 8)
-            
-            // 存储映射
-            selectorToFunctionName.set(selector.toLowerCase(), item.name)
+function loadSelectorsFromABI(functions: any) {
+    for (const [functionName, functionDef] of Object.entries(functions)) {
+        // 函数定义包含 sighash 属性（函数选择器）
+        const selector = (functionDef as any).sighash
+        if (selector) {
+            selectorToFunctionName.set(selector.toLowerCase(), functionName)
         }
     }
 }
 
 /**
- * 从 ABI 中提取函数选择器和名称的映射
+ * 从 TypeScript ABI 模块中提取函数选择器和名称的映射
  */
 function buildSelectorCache() {
-    // __dirname 在编译后指向 lib/，需要访问 src/abi/
-    // 从 lib/ 返回到项目根目录，再进入 src/abi/
-    const abiDir = path.join(__dirname, '..', 'src', 'abi')
+    // 从 BlogHub 和 SessionKeyManager 的 TypeScript 模块中加载函数选择器
+    loadSelectorsFromABI(blogHub.functions)
+    loadSelectorsFromABI(sessionKeyManager.functions)
     
-    // 读取所有需要的 ABI 文件
-    const abiFiles = [
-        path.join(abiDir, 'BlogHub.json'),
-        path.join(abiDir, 'SessionKeyManager.json'),
-    ]
-    
-    // 从每个 ABI 文件中加载函数选择器
-    for (const abiFile of abiFiles) {
-        if (fs.existsSync(abiFile)) {
-            loadABIFromFile(abiFile)
-        } else {
-            console.error("abi file not found:", abiFile)
-        }
-    }
-    
-    console.log(`Loaded ${selectorToFunctionName.size} function selectors from ABI files`)
+    console.log(`Loaded ${selectorToFunctionName.size} function selectors from ABI modules`)
 }
 
 /**
