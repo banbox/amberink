@@ -3,7 +3,7 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
 	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams } from '$lib/arweave';
-	import { editArticleWithSessionKey } from '$lib/contracts';
+	import { editArticleWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 	import { getArticleWithCache, removeCachedArticle } from '$lib/arweave/cache';
 	import { getCoverImageUrl } from '$lib/arweave/folder';
 	import { onMount } from 'svelte';
@@ -121,9 +121,6 @@
 			return;
 		}
 
-		// Check wallet connection
-		await checkWalletConnection();
-
 		// Load article metadata from GraphQL
 		try {
 			const result = await client.query(ARTICLE_BY_ID_QUERY, { id: articleId }, { requestPolicy: 'network-only' }).toPromise();
@@ -154,6 +151,9 @@
 			
 			isLoadingArticle = false;
 			isLoadingContent = true;
+			
+			// Check wallet connection
+			await checkWalletConnection();
 
 			// Load article content from Arweave
 			const articleContent = await getArticleWithCache(article.id);
@@ -180,14 +180,14 @@
 				// Check if user is the author
 				const articleAuthor = (article?.author?.id || '').toLowerCase();
 				isAuthorized = walletAddress === articleAuthor;
+				if(!isAuthorized){
+					console.log('not author:', articleAuthor, walletAddress);
+				}
 			}
 		} catch (e) {
 			console.error('Failed to check wallet:', e);
 		}
 	}
-
-	// editArticle selector for validation
-	const EDIT_ARTICLE_SELECTOR = '0xaacf0da4' as `0x${string}`;
 
 	// Convert ContentImage to ContentImageInfo for upload
 	function convertContentImages(images: ContentImage[]) {
@@ -222,7 +222,7 @@
 			const tags = selectedKey ? [getCategoryLabel(selectedKey)] : [];
 
 			// Get or create valid session key with balance check
-			const sessionKey = await ensureSessionKeyReady({ requiredSelector: EDIT_ARTICLE_SELECTOR });
+			const sessionKey = await ensureSessionKeyReady({ requiredSelector: FUNCTION_SELECTORS.editArticle });
 			if (!sessionKey) {
 				throw new Error(m.failed_prepare());
 			}
@@ -262,12 +262,12 @@
 			// Update article on Arweave
 			const result = await updateArticleFolderWithSessionKey(
 				sessionKey,
-				article.id, // Original manifest ID
+				article.id,
 				updateParams,
 				'devnet'
 			);
 
-			// Update on-chain metadata (title, author, category, originality)
+			// Update on-chain metadata (title, author, category)
 			submitStatus = 'updatingContract';
 			statusMessage = m.updating_onchain();
 
@@ -280,8 +280,7 @@
 				formData.author.trim(),
 				formData.title.trim(),
 				formData.summary.trim(),
-				formData.categoryId,
-				0 // originality - default to Original
+				formData.categoryId
 			);
 
 			console.log(`Article metadata updated on-chain. Tx: ${txHash}`);

@@ -5,15 +5,12 @@
 
 import { uploadArticleFolderWithSessionKey } from '$lib/arweave';
 import type { ArticleFolderUploadParams, ContentImageInfo } from '$lib/arweave';
-import { publishToContractWithSessionKey } from '$lib/contracts';
+import { publishToContractWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 import {
 	ensureSessionKeyReady,
 	getStoredSessionKey,
 	type StoredSessionKey
 } from '$lib/sessionKey';
-
-// publish selector for validation
-const PUBLISH_SELECTOR = '0x21a25d60' as `0x${string}`;
 
 export interface PublishArticleParams {
 	title: string;
@@ -53,7 +50,7 @@ export async function publishArticle(params: PublishArticleParams): Promise<Publ
 		// Only triggers MetaMask popups when necessary:
 		// - One popup for session key registration (if no valid key exists)
 		// - One popup for funding (if balance is insufficient)
-		const sessionKey = await ensureSessionKeyReady({ requiredSelector: PUBLISH_SELECTOR });
+		const sessionKey = await ensureSessionKeyReady({ requiredSelector: FUNCTION_SELECTORS.publish });
 		if (!sessionKey) {
 			throw new Error('Failed to prepare session key. Please try again.');
 		}

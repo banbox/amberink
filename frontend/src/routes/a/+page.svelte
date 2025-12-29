@@ -14,7 +14,7 @@
 	import { client, USER_BY_ID_QUERY, ARTICLE_BY_ID_QUERY, type UserData, type ArticleDetailData } from '$lib/graphql';
 	import { page } from '$app/stores';
 	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
-	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways } from '$lib/config';
+	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork } from '$lib/config';
 	import { getBlockExplorerTxUrl } from '$lib/chain';
 	import {
 		EvaluationScore,
@@ -157,6 +157,16 @@
 	// Get cover image URL from Irys mutable folder
 	function getCoverUrl(arweaveId: string): string {
 		return getCoverImageUrl(arweaveId, true);
+	}
+
+	// Get Irys explorer transaction URL
+	function getIrysExplorerUrl(txId: string): string {
+		const network = getIrysNetwork();
+		if (network === 'mainnet') {
+			return `https://gateway.irys.xyz/tx/${txId}`;
+		} else {
+			return `https://devnet.irys.xyz/tx/${txId}`;
+		}
 	}
 
 	// Share article
@@ -1163,7 +1173,7 @@
 			<div class="flex items-center gap-1">
 				<span class="font-medium text-gray-700">{m.arweave()}:</span>
 				<a
-					href={`${getArweaveGateways()[0]}/${article.id}`}
+					href={getIrysExplorerUrl(article.id)}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="text-blue-600 hover:underline"

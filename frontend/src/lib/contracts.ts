@@ -505,12 +505,17 @@ const BLOGHUB_ABI = [
 		name: 'editArticle',
 		type: 'function',
 		inputs: [
-			{ name: '_articleId', type: 'uint256' },
-			{ name: '_originalAuthor', type: 'string' },
-			{ name: '_title', type: 'string' },
-			{ name: '_summary', type: 'string' },
-			{ name: '_categoryId', type: 'uint64' },
-			{ name: '_originality', type: 'uint8' }
+			{
+				name: 'params',
+				type: 'tuple',
+				components: [
+					{ name: 'articleId', type: 'uint256' },
+					{ name: 'originalAuthor', type: 'string' },
+					{ name: 'title', type: 'string' },
+					{ name: 'summary', type: 'string' },
+					{ name: 'categoryId', type: 'uint16' }
+				]
+			}
 		],
 		outputs: [],
 		stateMutability: 'nonpayable'
@@ -521,12 +526,17 @@ const BLOGHUB_ABI = [
 		inputs: [
 			{ name: 'owner', type: 'address' },
 			{ name: 'sessionKey', type: 'address' },
-			{ name: '_articleId', type: 'uint256' },
-			{ name: '_originalAuthor', type: 'string' },
-			{ name: '_title', type: 'string' },
-			{ name: '_summary', type: 'string' },
-			{ name: '_categoryId', type: 'uint64' },
-			{ name: '_originality', type: 'uint8' },
+			{
+				name: 'params',
+				type: 'tuple',
+				components: [
+					{ name: 'articleId', type: 'uint256' },
+					{ name: 'originalAuthor', type: 'string' },
+					{ name: 'title', type: 'string' },
+					{ name: 'summary', type: 'string' },
+					{ name: 'categoryId', type: 'uint16' }
+				]
+			},
 			{ name: 'deadline', type: 'uint256' },
 			{ name: 'signature', type: 'bytes' }
 		],
@@ -1024,15 +1034,15 @@ async function getSessionKeyNonce(
 }
 
 // Function selectors for Session Key operations
-// NOTE: These selectors must be recalculated when function signatures change
-// Use: cast sig "functionName(type1,type2,...)" to get selector
-const FUNCTION_SELECTORS = {
+// 可从 squid\src\abi\BlogHub.ts 查阅squid配置的最新函数签名
+// 修改这里需要一并更新：frontend\src\lib\sessionKey.ts  ALLOWED_SELECTORS
+export const FUNCTION_SELECTORS = {
 	publish: '0x21a25d60' as `0x${string}`,      // publish((string,uint16,uint96,string,string,string,address,uint96,uint32,uint8)) - PublishParams struct
 	evaluate: '0xff1f090a' as `0x${string}`,     // evaluate(uint256,uint8,string,address,uint256)
 	follow: '0x63c3cc16' as `0x${string}`,       // follow(address,bool)
 	likeComment: '0xdffd40f2' as `0x${string}`,  // likeComment(uint256,uint256,address,address)
 	collect: '0x8d3c100a' as `0x${string}`,      // collect(uint256,address)
-	editArticle: '0x87ba2b0c' as `0x${string}`   // editArticle(uint256,string,string,string,string,uint64,uint8)
+	editArticle: '0x461e2378' as `0x${string}`   // editArticle((uint256,string,string,string,uint16))
 };
 
 /**
@@ -1436,12 +1446,11 @@ export async function updateProfile(
 }
 
 /** 验证文章编辑参数 */
-function validateEditArticleParams(articleId: bigint, originalAuthor: string, title: string, summary: string, originality: number) {
+function validateEditArticleParams(articleId: bigint, originalAuthor: string, title: string, summary: string) {
 	if (articleId <= 0n) throw new Error('Article ID must be positive');
 	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) throw new Error('Original author name is too long (max 64 bytes)');
 	if (title && new TextEncoder().encode(title).length > 128) throw new Error('Title is too long (max 128 bytes)');
-	if (summary && new TextEncoder().encode(summary).length > 512) throw new Error('Summary is too long (max 512 bytes)');
-	if (originality < 0 || originality > 2) throw new Error('Originality must be 0 (Original), 1 (SemiOriginal), or 2 (Reprint)');
+	if (summary && new TextEncoder().encode(summary).length > 500) throw new Error('Summary is too long (max 500 bytes)');
 }
 
 export async function editArticle(
@@ -1449,10 +1458,9 @@ export async function editArticle(
 	originalAuthor: string,
 	title: string,
 	summary: string,
-	categoryId: bigint,
-	originality: number
+	categoryId: bigint
 ): Promise<string> {
-	validateEditArticleParams(articleId, originalAuthor, title, summary, originality);
+	validateEditArticleParams(articleId, originalAuthor, title, summary);
 
 	try {
 		const walletClient = await getWalletClientWithChainCheck();
@@ -1460,7 +1468,13 @@ export async function editArticle(
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticle',
-			args: [articleId, originalAuthor, title, summary, categoryId, originality]
+			args: [{
+				articleId,
+				originalAuthor,
+				title,
+				summary,
+				categoryId: Number(categoryId)
+			}]
 		});
 		console.log(`Article edited. Tx: ${txHash}`);
 		return txHash;
@@ -1476,18 +1490,24 @@ export async function editArticleWithSessionKey(
 	originalAuthor: string,
 	title: string,
 	summary: string,
-	categoryId: bigint,
-	originality: number
+	categoryId: bigint
 ): Promise<string> {
-	validateEditArticleParams(articleId, originalAuthor, title, summary, originality);
+	validateEditArticleParams(articleId, originalAuthor, title, summary);
 
 	try {
 		const walletClient = createSessionKeyWalletClient(sessionKey);
 		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
+		const params = {
+			articleId,
+			originalAuthor,
+			title,
+			summary,
+			categoryId: Number(categoryId)
+		};
 		const callData = encodeFunctionData({
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticle',
-			args: [articleId, originalAuthor, title, summary, categoryId, originality]
+			args: [params]
 		});
 
 		await assertSessionKeyActive(sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, FUNCTION_SELECTORS.editArticle, 0n);
@@ -1497,7 +1517,7 @@ export async function editArticleWithSessionKey(
 			address: getBlogHubContractAddress(),
 			abi: BLOGHUB_ABI,
 			functionName: 'editArticleWithSessionKey',
-			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, originalAuthor, title, summary, categoryId, originality, deadline, signature]
+			args: [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, params, deadline, signature]
 		});
 		console.log(`Article edited with session key. Tx: ${txHash}`);
 		return txHash;

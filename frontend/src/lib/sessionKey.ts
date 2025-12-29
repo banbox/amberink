@@ -78,13 +78,14 @@ const PUBLISH_SELECTOR = '0x21a25d60' as const;
 
 // Allowed function selectors for session key
 // Use: cast sig "functionName(params)" to get selector
+// 更新这里时需要一并更新：frontend\src\lib\contracts.ts  FUNCTION_SELECTORS
 const ALLOWED_SELECTORS: `0x${string}`[] = [
 	'0xff1f090a', // evaluate(uint256,uint8,string,address,uint256)
 	'0xdffd40f2', // likeComment(uint256,uint256,address,address)
 	'0x63c3cc16', // follow(address,bool)
 	'0x21a25d60', // publish((string,uint16,uint96,string,string,string,address,uint96,uint32,uint8)) - PublishParams struct
 	'0x8d3c100a', // collect(uint256,address)
-	'0xaacf0da4'  // editArticle(uint256,string,string,uint64,uint8)
+	'0x461e2378'  // editArticle((uint256,string,string,string,uint16)) - EditArticleParams struct
 ];
 
 // Default spending limit (10 ETH)
@@ -627,7 +628,7 @@ export async function getOrCreateValidSessionKey(options?: {
 						
 						// Automatically reauthorize (triggers MetaMask popup)
 						try {
-							sessionKey = await reauthorizeSessionKey(sessionKey);
+							sessionKey = await extendSessionKey(sessionKey);
 							console.log('Session key reauthorized successfully');
 							return sessionKey;
 						} catch (error) {

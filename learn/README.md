@@ -1338,3 +1338,20 @@ frontend\src\routes\u\+page.ts
 ```
 Claude：已完成
 
+### 2025-12-28 21:00  详情页交易链接
+@help.md 当前项目发布内容会存储到irys+智能合约区块链。目前在文章详情页 frontend\src\routes\a\+page.svelte 底部会显示区块链的交易链接，点击可调整查看。智能合约的交易链接是正确的，不过irys目前是打开查看文档详情。帮我改为跳转到irys的explorer根据交易ID查看页面  
+Claude: 改为了点击链接打开irys接口，体验差。  
+开发者：irys上传文件后，是可更新的文件夹，现在有资源ID，也就是文件夹ID。我是通过@irys/web-upload调用的相关函数。我希望能获取某种方式展示此文件夹ID在区块链中的详情，类似以太坊explorer中查看某笔交易详情。给用户的感觉是数据确实上链了。但文件夹ID是可更新的，且包含多个文件（其中具体的子文件名已知）。请你帮我考虑应该获取什么信息？如何展示？  
+Gemini: 建议使用Irys网关的GraphQL获取交易数据，然后通过权威的ViewBlock查看链上数据。
+
+### 2025-12-29 12:00  编辑文章保存失败
+```log
+contracts.ts:1505 Error editing article with session key: Error: Session key is not authorized for this operation (selector=0x87ba2b0c). Please re-create the session key.
+    at assertSessionKeyActive (contracts.ts:964:9)
+    at async editArticleWithSessionKey (contracts.ts:1493:3)
+```
+@help.md  上面是编辑文章保存时的错误；上传内容到irys成功，但更新到区块链时失败。请帮我检查错误信息相关的代码逻辑，点烟问题原因并解决。frontend\src\lib\contracts.ts 跟这里的1029行的函数选择器有关应该。目前应该是使用Session Key，调用带Session Key的函数，不确定是否是函数错误导致的。最新的abi和对应的信息参考squid\src\abi\BlogHub.ts  
+Claude: 是editArticle签名更新了，前端依然用旧的导致，已更新解决  
+开发者：尝试重新签发Session Key，依然是这个错误；再次发上面内容给Claude  
+Claude：frontend\src\lib\sessionKey.ts中ALLOWED_SELECTORS更新。
+
