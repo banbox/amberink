@@ -46,7 +46,13 @@
 	}
 
 	async function handleConnect() {
-		await connectWallet();
+		const result = await connectWallet();
+		if (!result.success && result.error) {
+			alert(result.error);
+		} else if (result.cached) {
+			// Wallet used cached account without prompting user
+			alert(m.wallet_cached_account());
+		}
 	}
 
 	function handleDisconnect() {
@@ -99,7 +105,9 @@
 			<ChevronDownIcon size={16} class="transition-transform {showDropdown ? 'rotate-180' : ''}" />
 		</button>
 		{#if showDropdown}
-			<div class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg py-2 shadow-lg {dropdownColorClasses}">
+			<div
+				class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg py-2 shadow-lg {dropdownColorClasses}"
+			>
 				<button
 					class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-400 transition-colors"
 					class:hover:bg-green-700={envName === 'dev'}

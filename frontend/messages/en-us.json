@@ -386,5 +386,6 @@
 	"tip_in_usd": "Tip Amount (USD)",
 	"send_tip": "Send Tip",
 	"dislike_in_usd": "Dislike Amount (USD)",
-	"send_dislike": "Send Dislike"
+	"send_dislike": "Send Dislike",
+	"wallet_cached_account": "Connected with cached account. To switch to another, please open your wallet manually."
 }

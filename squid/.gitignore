@@ -11,3 +11,4 @@ src/abi/*.json
 .env
 .env.*
 !.env.example
+!.env.dev
