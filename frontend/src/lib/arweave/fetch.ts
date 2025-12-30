@@ -106,3 +106,129 @@ export function getFolderCoverImageUrl(manifestId: string, useMutable = true): s
 export function getFolderFileUrl(manifestId: string, fileName: string, useMutable = true): string {
 	return getPrimaryGatewayUrl(buildFolderPath(manifestId, fileName, useMutable));
 }
+
+/**
+ * 从 Irys GraphQL 获取 manifest 的标签
+ * @param manifestId - Manifest ID
+ * @returns 标签数组，每个标签包含 name 和 value
+ */
+async function fetchManifestTags(manifestId: string): Promise<Array<{ name: string; value: string }>> {
+	// 根据环境选择 GraphQL 端点
+	// 由于 config 中可能需要导入 getIrysNetwork，这里简单判断
+	const graphqlEndpoints = [
+		'https://devnet.irys.xyz/graphql',
+		'https://uploader.irys.xyz/graphql'
+	];
+
+	const query = `
+		query getManifestTags($ids: [String!]!) {
+			transactions(ids: $ids) {
+				edges {
+					node {
+						id
+						tags {
+							name
+							value
+						}
+					}
+				}
+			}
+		}
+	`;
+
+	for (const endpoint of graphqlEndpoints) {
+		try {
+			const response = await fetch(endpoint, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					query,
+					variables: { ids: [manifestId] }
+				})
+			});
+
+			if (response.ok) {
+				const result = await response.json();
+				const edges = result?.data?.transactions?.edges || [];
+				if (edges.length > 0) {
+					return edges[0].node.tags || [];
+				}
+			}
+		} catch (error) {
+			console.warn(`GraphQL endpoint ${endpoint} failed:`, error);
+		}
+	}
+
+	return [];
+}
+
+/**
+ * 解析文章内容，分离正文和附言
+ * 附言以 `---` 分隔符与正文分开
+ * @param fullContent - 完整的 Markdown 内容
+ * @returns 分离后的正文和附言
+ */
+function parseContentAndPostscript(fullContent: string): { content: string; postscript: string } {
+	// 查找 `\n\n---\n\n` 分隔符（发布时添加的格式）
+	const separator = '\n\n---\n\n';
+	const separatorIndex = fullContent.lastIndexOf(separator);
+
+	if (separatorIndex !== -1) {
+		return {
+			content: fullContent.substring(0, separatorIndex),
+			postscript: fullContent.substring(separatorIndex + separator.length)
+		};
+	}
+
+	return {
+		content: fullContent,
+		postscript: ''
+	};
+}
+
+/**
+ * 获取文章元数据（直接请求，无缓存）
+ * @param manifestId - 文章文件夹的 Manifest ID
+ */
+export async function fetchArticleMetadata(manifestId: string): Promise<ArticleMetadata & { postscript?: string }> {
+	// 获取 markdown 内容（使用 mutable URL 以获取最新版本）
+	console.log(`Fetching article content from mutable URL: ${manifestId}`);
+	const fullContent = await fetchArticleMarkdown(manifestId, true);
+	console.log(`Fetched content preview (first 100 chars):`, fullContent.substring(0, 100));
+
+	// 解析正文和附言
+	const { content, postscript } = parseContentAndPostscript(fullContent);
+
+	// 从内容中提取标题（第一个 # 开头的行）
+	let title = '';
+	const lines = content.split('\n');
+	for (const line of lines) {
+		if (line.startsWith('# ')) {
+			title = line.substring(2).trim();
+			break;
+		}
+	}
+
+	// 从 manifest 标签获取摘要
+	let summary = '';
+	try {
+		const tags = await fetchManifestTags(manifestId);
+		const summaryTag = tags.find(t => t.name === 'Article-Summary');
+		if (summaryTag) {
+			summary = summaryTag.value;
+		}
+		console.log(`Fetched summary from manifest tags: "${summary.substring(0, 50)}..."`);
+	} catch (error) {
+		console.warn('Failed to fetch manifest tags for summary:', error);
+	}
+
+	return {
+		title: title || 'Untitled',
+		summary,
+		content,
+		postscript,
+		tags: [],
+		createdAt: Date.now(),
+		version: '2.0.0'
+	};
+}

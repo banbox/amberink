@@ -32,12 +32,6 @@ export interface UploadReceipt {
 	signature: string;
 }
 
-/** 缓存条目 */
-export interface CachedArticle {
-	data: ArticleMetadata;
-	timestamp: number;
-}
-
 /** Irys 网络类型 */
 export type IrysNetwork = 'mainnet' | 'devnet';
 

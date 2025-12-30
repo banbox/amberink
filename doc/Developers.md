@@ -276,7 +276,7 @@ Irys 有两个 Bundler 网络：
 
 ---
 
-## 7. 内容获取与缓存
+## 7. 内容获取
 
 ### 7.1 从 Arweave 获取内容
 
@@ -289,21 +289,11 @@ Irys 有两个 Bundler 网络：
 - `fetchRawContent(arweaveId)` - 获取原始二进制数据
 - `fetchTextContent(arweaveId)` - 获取文本内容
 - `checkContentExists(arweaveId)` - 检查内容是否存在
+- `fetchArticleMetadata(arweaveId)` - 获取文章元数据（标题、内容、摘要等）
 
 所有函数支持多网关自动切换容错。
 
-### 7.2 客户端缓存策略
-
-> 📁 **实现文件**: [frontend/src/lib/arweave/cache.ts](../frontend/src/lib/arweave/cache.ts)
-
-基于 localStorage 的缓存策略，24 小时 TTL：
-- `getCachedArticle(arweaveId)` - 从缓存获取
-- `setCachedArticle(arweaveId, data)` - 存入缓存
-- `getArticleWithCache(arweaveId, forceRefresh?)` - 带缓存的获取
-- `getArticlesWithCache(arweaveIds)` - 批量获取（并行）
-- `clearAllCache()` / `clearOldCache()` - 清理缓存
-
-### 7.3 模块导出索引
+### 7.2 模块导出索引
 
 > 📁 **实现文件**: [frontend/src/lib/arweave/index.ts](../frontend/src/lib/arweave/index.ts)
 

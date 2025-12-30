@@ -2,8 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
-	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
-	import { getArticleWithCache } from '$lib/arweave/cache';
+	import { getCoverImageUrl, getAvatarUrl, fetchArticleMetadata } from '$lib/arweave';
 	import { queryArticleVersions, fetchArticleVersionContent, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
@@ -618,35 +617,65 @@
 			return;
 		}
 
-		// Load article metadata from GraphQL
-		try {
-			const result = await client.query(ARTICLE_BY_ID_QUERY, { id: articleId }, { requestPolicy: 'network-only' }).toPromise();
+		// Load article metadata from GraphQL with retry logic
+		// For newly published articles, the indexer may not have processed the event yet
+		const MAX_RETRY_TIME = 5000; // 5 seconds max cumulative wait
+		const RETRY_DELAYS = [500, 1000, 1500, 2000]; // Exponential backoff delays
+		let totalWaitTime = 0;
+		let retryIndex = 0;
+		let loadedArticle: ArticleDetailData | null = null;
 
-			if (result.error) {
-				articleError = result.error.message;
+		while (totalWaitTime < MAX_RETRY_TIME) {
+			try {
+				const result = await client.query(ARTICLE_BY_ID_QUERY, { id: articleId }, { requestPolicy: 'network-only' }).toPromise();
+
+				if (result.error) {
+					articleError = result.error.message;
+					articleLoading = false;
+					contentLoading = false;
+					return;
+				}
+
+				loadedArticle = result.data?.articleById ?? null;
+
+				if (loadedArticle) {
+					// Found the article, break out of retry loop
+					break;
+				}
+
+				// Article not found, wait and retry
+				if (retryIndex < RETRY_DELAYS.length) {
+					const delay = RETRY_DELAYS[retryIndex];
+					if (totalWaitTime + delay > MAX_RETRY_TIME) {
+						// Would exceed max wait time, stop retrying
+						break;
+					}
+					console.log(`Article not found in index, retrying in ${delay}ms... (attempt ${retryIndex + 1})`);
+					await new Promise(resolve => setTimeout(resolve, delay));
+					totalWaitTime += delay;
+					retryIndex++;
+				} else {
+					// No more retries
+					break;
+				}
+			} catch (e) {
+				articleError = e instanceof Error ? e.message : 'Failed to load article';
+				console.error('Failed to load article:', e);
 				articleLoading = false;
 				contentLoading = false;
 				return;
 			}
+		}
 
-			const loadedArticle: ArticleDetailData | null = result.data?.articleById;
-
-			if (!loadedArticle) {
-				articleError = 'Article not found';
-				articleLoading = false;
-				contentLoading = false;
-				return;
-			}
-
-			article = loadedArticle;
-			articleLoading = false;
-		} catch (e) {
-			articleError = e instanceof Error ? e.message : 'Failed to load article';
-			console.error('Failed to load article:', e);
+		if (!loadedArticle) {
+			articleError = 'Article not found';
 			articleLoading = false;
 			contentLoading = false;
 			return;
 		}
+
+		article = loadedArticle;
+		articleLoading = false;
 		
 		// Load native token price for USD conversion
 		loadNativeTokenPrice();
@@ -705,9 +734,10 @@
 					createdAt: currentVersionMeta?.timestamp || Date.now(),
 					version: '1.0.0'
 				};
-			} else {
+			} else if (!articleContent) {
+				// Content not loaded yet (initial load failed or skipped), try again
 				// article.id is now arweaveId
-				articleContent = await getArticleWithCache(article.id);
+				articleContent = await fetchArticleMetadata(article.id);
 			}
 		} catch (e) {
 			contentError = e instanceof Error ? e.message : 'Failed to load article content';
@@ -719,9 +749,7 @@
 </script>
 
 <svelte:head>
-	<title
-		>{currentVersionMeta?.title || article?.title || 'Article'} - AmberInk</title
-	>
+	<title>{currentVersionMeta?.title || article?.title || 'Article'} - AmberInk</title>
 	<meta
 		name="description"
 		content={articleContent?.summary ||
@@ -737,7 +765,7 @@
 		<!-- Title Skeleton -->
 		<header class="mb-8">
 			<div class="mb-6 h-20 w-full animate-pulse rounded-lg bg-gray-200"></div>
-			
+
 			<!-- Author Info Skeleton -->
 			<div class="flex items-center gap-3">
 				<div class="h-11 w-11 shrink-0 animate-pulse rounded-full bg-gray-200"></div>
@@ -791,401 +819,408 @@
 		</div>
 	</div>
 {:else}
-<!-- Medium-style article layout -->
-<article class="mx-auto w-full max-w-[680px] px-6 py-12">
-	<!-- Old Version Banner -->
-	{#if isViewingOldVersion}
-		<div
-			class="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
-		>
-			<div class="flex items-center gap-2 text-amber-800">
-				<ClockIcon size={20} />
-				<span class="text-sm font-medium">{m.viewing_historical_version()}</span>
-			</div>
-			<a
-				href={localizeHref(`/a?id=${article.id}`)}
-				class="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+	<!-- Medium-style article layout -->
+	<article class="mx-auto w-full max-w-[680px] px-6 py-12">
+		<!-- Old Version Banner -->
+		{#if isViewingOldVersion}
+			<div
+				class="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
 			>
-				{m.view_latest()}
-			</a>
-		</div>
-	{/if}
-
-	<!-- Title -->
-	<header class="mb-8">
-		<h1 class="mb-6 font-serif text-[32px] font-bold leading-tight text-gray-900 sm:text-[42px]">
-			{currentVersionMeta?.title || article.title || `Article #${article.articleId}`}
-		</h1>
-
-		<!-- Author Info Bar -->
-		<div class="flex items-center gap-3">
-			<!-- Avatar -->
-			<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
-				{#if getAvatarUrl(authorAvatar)}
-					<img
-						src={getAvatarUrl(authorAvatar)}
-						alt=""
-						class="h-11 w-11 rounded-full object-cover"
-					/>
-				{:else}
-					<div
-						class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
-					>
-						{authorInitials}
-					</div>
-				{/if}
-			</a>
-
-			<div class="flex flex-1 flex-col">
-				<!-- Name & Follow -->
-				<div class="flex items-center gap-2">
-					<a href={localizeHref(`/u?id=${authorAddress}`)} class="font-medium text-gray-900 hover:underline">
-						{displayAuthor}
-					</a>
-					<span class="text-gray-300">·</span>
-					<button
-						type="button"
-						class="text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
-						onclick={handleFollow}
-						disabled={isFollowing}
-					>
-						{isFollowing ? m.processing({}) : m.follow({})}
-					</button>
+				<div class="flex items-center gap-2 text-amber-800">
+					<ClockIcon size={20} />
+					<span class="text-sm font-medium">{m.viewing_historical_version()}</span>
 				</div>
-
-				<!-- Read time & Date & Originality Tag -->
-				<div class="flex items-center gap-2 text-sm text-gray-500">
-					{#if readingTime > 0}
-						<span>{m.min_read({ count: readingTime })}</span>
-						<span>·</span>
-					{/if}
-					<time datetime={article.createdAt}>
-						{formatDate(article.createdAt)}
-					</time>
-					<span>·</span>
-					<!-- Originality Tag with different background colors -->
-					{#if article.originality === 0}
-						<span
-							class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
-							>{m.original()}</span
-						>
-					{:else if article.originality === 1}
-						<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
-							>{m.semi_original()}</span
-						>
-					{:else}
-						<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-							>{m.reprint()}</span
-						>
-					{/if}
-				</div>
-			</div>
-		</div>
-	</header>
-
-	{#snippet interactionBar(position: 'top' | 'bottom')}
-	{#if article}
-		<div class={position === 'top' ? 'mb-8' : 'mt-12'}>
-			<div class="flex items-center justify-between border-y border-gray-100 py-3">
-				<div class="flex items-center gap-5">
-					<!-- Quality Score -->
-					{#if qualityScore() !== null}
-						<span
-							class={`text-lg font-bold ${getScoreColor(qualityScore())}`}
-							title={m.article_quality_score()}
-						>
-							{qualityScore()?.toFixed(1)}
-						</span>
-					{:else}
-						<span class="text-lg font-bold text-gray-300" title={m.no_ratings()}>--</span>
-					{/if}
-
-					<!-- Like/Tip -->
-					<button
-						type="button"
-						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-amber-500"
-						onclick={() => (showTipModal = true)}
-						title={m.tip({})}
-					>
-						<!-- Thumbs Up Icon -->
-						<ThumbsUpIcon size={20} />
-						<span class="text-sm">{formatTips(article.totalTips)} {nativeSymbol}</span>
-					</button>
-
-					<!-- Comments -->
-					<a
-						href={localizeHref('#comments')}
-						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-						title={m.comments({})}
-					>
-						<CommentIcon size={20} />
-						<span class="text-sm">{article.comments?.length || 0}</span>
-					</a>
-
-					<!-- Collect/Bookmark (only show when collecting is enabled) -->
-					{#if collectEnabled}
-						<button
-							type="button"
-							class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
-							onclick={() => (showCollectModal = true)}
-							title={m.collect()}
-						>
-							<!-- Bookmark Icon -->
-							<BookmarkIcon size={20} />
-							<span class="text-sm">{localCollectCount}/{maxCollectSupply.toString()}</span>
-						</button>
-					{/if}
-
-					<!-- Dislike -->
-					<button
-						type="button"
-						class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-red-500 disabled:opacity-50"
-						onclick={() => (showDislikeModal = true)}
-						disabled={isDisliking}
-						title={m.dislike({})}
-					>
-						<!-- Thumbs Down Icon -->
-						<ThumbsDownIcon size={20} />
-						<span class="text-sm">{formatTips(localDislikeAmount)}</span>
-					</button>
-				</div>
-
-				<!-- Right side: History, Edit & Share -->
-				<div class="flex items-center gap-3">
-					<!-- History versions button -->
-					<div class="relative">
-						<button
-							type="button"
-							onclick={toggleVersionsDropdown}
-							class="flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-900"
-							title={m.view_history_versions()}
-						>
-							<!-- Clock/History Icon -->
-							<ClockIcon size={20} />
-							{#if versionsLoading}
-								<SpinnerIcon size={12} />
-							{/if}
-						</button>
-
-						<!-- Versions Dropdown -->
-						{#if showVersionsDropdown}
-							<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-							<div
-								class="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
-								onclick={(e) => e.stopPropagation()}
-							>
-								<div class="border-b border-gray-100 px-4 py-3">
-									<div class="flex items-center justify-between">
-										<h4 class="font-medium text-gray-900">{m.history_versions()}</h4>
-										<button
-											type="button"
-											onclick={() => (showVersionsDropdown = false)}
-											class="text-gray-400 hover:text-gray-600"
-											aria-label={m.close_versions_dropdown()}
-										>
-											<CloseIcon size={16} />
-										</button>
-									</div>
-									{#if isViewingOldVersion}
-										<a
-											href={`/a?id=${article.id}`}
-											class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-										>
-											<BackIcon size={12} />
-											{m.back_to_latest_version()}
-										</a>
-									{/if}
-								</div>
-								<div class="max-h-64 overflow-y-auto">
-									{#if versions.length === 0}
-										<div class="px-4 py-6 text-center text-sm text-gray-500">
-											{versionsLoading ? m.loading() : m.no_history()}
-										</div>
-									{:else}
-										{#each versions as version, idx}
-											<a
-												href={localizeHref(idx === 0 ? `/a?id=${article.id}` : `/a?id=${article.id}&v=${version.txId}`)}
-												class="flex items-start gap-3 border-b border-gray-50 px-4 py-3 transition-colors hover:bg-gray-50"
-												class:bg-blue-50={versionTxId === version.txId ||
-													(idx === 0 && !versionTxId)}
-												onclick={() => (showVersionsDropdown = false)}
-											>
-												<div
-													class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600"
-												>
-													{versions.length - idx}
-												</div>
-												<div class="min-w-0 flex-1">
-													<div class="flex items-center gap-2">
-														<span class="truncate font-medium text-gray-900">
-															{version.title || article.title || m.untitled()}
-														</span>
-														{#if idx === 0}
-															<span
-																class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700"
-																>{m.latest()}</span
-															>
-														{/if}
-													</div>
-													<div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-														<span>{formatTimestamp(version.timestamp)}</span>
-														{#if version.owner}
-															<span>·</span>
-															<span>{shortAddress(version.owner)}</span>
-														{/if}
-													</div>
-												</div>
-											</a>
-										{/each}
-									{/if}
-								</div>
-							</div>
-						{/if}
-					</div>
-
-					<!-- Edit button (only for author) -->
-					{#if isAuthor}
-						<a
-							href={localizeHref(`/edit?id=${article.id}`)}
-							class="text-gray-500 transition-colors hover:text-blue-600"
-							title={m.edit({})}
-						>
-							<EditIcon size={20} />
-						</a>
-					{/if}
-					<button
-						type="button"
-						onclick={handleShare}
-						class="text-gray-500 transition-colors hover:text-gray-900"
-						title={m.share({})}
-					>
-						<ShareIcon size={20} />
-					</button>
-				</div>
-			</div>
-		</div>
-	{/if}
-	{/snippet}
-
-	<!-- Interaction Bar (Top) -->
-	{@render interactionBar('top')}
-
-	<!-- Cover Image -->
-	<div class="mb-10 overflow-hidden" id="cover-container">
-		<img
-			src={coverUrl}
-			alt={article.title}
-			class="h-auto w-full object-cover"
-			onerror={(e) => {
-				const target = e.currentTarget as HTMLImageElement;
-				const container = target.parentElement;
-				if (container) container.style.display = 'none';
-			}}
-		/>
-	</div>
-
-	<!-- Content -->
-	<div class="prose prose-lg max-w-none">
-		{#if contentLoading}
-			<div class="flex items-center justify-center py-16">
-				<div class="flex items-center gap-3 text-gray-500">
-					<SpinnerIcon size={20} />
-					<span>{m.loading_content({})}</span>
-				</div>
-			</div>
-		{:else if contentError}
-			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-				<p class="text-red-700">{contentError}</p>
-				{#if article}
-					<a
-						href={`${getArweaveGateways()[0]}/${article.id}`}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="mt-3 inline-block text-sm text-red-600 underline hover:text-red-800"
-					>
-						{m.view_on_arweave({})}
-					</a>
-				{/if}
-			</div>
-		{:else if articleContent?.content && article}
-			<div class="prose prose-lg prose-gray max-w-none font-serif">
-				{@html DOMPurify.sanitize(
-					marked(
-						processContentImages(articleContent.content, versionTxId || article.id, !versionTxId)
-					) as string
-				)}
-			</div>
-		{:else}
-			<div class="py-8 text-center text-gray-500">
-				<p>{m.no_items({ items: m.content() })}</p>
+				<a
+					href={localizeHref(`/a?id=${article.id}`)}
+					class="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+				>
+					{m.view_latest()}
+				</a>
 			</div>
 		{/if}
-	</div>
 
-	<!-- Postscript / Summary -->
-	{#if articleContent?.summary}
-		<aside class="mt-12 border-l-2 border-gray-200 pl-5 text-gray-600 italic">
-			<p>{articleContent.summary}</p>
-		</aside>
-	{/if}
+		<!-- Title -->
+		<header class="mb-8">
+			<h1 class="mb-6 font-serif text-[32px] font-bold leading-tight text-gray-900 sm:text-[42px]">
+				{currentVersionMeta?.title || article.title || `Article #${article.articleId}`}
+			</h1>
 
-	<!-- Interaction Bar (Bottom) -->
-	{@render interactionBar('bottom')}
-
-	<!-- Comments Section -->
-	<CommentSection
-		articleId={article.articleId}
-		comments={article.comments || []}
-		{walletAddress}
-		currentUserAvatar={currentUserData?.avatar}
-		currentUserNickname={currentUserData?.nickname}
-		{sessionKey}
-		{hasValidSessionKey}
-		{isCommenting}
-		onComment={handleComment}
-	/>
-
-	<!-- Transaction Info (collapsed) -->
-	<details class="mt-10 text-sm text-gray-500">
-		<summary class="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
-			{m.blockchain_info({})}
-		</summary>
-		<div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 rounded-lg bg-gray-50 p-4">
-			<div>
-				<span class="font-medium text-gray-700">{m.article_id({})}:</span>
-				{article.articleId}
-			</div>
-			<div>
-				<span class="font-medium text-gray-700">{m.block({})}:</span>
-				{article.blockNumber}
-			</div>
-			<div class="flex items-center gap-1">
-				<span class="font-medium text-gray-700">{m.transaction({})}:</span>
-				<a
-					href={getBlockExplorerTxUrl(article.txHash)}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="text-blue-600 hover:underline"
-				>
-					{article.txHash.slice(0, 10)}...{article.txHash.slice(-8)}
+			<!-- Author Info Bar -->
+			<div class="flex items-center gap-3">
+				<!-- Avatar -->
+				<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
+					{#if getAvatarUrl(authorAvatar)}
+						<img
+							src={getAvatarUrl(authorAvatar)}
+							alt=""
+							class="h-11 w-11 rounded-full object-cover"
+						/>
+					{:else}
+						<div
+							class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
+						>
+							{authorInitials}
+						</div>
+					{/if}
 				</a>
+
+				<div class="flex flex-1 flex-col">
+					<!-- Name & Follow -->
+					<div class="flex items-center gap-2">
+						<a
+							href={localizeHref(`/u?id=${authorAddress}`)}
+							class="font-medium text-gray-900 hover:underline"
+						>
+							{displayAuthor}
+						</a>
+						<span class="text-gray-300">·</span>
+						<button
+							type="button"
+							class="text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+							onclick={handleFollow}
+							disabled={isFollowing}
+						>
+							{isFollowing ? m.processing({}) : m.follow({})}
+						</button>
+					</div>
+
+					<!-- Read time & Date & Originality Tag -->
+					<div class="flex items-center gap-2 text-sm text-gray-500">
+						{#if readingTime > 0}
+							<span>{m.min_read({ count: readingTime })}</span>
+							<span>·</span>
+						{/if}
+						<time datetime={article.createdAt}>
+							{formatDate(article.createdAt)}
+						</time>
+						<span>·</span>
+						<!-- Originality Tag with different background colors -->
+						{#if article.originality === 0}
+							<span
+								class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
+								>{m.original()}</span
+							>
+						{:else if article.originality === 1}
+							<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+								>{m.semi_original()}</span
+							>
+						{:else}
+							<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+								>{m.reprint()}</span
+							>
+						{/if}
+					</div>
+				</div>
 			</div>
-			<div class="flex items-center gap-1">
-				<span class="font-medium text-gray-700">{m.arweave()}:</span>
-				<a
-					href={getIrysExplorerUrl(article.id)}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="text-blue-600 hover:underline"
-				>
-					{article.id.slice(0, 10)}...
-				</a>
-			</div>
+		</header>
+
+		{#snippet interactionBar(position: 'top' | 'bottom')}
+			{#if article}
+				<div class={position === 'top' ? 'mb-8' : 'mt-12'}>
+					<div class="flex items-center justify-between border-y border-gray-100 py-3">
+						<div class="flex items-center gap-5">
+							<!-- Quality Score -->
+							{#if qualityScore() !== null}
+								<span
+									class={`text-lg font-bold ${getScoreColor(qualityScore())}`}
+									title={m.article_quality_score()}
+								>
+									{qualityScore()?.toFixed(1)}
+								</span>
+							{:else}
+								<span class="text-lg font-bold text-gray-300" title={m.no_ratings()}>--</span>
+							{/if}
+
+							<!-- Like/Tip -->
+							<button
+								type="button"
+								class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-amber-500"
+								onclick={() => (showTipModal = true)}
+								title={m.tip({})}
+							>
+								<!-- Thumbs Up Icon -->
+								<ThumbsUpIcon size={20} />
+								<span class="text-sm">{formatTips(article.totalTips)} {nativeSymbol}</span>
+							</button>
+
+							<!-- Comments -->
+							<a
+								href={localizeHref('#comments')}
+								class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+								title={m.comments({})}
+							>
+								<CommentIcon size={20} />
+								<span class="text-sm">{article.comments?.length || 0}</span>
+							</a>
+
+							<!-- Collect/Bookmark (only show when collecting is enabled) -->
+							{#if collectEnabled}
+								<button
+									type="button"
+									class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+									onclick={() => (showCollectModal = true)}
+									title={m.collect()}
+								>
+									<!-- Bookmark Icon -->
+									<BookmarkIcon size={20} />
+									<span class="text-sm">{localCollectCount}/{maxCollectSupply.toString()}</span>
+								</button>
+							{/if}
+
+							<!-- Dislike -->
+							<button
+								type="button"
+								class="group flex items-center gap-1.5 text-gray-500 transition-colors hover:text-red-500 disabled:opacity-50"
+								onclick={() => (showDislikeModal = true)}
+								disabled={isDisliking}
+								title={m.dislike({})}
+							>
+								<!-- Thumbs Down Icon -->
+								<ThumbsDownIcon size={20} />
+								<span class="text-sm">{formatTips(localDislikeAmount)}</span>
+							</button>
+						</div>
+
+						<!-- Right side: History, Edit & Share -->
+						<div class="flex items-center gap-3">
+							<!-- History versions button -->
+							<div class="relative">
+								<button
+									type="button"
+									onclick={toggleVersionsDropdown}
+									class="flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-900"
+									title={m.view_history_versions()}
+								>
+									<!-- Clock/History Icon -->
+									<ClockIcon size={20} />
+									{#if versionsLoading}
+										<SpinnerIcon size={12} />
+									{/if}
+								</button>
+
+								<!-- Versions Dropdown -->
+								{#if showVersionsDropdown}
+									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+									<div
+										class="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
+										onclick={(e) => e.stopPropagation()}
+									>
+										<div class="border-b border-gray-100 px-4 py-3">
+											<div class="flex items-center justify-between">
+												<h4 class="font-medium text-gray-900">{m.history_versions()}</h4>
+												<button
+													type="button"
+													onclick={() => (showVersionsDropdown = false)}
+													class="text-gray-400 hover:text-gray-600"
+													aria-label={m.close_versions_dropdown()}
+												>
+													<CloseIcon size={16} />
+												</button>
+											</div>
+											{#if isViewingOldVersion}
+												<a
+													href={`/a?id=${article.id}`}
+													class="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+												>
+													<BackIcon size={12} />
+													{m.back_to_latest_version()}
+												</a>
+											{/if}
+										</div>
+										<div class="max-h-64 overflow-y-auto">
+											{#if versions.length === 0}
+												<div class="px-4 py-6 text-center text-sm text-gray-500">
+													{versionsLoading ? m.loading() : m.no_history()}
+												</div>
+											{:else}
+												{#each versions as version, idx}
+													<a
+														href={localizeHref(
+															idx === 0
+																? `/a?id=${article.id}`
+																: `/a?id=${article.id}&v=${version.txId}`
+														)}
+														class="flex items-start gap-3 border-b border-gray-50 px-4 py-3 transition-colors hover:bg-gray-50"
+														class:bg-blue-50={versionTxId === version.txId ||
+															(idx === 0 && !versionTxId)}
+														onclick={() => (showVersionsDropdown = false)}
+													>
+														<div
+															class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600"
+														>
+															{versions.length - idx}
+														</div>
+														<div class="min-w-0 flex-1">
+															<div class="flex items-center gap-2">
+																<span class="truncate font-medium text-gray-900">
+																	{version.title || article.title || m.untitled()}
+																</span>
+																{#if idx === 0}
+																	<span
+																		class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700"
+																		>{m.latest()}</span
+																	>
+																{/if}
+															</div>
+															<div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+																<span>{formatTimestamp(version.timestamp)}</span>
+																{#if version.owner}
+																	<span>·</span>
+																	<span>{shortAddress(version.owner)}</span>
+																{/if}
+															</div>
+														</div>
+													</a>
+												{/each}
+											{/if}
+										</div>
+									</div>
+								{/if}
+							</div>
+
+							<!-- Edit button (only for author) -->
+							{#if isAuthor}
+								<a
+									href={localizeHref(`/edit?id=${article.id}`)}
+									class="text-gray-500 transition-colors hover:text-blue-600"
+									title={m.edit({})}
+								>
+									<EditIcon size={20} />
+								</a>
+							{/if}
+							<button
+								type="button"
+								onclick={handleShare}
+								class="text-gray-500 transition-colors hover:text-gray-900"
+								title={m.share({})}
+							>
+								<ShareIcon size={20} />
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
+		{/snippet}
+
+		<!-- Interaction Bar (Top) -->
+		{@render interactionBar('top')}
+
+		<!-- Cover Image -->
+		<div class="mb-10 overflow-hidden" id="cover-container">
+			<img
+				src={coverUrl}
+				alt={article.title}
+				class="h-auto w-full object-cover"
+				onerror={(e) => {
+					const target = e.currentTarget as HTMLImageElement;
+					const container = target.parentElement;
+					if (container) container.style.display = 'none';
+				}}
+			/>
 		</div>
-	</details>
-</article>
 
-{#snippet amountModal(config: {
+		<!-- Content -->
+		<div class="prose prose-lg max-w-none">
+			{#if contentLoading}
+				<div class="flex items-center justify-center py-16">
+					<div class="flex items-center gap-3 text-gray-500">
+						<SpinnerIcon size={20} />
+						<span>{m.loading_content({})}</span>
+					</div>
+				</div>
+			{:else if contentError}
+				<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+					<p class="text-red-700">{contentError}</p>
+					{#if article}
+						<a
+							href={`${getArweaveGateways()[0]}/${article.id}`}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="mt-3 inline-block text-sm text-red-600 underline hover:text-red-800"
+						>
+							{m.view_on_arweave({})}
+						</a>
+					{/if}
+				</div>
+			{:else if articleContent?.content && article}
+				<div class="prose prose-lg prose-gray max-w-none font-serif">
+					{@html DOMPurify.sanitize(
+						marked(
+							processContentImages(articleContent.content, versionTxId || article.id, !versionTxId)
+						) as string
+					)}
+				</div>
+			{:else}
+				<div class="py-8 text-center text-gray-500">
+					<p>{m.no_items({ items: m.content() })}</p>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Postscript / Summary -->
+		{#if articleContent?.summary}
+			<aside class="mt-12 border-l-2 border-gray-200 pl-5 text-gray-600 italic">
+				<p>{articleContent.summary}</p>
+			</aside>
+		{/if}
+
+		<!-- Interaction Bar (Bottom) -->
+		{@render interactionBar('bottom')}
+
+		<!-- Comments Section -->
+		<CommentSection
+			articleId={article.articleId}
+			comments={article.comments || []}
+			{walletAddress}
+			currentUserAvatar={currentUserData?.avatar}
+			currentUserNickname={currentUserData?.nickname}
+			{sessionKey}
+			{hasValidSessionKey}
+			{isCommenting}
+			onComment={handleComment}
+		/>
+
+		<!-- Transaction Info (collapsed) -->
+		<details class="mt-10 text-sm text-gray-500">
+			<summary class="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
+				{m.blockchain_info({})}
+			</summary>
+			<div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 rounded-lg bg-gray-50 p-4">
+				<div>
+					<span class="font-medium text-gray-700">{m.article_id({})}:</span>
+					{article.articleId}
+				</div>
+				<div>
+					<span class="font-medium text-gray-700">{m.block({})}:</span>
+					{article.blockNumber}
+				</div>
+				<div class="flex items-center gap-1">
+					<span class="font-medium text-gray-700">{m.transaction({})}:</span>
+					<a
+						href={getBlockExplorerTxUrl(article.txHash)}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="text-blue-600 hover:underline"
+					>
+						{article.txHash.slice(0, 10)}...{article.txHash.slice(-8)}
+					</a>
+				</div>
+				<div class="flex items-center gap-1">
+					<span class="font-medium text-gray-700">{m.arweave()}:</span>
+					<a
+						href={getIrysExplorerUrl(article.id)}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="text-blue-600 hover:underline"
+					>
+						{article.id.slice(0, 10)}...
+					</a>
+				</div>
+			</div>
+		</details>
+	</article>
+
+	{#snippet amountModal(config: {
 	show: boolean,
 	onClose: () => void,
 	title: string,
@@ -1199,267 +1234,273 @@
 	submitText: string,
 	colorScheme: 'emerald' | 'amber' | 'red'
 })}
-	{#if config.show}
+		{#if config.show}
+			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
+			<div
+				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+				role="dialog"
+				aria-modal="true"
+				tabindex="-1"
+				onclick={config.onClose}
+			>
+				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+				<div
+					class="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+					role="document"
+					onclick={(e) => e.stopPropagation()}
+				>
+					<h3 class="mb-4 text-lg font-bold text-gray-900">{config.title}</h3>
+					{#if config.description}
+						<p class="mb-4 text-sm text-gray-500">{config.description}</p>
+					{/if}
+
+					<div class="mb-4">
+						<label for={config.inputId} class="mb-2 block text-sm font-medium text-gray-700"
+							>{config.labelText}</label
+						>
+						<div class="flex items-center gap-2">
+							<span class="text-sm font-medium text-gray-600">$</span>
+							<input
+								id={config.inputId}
+								type="number"
+								value={config.value}
+								oninput={(e) => config.onValueChange(e.currentTarget.value)}
+								step="0.01"
+								min="0.01"
+								class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+								disabled={config.isProcessing}
+							/>
+							<span class="text-sm font-medium text-gray-600">USD</span>
+						</div>
+						<!-- Show approximate native token amount -->
+						<div class="mt-2 text-xs text-gray-500">
+							{#if priceLoading}
+								{m.price_loading({})}
+							{:else if nativeTokenPrice}
+								≈ {getApproxNativeAmount(config.value)} {nativeSymbol}
+							{/if}
+						</div>
+					</div>
+
+					<!-- Quick USD amounts -->
+					<div class="mb-6 flex gap-2">
+						{#each ['0.50', '1.00', '2.00', '5.00'] as amount}
+							<button
+								type="button"
+								onclick={() => config.onValueChange(amount)}
+								class="flex-1 rounded-lg border border-gray-200 py-1.5 text-sm transition-colors hover:border-{config.colorScheme}-500 hover:bg-{config.colorScheme}-50"
+								class:border-emerald-500={config.colorScheme === 'emerald' &&
+									config.value === amount}
+								class:bg-emerald-50={config.colorScheme === 'emerald' && config.value === amount}
+								class:border-amber-500={config.colorScheme === 'amber' && config.value === amount}
+								class:bg-amber-50={config.colorScheme === 'amber' && config.value === amount}
+								class:border-red-500={config.colorScheme === 'red' && config.value === amount}
+								class:bg-red-50={config.colorScheme === 'red' && config.value === amount}
+							>
+								${amount}
+							</button>
+						{/each}
+					</div>
+
+					<div class="flex gap-3">
+						<button
+							type="button"
+							onclick={config.onClose}
+							class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+							disabled={config.isProcessing}
+						>
+							{m.cancel({})}
+						</button>
+						<button
+							type="button"
+							onclick={config.onSubmit}
+							disabled={config.isProcessing || !config.value}
+							class="flex-1 rounded-lg py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+							class:bg-emerald-500={config.colorScheme === 'emerald'}
+							class:hover:bg-emerald-600={config.colorScheme === 'emerald'}
+							class:bg-amber-500={config.colorScheme === 'amber'}
+							class:hover:bg-amber-600={config.colorScheme === 'amber'}
+							class:bg-red-500={config.colorScheme === 'red'}
+							class:hover:bg-red-600={config.colorScheme === 'red'}
+						>
+							{config.isProcessing ? m.processing({}) : config.submitText}
+						</button>
+					</div>
+				</div>
+			</div>
+		{/if}
+	{/snippet}
+
+	<!-- Collect Modal (only when collecting is enabled) -->
+	{#if showCollectModal && collectEnabled && article}
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
 		<div
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 			role="dialog"
 			aria-modal="true"
 			tabindex="-1"
-			onclick={config.onClose}
+			onclick={() => (showCollectModal = false)}
 		>
 			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 			<div
-				class="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+				class="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
 				role="document"
 				onclick={(e) => e.stopPropagation()}
 			>
-				<h3 class="mb-4 text-lg font-bold text-gray-900">{config.title}</h3>
-				{#if config.description}
-					<p class="mb-4 text-sm text-gray-500">{config.description}</p>
+				<h3 class="mb-4 text-lg font-bold text-gray-900">{m.collect_article()}</h3>
+
+				<!-- Collect Stats -->
+				<div class="mb-6 grid grid-cols-3 gap-4">
+					<div class="rounded-lg bg-gray-50 p-3 text-center">
+						<div class="text-2xl font-bold text-gray-900">{localCollectCount}</div>
+						<div class="text-xs text-gray-500">{m.collected_count()}</div>
+					</div>
+					<div class="rounded-lg bg-gray-50 p-3 text-center">
+						<div class="text-2xl font-bold text-emerald-600">
+							{formatTips(article?.collectPrice || '0')}
+						</div>
+						<div class="text-xs text-gray-500">{m.price_label()} ({nativeSymbol})</div>
+					</div>
+					<div class="rounded-lg bg-gray-50 p-3 text-center">
+						<div class="text-2xl font-bold text-gray-900">
+							{maxCollectSupply > 0n
+								? (maxCollectSupply - BigInt(localCollectCount)).toString()
+								: '∞'}
+						</div>
+						<div class="text-xs text-gray-500">{m.remaining()}</div>
+					</div>
+				</div>
+
+				<!-- Collectors List -->
+				{#if article?.collections && article.collections.length > 0}
+					<div class="mb-6">
+						<h4 class="mb-3 text-sm font-medium text-gray-700">
+							{m.collectors()} ({article.collections.length})
+						</h4>
+						<div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200">
+							<table class="w-full text-sm">
+								<thead class="sticky top-0 bg-gray-50">
+									<tr class="text-left text-xs text-gray-500">
+										<th class="px-3 py-2">{m.address()}</th>
+										<th class="px-3 py-2 text-right">{m.amount()}</th>
+										<th class="px-3 py-2 text-right">{m.time()}</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-gray-100">
+									{#each article.collections as collection}
+										<tr class="hover:bg-gray-50">
+											<td class="px-3 py-2">
+												<a
+													href={localizeHref(`/u?id=${collection.user.id}`)}
+													class="flex items-center gap-2 hover:underline"
+												>
+													{#if getAvatarUrl(collection.user.avatar)}
+														<img
+															src={getAvatarUrl(collection.user.avatar)}
+															alt=""
+															class="h-6 w-6 rounded-full object-cover"
+														/>
+													{:else}
+														<div
+															class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
+														>
+															{collection.user.id.slice(2, 4).toUpperCase()}
+														</div>
+													{/if}
+													<span class="truncate text-gray-700"
+														>{collection.user.nickname || shortAddress(collection.user.id)}</span
+													>
+												</a>
+											</td>
+											<td class="px-3 py-2 text-right font-medium text-emerald-600">
+												{formatTips(collection.amount)}
+											</td>
+											<td class="px-3 py-2 text-right text-gray-500">
+												{formatDate(collection.createdAt)}
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				{:else}
+					<div class="mb-6 rounded-lg border border-gray-200 p-4 text-center text-sm text-gray-500">
+						{m.no_items({ items: m.collectors() })}
+					</div>
 				{/if}
 
-				<div class="mb-4">
-					<label for={config.inputId} class="mb-2 block text-sm font-medium text-gray-700"
-						>{config.labelText}</label
-					>
-					<div class="flex items-center gap-2">
-						<span class="text-sm font-medium text-gray-600">$</span>
-						<input
-							id={config.inputId}
-							type="number"
-							value={config.value}
-							oninput={(e) => config.onValueChange(e.currentTarget.value)}
-							step="0.01"
-							min="0.01"
-							class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-							disabled={config.isProcessing}
-						/>
-						<span class="text-sm font-medium text-gray-600">USD</span>
-					</div>
-					<!-- Show approximate native token amount -->
-					<div class="mt-2 text-xs text-gray-500">
-						{#if priceLoading}
-							{m.price_loading({})}
-						{:else if nativeTokenPrice}
-							≈ {getApproxNativeAmount(config.value)} {nativeSymbol}
-						{/if}
-					</div>
-				</div>
-
-				<!-- Quick USD amounts -->
-				<div class="mb-6 flex gap-2">
-					{#each ['0.50', '1.00', '2.00', '5.00'] as amount}
-						<button
-							type="button"
-							onclick={() => config.onValueChange(amount)}
-							class="flex-1 rounded-lg border border-gray-200 py-1.5 text-sm transition-colors hover:border-{config.colorScheme}-500 hover:bg-{config.colorScheme}-50"
-							class:border-emerald-500={config.colorScheme === 'emerald' && config.value === amount}
-							class:bg-emerald-50={config.colorScheme === 'emerald' && config.value === amount}
-							class:border-amber-500={config.colorScheme === 'amber' && config.value === amount}
-							class:bg-amber-50={config.colorScheme === 'amber' && config.value === amount}
-							class:border-red-500={config.colorScheme === 'red' && config.value === amount}
-							class:bg-red-50={config.colorScheme === 'red' && config.value === amount}
-						>
-							${amount}
-						</button>
-					{/each}
-				</div>
-
+				<!-- Action Buttons -->
 				<div class="flex gap-3">
 					<button
 						type="button"
-						onclick={config.onClose}
+						onclick={() => (showCollectModal = false)}
 						class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-						disabled={config.isProcessing}
+						disabled={isCollecting}
 					>
 						{m.cancel({})}
 					</button>
 					<button
 						type="button"
-						onclick={config.onSubmit}
-						disabled={config.isProcessing || !config.value}
-						class="flex-1 rounded-lg py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-						class:bg-emerald-500={config.colorScheme === 'emerald'}
-						class:hover:bg-emerald-600={config.colorScheme === 'emerald'}
-						class:bg-amber-500={config.colorScheme === 'amber'}
-						class:hover:bg-amber-600={config.colorScheme === 'amber'}
-						class:bg-red-500={config.colorScheme === 'red'}
-						class:hover:bg-red-600={config.colorScheme === 'red'}
+						onclick={handleCollect}
+						disabled={isCollecting || !collectAvailable}
+						class="flex-1 rounded-lg bg-emerald-500 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
 					>
-						{config.isProcessing ? m.processing({}) : config.submitText}
+						{#if isCollecting}
+							{m.processing({})}
+						{:else if !collectAvailable}
+							{m.sold_out()}
+						{:else}
+							{m.collect_for({
+								price: formatTips(article?.collectPrice || '0'),
+								symbol: nativeSymbol
+							})}
+						{/if}
 					</button>
 				</div>
 			</div>
 		</div>
 	{/if}
-{/snippet}
 
-<!-- Collect Modal (only when collecting is enabled) -->
-{#if showCollectModal && collectEnabled && article}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		onclick={() => (showCollectModal = false)}
-	>
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<!-- Tip Modal -->
+	{@render amountModal({
+		show: showTipModal,
+		onClose: () => (showTipModal = false),
+		title: m.tip_author({}),
+		labelText: m.tip_in_usd({}),
+		inputId: 'tip-amount',
+		value: tipAmountUsd,
+		onValueChange: (v: string) => (tipAmountUsd = v),
+		isProcessing: isTipping,
+		onSubmit: handleTip,
+		submitText: m.send_tip({}),
+		colorScheme: 'amber'
+	})}
+
+	<!-- Dislike Modal -->
+	{@render amountModal({
+		show: showDislikeModal,
+		onClose: () => (showDislikeModal = false),
+		title: m.dislike({}),
+		description: m.dislike_description({}),
+		labelText: m.dislike_in_usd({}),
+		inputId: 'dislike-amount',
+		value: dislikeAmountUsd,
+		onValueChange: (v: string) => (dislikeAmountUsd = v),
+		isProcessing: isDisliking,
+		onSubmit: handleDislike,
+		submitText: m.send_dislike({}),
+		colorScheme: 'red'
+	})}
+
+	<!-- Feedback Toast -->
+	{#if feedbackMessage}
 		<div
-			class="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-			role="document"
-			onclick={(e) => e.stopPropagation()}
+			class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transform rounded-lg px-6 py-3 shadow-lg transition-all"
+			class:bg-emerald-600={feedbackMessage.type === 'success'}
+			class:bg-red-600={feedbackMessage.type === 'error'}
 		>
-			<h3 class="mb-4 text-lg font-bold text-gray-900">{m.collect_article()}</h3>
-
-			<!-- Collect Stats -->
-			<div class="mb-6 grid grid-cols-3 gap-4">
-				<div class="rounded-lg bg-gray-50 p-3 text-center">
-					<div class="text-2xl font-bold text-gray-900">{localCollectCount}</div>
-					<div class="text-xs text-gray-500">{m.collected_count()}</div>
-				</div>
-				<div class="rounded-lg bg-gray-50 p-3 text-center">
-					<div class="text-2xl font-bold text-emerald-600">{formatTips(article?.collectPrice || '0')}</div>
-					<div class="text-xs text-gray-500">{m.price_label()} ({nativeSymbol})</div>
-				</div>
-				<div class="rounded-lg bg-gray-50 p-3 text-center">
-					<div class="text-2xl font-bold text-gray-900">
-						{maxCollectSupply > 0n
-							? (maxCollectSupply - BigInt(localCollectCount)).toString()
-							: '∞'}
-					</div>
-					<div class="text-xs text-gray-500">{m.remaining()}</div>
-				</div>
-			</div>
-
-			<!-- Collectors List -->
-			{#if article?.collections && article.collections.length > 0}
-				<div class="mb-6">
-					<h4 class="mb-3 text-sm font-medium text-gray-700">
-						{m.collectors()} ({article.collections.length})
-					</h4>
-					<div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200">
-						<table class="w-full text-sm">
-							<thead class="sticky top-0 bg-gray-50">
-								<tr class="text-left text-xs text-gray-500">
-									<th class="px-3 py-2">{m.address()}</th>
-									<th class="px-3 py-2 text-right">{m.amount()}</th>
-									<th class="px-3 py-2 text-right">{m.time()}</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-100">
-								{#each article.collections as collection}
-									<tr class="hover:bg-gray-50">
-										<td class="px-3 py-2">
-											<a
-												href={localizeHref(`/u?id=${collection.user.id}`)}
-												class="flex items-center gap-2 hover:underline"
-											>
-												{#if getAvatarUrl(collection.user.avatar)}
-													<img
-														src={getAvatarUrl(collection.user.avatar)}
-														alt=""
-														class="h-6 w-6 rounded-full object-cover"
-													/>
-												{:else}
-													<div
-														class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
-													>
-														{collection.user.id.slice(2, 4).toUpperCase()}
-													</div>
-												{/if}
-												<span class="truncate text-gray-700"
-													>{collection.user.nickname || shortAddress(collection.user.id)}</span
-												>
-											</a>
-										</td>
-										<td class="px-3 py-2 text-right font-medium text-emerald-600">
-											{formatTips(collection.amount)}
-										</td>
-										<td class="px-3 py-2 text-right text-gray-500">
-											{formatDate(collection.createdAt)}
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</div>
-			{:else}
-				<div class="mb-6 rounded-lg border border-gray-200 p-4 text-center text-sm text-gray-500">
-					{m.no_items({ items: m.collectors() })}
-				</div>
-			{/if}
-
-			<!-- Action Buttons -->
-			<div class="flex gap-3">
-				<button
-					type="button"
-					onclick={() => (showCollectModal = false)}
-					class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-					disabled={isCollecting}
-				>
-					{m.cancel({})}
-				</button>
-				<button
-					type="button"
-					onclick={handleCollect}
-					disabled={isCollecting || !collectAvailable}
-					class="flex-1 rounded-lg bg-emerald-500 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
-				>
-					{#if isCollecting}
-						{m.processing({})}
-					{:else if !collectAvailable}
-						{m.sold_out()}
-					{:else}
-						{m.collect_for({ price: formatTips(article?.collectPrice || '0'), symbol: nativeSymbol })}
-					{/if}
-				</button>
-			</div>
+			<p class="text-sm font-medium text-white">{feedbackMessage.text}</p>
 		</div>
-	</div>
-{/if}
-
-<!-- Tip Modal -->
-{@render amountModal({
-	show: showTipModal,
-	onClose: () => (showTipModal = false),
-	title: m.tip_author({}),
-	labelText: m.tip_in_usd({}),
-	inputId: 'tip-amount',
-	value: tipAmountUsd,
-	onValueChange: (v: string) => (tipAmountUsd = v),
-	isProcessing: isTipping,
-	onSubmit: handleTip,
-	submitText: m.send_tip({}),
-	colorScheme: 'amber'
-})}
-
-<!-- Dislike Modal -->
-{@render amountModal({
-	show: showDislikeModal,
-	onClose: () => (showDislikeModal = false),
-	title: m.dislike({}),
-	description: m.dislike_description({}),
-	labelText: m.dislike_in_usd({}),
-	inputId: 'dislike-amount',
-	value: dislikeAmountUsd,
-	onValueChange: (v: string) => (dislikeAmountUsd = v),
-	isProcessing: isDisliking,
-	onSubmit: handleDislike,
-	submitText: m.send_dislike({}),
-	colorScheme: 'red'
-})}
-
-<!-- Feedback Toast -->
-{#if feedbackMessage}
-	<div
-		class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transform rounded-lg px-6 py-3 shadow-lg transition-all"
-		class:bg-emerald-600={feedbackMessage.type === 'success'}
-		class:bg-red-600={feedbackMessage.type === 'error'}
-	>
-		<p class="text-sm font-medium text-white">{feedbackMessage.text}</p>
-	</div>
-{/if}
+	{/if}
 {/if}

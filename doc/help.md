@@ -138,7 +138,7 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 
 - **upload.ts**: Arweave 上传功能。上传文章文件夹、图片、元数据到 Arweave。支持 MetaMask 和 Session Key 两种模式。支持免费上传额度检查。
 
-- **cache.ts**: Arweave 缓存管理。缓存已下载的文章内容、图片、Manifest，减少网络请求。
+- **cache.ts**: 文章元数据获取。从 Arweave 获取文章内容并构建元数据对象（直接请求，无缓存）。
 
 - **fetch.ts**: Arweave 内容获取。从 Arweave 网关下载文章、图片、Manifest，支持多网关重试。
 

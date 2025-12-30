@@ -2,9 +2,8 @@
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
-	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams } from '$lib/arweave';
+	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMetadata } from '$lib/arweave';
 	import { editArticleWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
-	import { getArticleWithCache, removeCachedArticle } from '$lib/arweave/cache';
 	import { getCoverImageUrl } from '$lib/arweave/folder';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -156,10 +155,11 @@
 			await checkWalletConnection();
 
 			// Load article content from Arweave
-			const articleContent = await getArticleWithCache(article.id);
+			const articleContent = await fetchArticleMetadata(article.id);
 			if (articleContent) {
 				formData.content = articleContent.content || '';
 				formData.summary = articleContent.summary || '';
+				formData.postscript = articleContent.postscript || '';
 			}
 			isLoadingContent = false;
 		} catch (e) {
@@ -285,9 +285,6 @@
 
 			console.log(`Article metadata updated on-chain. Tx: ${txHash}`);
 
-			// Clear cache for this article
-			removeCachedArticle(article.id);
-
 			// Success
 			submitStatus = 'success';
 			statusMessage = m.edit_success({ txId: result.newManifestTxId });
@@ -345,46 +342,48 @@
 
 <div class="min-h-screen bg-white">
 	<div class="mx-auto max-w-3xl px-6 py-12">
-
-    {#if isLoadingArticle}
-      <div class="flex items-center justify-center py-16">
-        <div class="flex items-center gap-3 text-gray-500">
-          <SpinnerIcon size={20} class="text-gray-500" />
-          <span>{m.loading()}</span>
-        </div>
-      </div>
-    {:else if loadError}
-      <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <p class="text-red-800">{loadError}</p>
-      </div>
-    {:else if !article}
-      <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <p class="text-red-800">{m.article_not_found()}</p>
-      </div>
-    {:else if !walletAddress}
-      <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
-        <p class="text-yellow-800">{m.connect_wallet_first()}</p>
-      </div>
-    {:else if !isAuthorized}
-      <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <p class="text-red-800">{m.not_author()}</p>
-        <a href={localizeHref(`/a?id=${article.id}`)} class="mt-4 inline-block text-blue-600 hover:underline">
-          {m.back_to({ destination: m.article() })}
-        </a>
-      </div>
-    {:else if isLoadingContent}
-      <div class="flex items-center justify-center py-16">
-        <div class="flex items-center gap-3 text-gray-500">
-          <SpinnerIcon size={20} class="text-gray-500" />
-          <span>{m.loading_content()}</span>
-        </div>
-      </div>
-    {:else}
+		{#if isLoadingArticle}
+			<div class="flex items-center justify-center py-16">
+				<div class="flex items-center gap-3 text-gray-500">
+					<SpinnerIcon size={20} class="text-gray-500" />
+					<span>{m.loading()}</span>
+				</div>
+			</div>
+		{:else if loadError}
+			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+				<p class="text-red-800">{loadError}</p>
+			</div>
+		{:else if !article}
+			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+				<p class="text-red-800">{m.article_not_found()}</p>
+			</div>
+		{:else if !walletAddress}
+			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
+				<p class="text-yellow-800">{m.connect_wallet_first()}</p>
+			</div>
+		{:else if !isAuthorized}
+			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+				<p class="text-red-800">{m.not_author()}</p>
+				<a
+					href={localizeHref(`/a?id=${article.id}`)}
+					class="mt-4 inline-block text-blue-600 hover:underline"
+				>
+					{m.back_to({ destination: m.article() })}
+				</a>
+			</div>
+		{:else if isLoadingContent}
+			<div class="flex items-center justify-center py-16">
+				<div class="flex items-center gap-3 text-gray-500">
+					<SpinnerIcon size={20} class="text-gray-500" />
+					<span>{m.loading_content()}</span>
+				</div>
+			</div>
+		{:else}
 			<header class="mb-12">
 				<h1 class="mb-2 text-4xl font-light tracking-tight">{m.edit_article()}</h1>
 				<p class="text-gray-500">{m.edit_description()}</p>
 			</header>
-			
+
 			<form
 				onsubmit={(e) => {
 					e.preventDefault();

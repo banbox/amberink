@@ -26,7 +26,6 @@ export type {
 	ArticleBundle,
 	IrysTag,
 	UploadReceipt,
-	CachedArticle,
 	IrysNetwork,
 	IrysConfig,
 	ArticleFolderManifest,
@@ -93,19 +92,9 @@ export {
 	fetchFromFolder,
 	fetchArticleMarkdown,
 	getFolderCoverImageUrl,
-	getFolderFileUrl
+	getFolderFileUrl,
+	fetchArticleMetadata
 } from './fetch';
-
-// 缓存功能
-export {
-	getCachedArticle,
-	setCachedArticle,
-	removeCachedArticle,
-	clearAllCache,
-	clearOldCache,
-	getArticleWithCache,
-	getArticlesWithCache
-} from './cache';
 
 // 文章文件夹功能
 export {
