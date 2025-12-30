@@ -178,19 +178,19 @@ contract DeployBlogHub is DeployBase {
     }
 }
 
-/// @dev 升级 BlogHub 合约 (使用 CREATE2)
+/// @dev 升级 BlogHub 合约 (不使用 CREATE2，每次升级是新版本)
 contract UpgradeBlogHub is DeployBase {
     function run() external {
         DeployConfig memory cfg = _loadConfig();
         address proxyAddress = vm.envAddress("BLOG_HUB_PROXY");
 
         vm.startBroadcast(cfg.privateKey);
-        BlogHub newImpl = new BlogHub{salt: cfg.salt}();
+        // 升级不使用 CREATE2，因为每次升级都是新版本，不需要确定性地址
+        BlogHub newImpl = new BlogHub();
         BlogHub(payable(proxyAddress)).upgradeToAndCall(address(newImpl), "");
         vm.stopBroadcast();
 
         console.log("New BlogHub Implementation:", address(newImpl));
-        _logSalt(cfg.salt);
         console.log("BlogHub upgraded successfully");
     }
 }

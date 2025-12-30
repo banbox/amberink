@@ -12,10 +12,10 @@ import * as sessionKeyManager from './abi/SessionKeyManager'
 // BlogHub 合约地址
 // Optimism Sepolia: 0x... (部署后填写)
 // Local Anvil:
-const BLOG_HUB_ADDRESS = (process.env.BLOG_HUB_ADDRESS || '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9').toLowerCase()
+const BLOG_HUB_ADDRESS = (process.env.BLOG_HUB_ADDRESS || '0x000000').toLowerCase()
 
 // SessionKeyManager 合约地址
-const SESSION_KEY_MANAGER_ADDRESS = (process.env.SESSION_KEY_MANAGER_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3').toLowerCase()
+const SESSION_KEY_MANAGER_ADDRESS = (process.env.SESSION_KEY_MANAGER_ADDRESS || '0x000000').toLowerCase()
 
 const envRateLimit = process.env.RPC_RATE_LIMIT
 const envFinalityConfirmation = process.env.FINALITY_CONFIRMATION

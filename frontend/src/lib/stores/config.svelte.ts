@@ -42,8 +42,8 @@ export { PYTH_CONTRACT_ADDRESSES, PYTH_PRICE_FEED_IDS, CHAIN_NATIVE_TOKEN, ALLOW
 
 // Default values (used when env vars are not set)
 export const defaults = {
-	blogHubContractAddress: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9',
-	sessionKeyManagerAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+	blogHubContractAddress: '0x000000',
+	sessionKeyManagerAddress: '0x000000',
 	rpcUrl: 'http://localhost:8545',
 	chainId: 31337,
 	irysNetwork: 'devnet' as const,
@@ -240,15 +240,15 @@ let userConfig = $state<UserConfig>(loadUserConfig());
 // Merged config (user overrides + env defaults)
 export function getConfig() {
 	const chainId = userConfig.chainId ?? envDefaults.chainId;
-	
+
 	// Get contract addresses from chain configuration
 	const chainContracts = SUPPORTED_CHAINS[chainId];
 	const blogHubContractAddress = chainContracts?.blogHubAddress || defaults.blogHubContractAddress as `0x${string}`;
 	const sessionKeyManagerAddress = chainContracts?.sessionKeyManagerAddress || defaults.sessionKeyManagerAddress as `0x${string}`;
-	
+
 	// Auto-determine Irys network: prod -> mainnet, otherwise -> devnet
 	const irysNetwork: 'mainnet' | 'devnet' = envName === 'prod' ? 'mainnet' : 'devnet';
-	
+
 	return {
 		appName: defaults.appName,
 		appVersion: defaults.appVersion,

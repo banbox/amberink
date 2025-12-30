@@ -215,8 +215,8 @@ export const SUPPORTED_CHAINS: Record<number, ChainInfo> = {
         nativeToken: 'ANVIL',
         explorerUrl: '',
         pythContractAddress: '0x0000000000000000000000000000000000000000',
-        blogHubAddress: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9',
-        sessionKeyManagerAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+        blogHubAddress: '0xDDfff9173E7c197d2cd4AeCa22e1E1fBd7183584',
+        sessionKeyManagerAddress: '0xcFAa8395E839d2FE5AAeCb772681E5C10d82096E',
     },
 };
 
