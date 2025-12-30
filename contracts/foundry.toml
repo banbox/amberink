@@ -6,6 +6,8 @@ solc = "0.8.30"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+bytecode_hash = "none"
+evm_version = "prague"
 
 # 依赖映射
 remappings = [

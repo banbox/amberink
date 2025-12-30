@@ -1359,3 +1359,17 @@ Claude：frontend\src\lib\sessionKey.ts中ALLOWED_SELECTORS更新。
 @help.md squid\src\main.ts 当前在启动Subsquid的processer时会从abi的json文件解析。实际是没必要的，帮我改为从squid\src\abi\BlogHub.ts squid\src\abi\SessionKeyManager.ts 这两个解析后的ts文件中直接加载  
 Claude: 修改完成
 
+### 2025-12-29 14:10  多链部署地址问题
+如果一个Solidity智能合约要部署在多个evm的layer 2链上，如何确保不同链上的合约地址相同？  
+Gemini: 使用Create2生成合约地址, foundry的部署脚本`new MyContract{salt: salt}()`,传入`--broadcast`参数；其他细节：foundry.toml中`bytecode_hash = "none"`，合约代码中使用`initialize`替代构造函数，以及多次构建使用相同evm版本。
+
+### 2025-12-30 15:00  确定性部署
+@help.md 当前智能合约应该使用确定性部署，部署到多个layer2链上，确保地址一样。请参考下面细节，帮我检查contracts下的各个环节是否配置正确，有错误的地方帮我修改正确。  
+Claude：修改完成
+
+### 2025-12-30 15:40  硬编码合约地址
+contracts/script/Deploy.s.sol 当前发布脚本中，OPTIMISM_ENTRYPOINT的作用是什么，如果发布到多个layer2链，这里需要改动吗？如何修改  
+Claude: 这是ERC-4337Entrypoint合约地址，在多链上地址相同。  
+开发者：当前合约部署脚本中硬编码了ERC4337_ENTRYPOINT_V07，如果我要发布到的是测试网，这个地址需要修改吗？如何修改？  
+Claude：不需要修改，是通过确定性部署的，主网、测试网地址相同  
+

@@ -5,27 +5,69 @@ import {Script, console} from "forge-std/Script.sol";
 import {SessionKeyManager} from "../src/SessionKeyManager.sol";
 import {BlogPaymaster} from "../src/BlogPaymaster.sol";
 import {BlogHub} from "../src/BlogHub.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {
+    ERC1967Proxy
+} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+/**
+ * @title DeployBase
+ * @dev 部署脚本的基础合约，包含共享的常量、配置和辅助函数
+ */
+abstract contract DeployBase is Script {
+    address public constant ERC4337_ENTRYPOINT_V07 =
+        0x0000000071727De22E5E9d8BAf0edAc6f37da032; // 在多个EVM链上地址都相同，主网测试网也相同
+    bytes32 public constant DEFAULT_SALT = keccak256("AmberInk.v1");
+
+    struct DeployConfig {
+        uint256 privateKey;
+        address deployer;
+        address entryPoint;
+        address treasury;
+        bytes32 salt;
+    }
+
+    function _loadConfig() internal view returns (DeployConfig memory cfg) {
+        cfg.privateKey = vm.envUint("PRIVATE_KEY");
+        cfg.deployer = vm.addr(cfg.privateKey);
+        cfg.entryPoint = vm.envOr("ENTRY_POINT", ERC4337_ENTRYPOINT_V07);
+        cfg.treasury = vm.envOr("TREASURY", cfg.deployer);
+        cfg.salt = vm.envOr("DEPLOY_SALT", DEFAULT_SALT);
+    }
+
+    function _blogHubInitData(
+        address owner,
+        address treasury
+    ) internal pure returns (bytes memory) {
+        return
+            abi.encodeWithSelector(
+                BlogHub.initialize.selector,
+                owner,
+                treasury
+            );
+    }
+
+    function _logSalt(bytes32 salt) internal pure {
+        console.log("Salt:", vm.toString(salt));
+    }
+}
 
 /**
  * @title DeployScript
- * @dev 部署所有 dapp 合约的脚本
+ * @dev 部署所有 dapp 合约的脚本（使用 CREATE2 确定性部署）
  *
  * 使用方法:
- * 1. 本地测试: forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast --tc DeployScript
- * 2. Optimism Sepolia: forge script script/Deploy.s.sol --rpc-url $ETHERSCAN_RPC --broadcast --verify --tc DeployScript
- * 3. Optimism Mainnet: forge script script/Deploy.s.sol --rpc-url $OP_MAINNET_RPC --broadcast --verify --tc DeployScript
- * 
+ * forge script script/Deploy.s.sol --rpc-url $ETH_RPC --broadcast --tc DeployScript
+ *
  * 环境变量:
  * - PRIVATE_KEY: 部署者私钥
  * - ENTRY_POINT: ERC-4337 EntryPoint 地址 (可选，默认使用 Optimism 官方地址)
  * - TREASURY: 平台国库地址 (可选，默认使用部署者地址)
+ * - DEPLOY_SALT: 部署 salt (可选，默认使用预定义 salt)
+ *
+ * 注意：使用 CREATE2 确定性部署，相同的 salt + 相同的字节码 = 相同的地址
+ * 确保在所有链上使用相同的部署者地址和相同的构造函数参数
  */
-contract DeployScript is Script {
-    // Optimism 官方 EntryPoint v0.7 地址
-    address public constant OPTIMISM_ENTRYPOINT = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
-    
-    // 部署的合约地址
+contract DeployScript is DeployBase {
     SessionKeyManager public sessionKeyManager;
     BlogPaymaster public paymaster;
     BlogHub public blogHubImpl;
@@ -33,54 +75,49 @@ contract DeployScript is Script {
     address public blogHubProxy;
 
     function run() external {
-        // 获取部署者私钥
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
-        
-        // 获取配置
-        address entryPoint = vm.envOr("ENTRY_POINT", OPTIMISM_ENTRYPOINT);
-        address treasury = vm.envOr("TREASURY", deployer);
+        DeployConfig memory cfg = _loadConfig();
 
-        console.log("=== dapp Deployment ===");
-        console.log("Deployer:", deployer);
-        console.log("EntryPoint:", entryPoint);
-        console.log("Treasury:", treasury);
+        console.log("=== dapp Deployment (CREATE2) ===");
+        console.log("Deployer:", cfg.deployer);
+        console.log("EntryPoint:", cfg.entryPoint);
+        console.log("Treasury:", cfg.treasury);
+        _logSalt(cfg.salt);
         console.log("");
 
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(cfg.privateKey);
 
-        // 1. 部署 SessionKeyManager
-        sessionKeyManager = new SessionKeyManager();
-        console.log("SessionKeyManager deployed at:", address(sessionKeyManager));
+        sessionKeyManager = new SessionKeyManager{salt: cfg.salt}();
+        console.log(
+            "SessionKeyManager deployed at:",
+            address(sessionKeyManager)
+        );
 
-        // 2. 部署 BlogPaymaster
-        paymaster = new BlogPaymaster(entryPoint, deployer);
+        paymaster = new BlogPaymaster{salt: cfg.salt}(
+            cfg.entryPoint,
+            cfg.deployer
+        );
         console.log("BlogPaymaster deployed at:", address(paymaster));
 
-        // 3. 部署 BlogHub (使用 UUPS 代理模式)
-        blogHubImpl = new BlogHub();
-        console.log("BlogHub Implementation deployed at:", address(blogHubImpl));
-
-        bytes memory initData = abi.encodeWithSelector(
-            BlogHub.initialize.selector,
-            deployer,
-            treasury
+        blogHubImpl = new BlogHub{salt: cfg.salt}();
+        console.log(
+            "BlogHub Implementation deployed at:",
+            address(blogHubImpl)
         );
-        ERC1967Proxy proxy = new ERC1967Proxy(address(blogHubImpl), initData);
+
+        ERC1967Proxy proxy = new ERC1967Proxy{salt: cfg.salt}(
+            address(blogHubImpl),
+            _blogHubInitData(cfg.deployer, cfg.treasury)
+        );
         blogHubProxy = address(proxy);
         blogHub = BlogHub(payable(blogHubProxy));
         console.log("BlogHub Proxy deployed at:", blogHubProxy);
 
-        // 4. 配置合约关联
         paymaster.setSessionKeyManager(address(sessionKeyManager));
-        console.log("Paymaster SessionKeyManager set");
-
         blogHub.setSessionKeyManager(address(sessionKeyManager));
-        console.log("BlogHub SessionKeyManager set");
+        console.log("SessionKeyManager configured for Paymaster and BlogHub");
 
         vm.stopBroadcast();
 
-        // 输出部署摘要
         console.log("");
         console.log("=== Deployment Summary ===");
         console.log("SessionKeyManager:", address(sessionKeyManager));
@@ -88,140 +125,107 @@ contract DeployScript is Script {
         console.log("BlogHub Implementation:", address(blogHubImpl));
         console.log("BlogHub Proxy:", blogHubProxy);
         console.log("");
-        console.log("=== Next Steps ===");
-        console.log("1. Deposit ETH to Paymaster for gas sponsorship");
-        console.log("2. Add stake to Paymaster via addStake()");
-        console.log("3. Configure platform fee and treasury if needed");
+        console.log(
+            "Next: 1) Deposit ETH to Paymaster 2) addStake() 3) Configure fees"
+        );
     }
 }
 
-/**
- * @title DeploySessionKeyManager
- * @dev 单独部署 SessionKeyManager
- */
-contract DeploySessionKeyManager is Script {
+/// @dev 单独部署 SessionKeyManager (使用 CREATE2)
+contract DeploySessionKeyManager is DeployBase {
     function run() external returns (SessionKeyManager) {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        
-        vm.startBroadcast(deployerPrivateKey);
-        SessionKeyManager manager = new SessionKeyManager();
+        DeployConfig memory cfg = _loadConfig();
+        vm.startBroadcast(cfg.privateKey);
+        SessionKeyManager manager = new SessionKeyManager{salt: cfg.salt}();
         vm.stopBroadcast();
-
         console.log("SessionKeyManager deployed at:", address(manager));
+        _logSalt(cfg.salt);
         return manager;
     }
 }
 
-/**
- * @title DeployBlogPaymaster
- * @dev 单独部署 BlogPaymaster
- */
-contract DeployBlogPaymaster is Script {
-    address public constant OPTIMISM_ENTRYPOINT = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
-
+/// @dev 单独部署 BlogPaymaster (使用 CREATE2)
+contract DeployBlogPaymaster is DeployBase {
     function run() external returns (BlogPaymaster) {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
-        address entryPoint = vm.envOr("ENTRY_POINT", OPTIMISM_ENTRYPOINT);
-        
-        vm.startBroadcast(deployerPrivateKey);
-        BlogPaymaster pm = new BlogPaymaster(entryPoint, deployer);
+        DeployConfig memory cfg = _loadConfig();
+        vm.startBroadcast(cfg.privateKey);
+        BlogPaymaster pm = new BlogPaymaster{salt: cfg.salt}(
+            cfg.entryPoint,
+            cfg.deployer
+        );
         vm.stopBroadcast();
-
         console.log("BlogPaymaster deployed at:", address(pm));
+        _logSalt(cfg.salt);
         return pm;
     }
 }
 
-/**
- * @title DeployBlogHub
- * @dev 单独部署 BlogHub
- */
-contract DeployBlogHub is Script {
+/// @dev 单独部署 BlogHub (使用 CREATE2)
+contract DeployBlogHub is DeployBase {
     function run() external returns (address) {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
-        address treasury = vm.envOr("TREASURY", deployer);
-        
-        vm.startBroadcast(deployerPrivateKey);
-        
-        BlogHub impl = new BlogHub();
+        DeployConfig memory cfg = _loadConfig();
+        vm.startBroadcast(cfg.privateKey);
+        BlogHub impl = new BlogHub{salt: cfg.salt}();
         console.log("BlogHub Implementation:", address(impl));
-
-        bytes memory initData = abi.encodeWithSelector(
-            BlogHub.initialize.selector,
-            deployer,
-            treasury
+        ERC1967Proxy proxy = new ERC1967Proxy{salt: cfg.salt}(
+            address(impl),
+            _blogHubInitData(cfg.deployer, cfg.treasury)
         );
-        ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
-        
         vm.stopBroadcast();
-
         console.log("BlogHub Proxy deployed at:", address(proxy));
+        _logSalt(cfg.salt);
         return address(proxy);
     }
 }
 
-/**
- * @title UpgradeBlogHub
- * @dev 升级 BlogHub 合约
- */
-contract UpgradeBlogHub is Script {
+/// @dev 升级 BlogHub 合约 (使用 CREATE2)
+contract UpgradeBlogHub is DeployBase {
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        DeployConfig memory cfg = _loadConfig();
         address proxyAddress = vm.envAddress("BLOG_HUB_PROXY");
-        
-        vm.startBroadcast(deployerPrivateKey);
-        
-        // 部署新的实现
-        BlogHub newImpl = new BlogHub();
-        console.log("New BlogHub Implementation:", address(newImpl));
 
-        // 升级代理
-        BlogHub proxy = BlogHub(payable(proxyAddress));
-        proxy.upgradeToAndCall(address(newImpl), "");
-        
+        vm.startBroadcast(cfg.privateKey);
+        BlogHub newImpl = new BlogHub{salt: cfg.salt}();
+        BlogHub(payable(proxyAddress)).upgradeToAndCall(address(newImpl), "");
         vm.stopBroadcast();
 
+        console.log("New BlogHub Implementation:", address(newImpl));
+        _logSalt(cfg.salt);
         console.log("BlogHub upgraded successfully");
     }
 }
 
-/**
- * @title ConfigurePaymaster
- * @dev 配置 Paymaster (存款、添加 stake)
- */
+/// @dev 配置 Paymaster (存款、添加 stake)
 contract ConfigurePaymaster is Script {
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address paymasterAddress = vm.envAddress("PAYMASTER");
-        uint256 depositAmount = vm.envOr("DEPOSIT_AMOUNT", uint256(0.1 ether));
-        uint256 stakeAmount = vm.envOr("STAKE_AMOUNT", uint256(0.1 ether));
-        uint32 unstakeDelay = uint32(vm.envOr("UNSTAKE_DELAY", uint256(1 days)));
-        
-        BlogPaymaster pm = BlogPaymaster(payable(paymasterAddress));
-        
-        vm.startBroadcast(deployerPrivateKey);
-        
-        // 向 EntryPoint 存款
-        pm.depositToEntryPoint{value: depositAmount}();
-        console.log("Deposited to EntryPoint:", depositAmount);
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        BlogPaymaster pm = BlogPaymaster(payable(vm.envAddress("PAYMASTER")));
+        uint256 depositAmt = vm.envOr("DEPOSIT_AMOUNT", uint256(0.1 ether));
+        uint256 stakeAmt = vm.envOr("STAKE_AMOUNT", uint256(0.1 ether));
+        uint32 unstakeDelay = uint32(
+            vm.envOr("UNSTAKE_DELAY", uint256(1 days))
+        );
 
-        // 添加 stake
-        pm.addStake{value: stakeAmount}(unstakeDelay);
-        console.log("Added stake:", stakeAmount);
-        console.log("Unstake delay:", unstakeDelay, "seconds");
-        
+        vm.startBroadcast(pk);
+        pm.depositToEntryPoint{value: depositAmt}();
+        pm.addStake{value: stakeAmt}(unstakeDelay);
         vm.stopBroadcast();
 
-        // 显示当前状态
-        (uint256 deposit, bool staked, uint112 stake, uint32 delay, uint48 withdrawTime) = pm.getDepositInfo();
-        console.log("");
+        console.log("Deposited:", depositAmt);
+        console.log("Staked:", stakeAmt);
+        console.log("Delay:", unstakeDelay);
+        (
+            uint256 dep,
+            bool staked,
+            uint112 stake,
+            uint32 delay,
+            uint48 withdrawTime
+        ) = pm.getDepositInfo();
         console.log("=== Paymaster Status ===");
-        console.log("EntryPoint Deposit:", deposit);
+        console.log("Deposit:", dep);
         console.log("Staked:", staked);
-        console.log("Stake Amount:", stake);
-        console.log("Unstake Delay:", delay);
-        console.log("Withdraw Time:", withdrawTime);
+        console.log("Stake:", stake);
+        console.log("Delay:", delay);
+        console.log("WithdrawTime:", withdrawTime);
     }
 }
