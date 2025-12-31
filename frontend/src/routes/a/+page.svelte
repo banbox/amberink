@@ -84,7 +84,7 @@
 	let currentVersionIndex = $state<number | null>(null);
 	
 	// Current viewing version metadata (for historical versions)
-	let currentVersionMeta = $state<{ title?: string; owner?: string; timestamp?: number } | null>(null);
+	let currentVersionMeta = $state<{ title?: string; summary?: string; owner?: string; timestamp?: number } | null>(null);
 
 	// Local counts (optimistic updates)
 	let localDislikeAmount = $state('0');
@@ -721,6 +721,7 @@
 				if (versionInfo) {
 					currentVersionMeta = {
 						title: versionInfo.title,
+						summary: versionInfo.summary,
 						owner: versionInfo.owner,
 						timestamp: versionInfo.timestamp
 					};
@@ -729,7 +730,7 @@
 				articleContent = {
 					title: currentVersionMeta?.title || '',
 					content,
-					summary: '',
+					summary: currentVersionMeta?.summary || '',
 					tags: [],
 					createdAt: currentVersionMeta?.timestamp || Date.now(),
 					version: '1.0.0'

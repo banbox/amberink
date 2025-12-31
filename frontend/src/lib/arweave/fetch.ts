@@ -109,18 +109,42 @@ export function getFolderFileUrl(manifestId: string, fileName: string, useMutabl
 
 /**
  * 从 Irys GraphQL 获取 manifest 的标签
- * @param manifestId - Manifest ID
+ * 对于 mutable folders，需要查询带有 Root-TX 标签的最新 manifest
+ * @param manifestId - 原始 Manifest ID
  * @returns 标签数组，每个标签包含 name 和 value
  */
 async function fetchManifestTags(manifestId: string): Promise<Array<{ name: string; value: string }>> {
 	// 根据环境选择 GraphQL 端点
-	// 由于 config 中可能需要导入 getIrysNetwork，这里简单判断
 	const graphqlEndpoints = [
 		'https://devnet.irys.xyz/graphql',
 		'https://uploader.irys.xyz/graphql'
 	];
 
-	const query = `
+	// 先查询带有 Root-TX = manifestId 的最新 manifest（更新版本）
+	const latestVersionQuery = `
+		query getLatestManifestTags($rootTx: String!) {
+			transactions(
+				tags: [
+					{ name: "Root-TX", values: [$rootTx] }
+				]
+				order: DESC
+				limit: 1
+			) {
+				edges {
+					node {
+						id
+						tags {
+							name
+							value
+						}
+					}
+				}
+			}
+		}
+	`;
+
+	// 查询原始 manifest 的标签（作为 fallback）
+	const originalQuery = `
 		query getManifestTags($ids: [String!]!) {
 			transactions(ids: $ids) {
 				edges {
@@ -138,11 +162,31 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 
 	for (const endpoint of graphqlEndpoints) {
 		try {
+			// 1. 先尝试获取最新版本的 manifest 标签
+			const latestResponse = await fetch(endpoint, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					query: latestVersionQuery,
+					variables: { rootTx: manifestId }
+				})
+			});
+
+			if (latestResponse.ok) {
+				const latestResult = await latestResponse.json();
+				const latestEdges = latestResult?.data?.transactions?.edges || [];
+				if (latestEdges.length > 0) {
+					console.log(`Found latest manifest version: ${latestEdges[0].node.id}`);
+					return latestEdges[0].node.tags || [];
+				}
+			}
+
+			// 2. 如果没有更新版本，查询原始 manifest
 			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					query,
+					query: originalQuery,
 					variables: { ids: [manifestId] }
 				})
 			});
@@ -151,6 +195,7 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 				const result = await response.json();
 				const edges = result?.data?.transactions?.edges || [];
 				if (edges.length > 0) {
+					console.log(`Using original manifest tags: ${manifestId}`);
 					return edges[0].node.tags || [];
 				}
 			}

@@ -351,6 +351,7 @@ export interface ArticleVersion {
 	txId: string;
 	timestamp: number;
 	title?: string;
+	summary?: string;
 	wordCount?: number;
 	owner?: string;
 }
@@ -428,11 +429,14 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				// 备用：检查是否使用不同的属性名
 				const titleTagAlt = tags.find((t: Record<string, string>) => t['name'] === 'Article-Title' || t['Name'] === 'Article-Title');
 				console.log('[queryArticleVersions] Found title tag:', titleTag, 'alt:', titleTagAlt);
+				// 提取摘要标签
+				const summaryTag = tags.find((t: { name: string; value: string }) => t.name === 'Article-Summary');
 
 				versions.push({
 					txId: node.id,
 					timestamp: node.timestamp,
 					title: titleTag?.value,
+					summary: summaryTag?.value,
 					owner: node.address
 				});
 			}
@@ -483,6 +487,7 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 				const originalNode = originalEdges[0].node;
 				const originalTags = originalNode.tags || [];
 				const originalTitleTag = originalTags.find((t: { name: string; value: string }) => t.name === 'Article-Title');
+				const originalSummaryTag = originalTags.find((t: { name: string; value: string }) => t.name === 'Article-Summary');
 
 				// 检查原始版本是否已在列表中
 				const existsInVersions = versions.some(v => v.txId === originalManifestId);
@@ -491,6 +496,7 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 						txId: originalNode.id,
 						timestamp: originalNode.timestamp,
 						title: originalTitleTag?.value,
+						summary: originalSummaryTag?.value,
 						owner: originalNode.address
 					});
 				}
