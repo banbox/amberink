@@ -72,7 +72,10 @@
 	});
 </script>
 
-<a href={localizeHref(`/a?id=${article.id}`)} class="group flex gap-4 border-b border-gray-100 py-5 transition-colors">
+<a
+	href={localizeHref(`/a?id=${article.id}`)}
+	class="group flex gap-4 border-b border-gray-100 py-5 transition-colors"
+>
 	<!-- Left: Text Content -->
 	<div class="min-w-0 flex-1">
 		<!-- Category & Author -->
@@ -101,10 +104,12 @@
 			{article.title || `Article #${article.id}`}
 		</h3>
 
-		<!-- Summary/Description placeholder - could be fetched from Arweave -->
-		<p class="mb-3 line-clamp-2 text-sm text-gray-600">
-			{'no summary'}
-		</p>
+		<!-- Summary/Description from chain data -->
+		{#if article.summary}
+			<p class="mb-3 line-clamp-2 text-sm text-gray-600">
+				{article.summary}
+			</p>
+		{/if}
 
 		<!-- Interaction Bar -->
 		<div class="flex items-center gap-4 text-sm text-gray-500">

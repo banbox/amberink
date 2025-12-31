@@ -1417,3 +1417,16 @@ Claude：已解决
 Claude：\s分词没有考虑中文导致，已解决  
 开发者：我希望它能兼容世界上大部分主流语言，请继续考虑目前是否满足此要求，如果不满足进行必要修改  
 Claude：已解决
+
+### 2025-12-31 20:25  列表的摘要未显示
+@doc/help.md 当前前端的文章列表并未正确显示文章的摘要。全部显示的都是`no summary`；按说摘要应该在发布和修改文章时通过智能合约事件触发，被squid收集更新，然后前端请求列表数据包含summmary返回。请你帮我梳理上面相关逻辑，检查是哪里出了问题，帮我解决  
+Claude: 前端请求时没带summary字段，已解决
+
+### 2025-12-31 20:44  fetchArticleMetadata函数拆分
+@doc/help.md fetchArticleMetadata函数，帮我拆分为两个函数：一个只返回content；另一个只返回summary；目前详情页只用到了content，edit编辑页面用到了content和summary字段；在编辑页面分别调用2个函数。  
+Claude: 修改完成
+
+### 2025-12-31 20:25  详情页内容太少时，两个bar太近
+@doc/help.md  frontend/src/routes/a/+page.svelte 文章详情页目前头部和尾部显示两次工具条，但是在正文太短时，这么搞就没必要了，请帮我判断内容太少时不显示尾部的工具条（内容未加载时也不显示）  
+Claude：修改完成
+

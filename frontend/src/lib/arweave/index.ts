@@ -93,7 +93,7 @@ export {
 	fetchArticleMarkdown,
 	getFolderCoverImageUrl,
 	getFolderFileUrl,
-	fetchArticleMetadata
+	fetchArticleSummaryFromTags
 } from './fetch';
 
 // 文章文件夹功能

@@ -289,7 +289,8 @@ Irys 有两个 Bundler 网络：
 - `fetchRawContent(arweaveId)` - 获取原始二进制数据
 - `fetchTextContent(arweaveId)` - 获取文本内容
 - `checkContentExists(arweaveId)` - 检查内容是否存在
-- `fetchArticleMetadata(arweaveId)` - 获取文章元数据（标题、内容、摘要等）
+- `fetchArticleMarkdown(arweaveId)` - 获取文章元数据（标题、内容、摘要等）
+- `fetchArticleSummaryFromTags(arweaveId)` - 获取文章摘要
 
 所有函数支持多网关自动切换容错。
 

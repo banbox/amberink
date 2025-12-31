@@ -2,7 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
-	import { getCoverImageUrl, getAvatarUrl, fetchArticleMetadata } from '$lib/arweave';
+	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
 	import { queryArticleVersions, fetchArticleVersionContent, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
@@ -46,7 +46,7 @@
 	let articleError = $state<string | null>(null);
 
 	// Article content from Arweave
-	let articleContent = $state<ArticleMetadata | null>(null);
+	let articleContent = $state<string | null>(null);
 	let contentLoading = $state(true);
 	let contentError = $state<string | null>(null);
 
@@ -515,7 +515,7 @@
 				: (authorId ? authorId.slice(2, 4).toUpperCase() : '??'))
 	);
 	const authorAddress = $derived(authorId);
-	const readingTime = $derived(articleContent?.content ? getReadingTime(articleContent.content) : 0);
+	const readingTime = $derived(articleContent ? getReadingTime(articleContent) : 0);
 	// Check if current user is the article author (for edit button)
 	const isAuthor = $derived(
 		walletAddress && article && walletAddress.toLowerCase() === authorId.toLowerCase()
@@ -778,19 +778,12 @@
 						timestamp: versionInfo.timestamp
 					};
 				}
-				const content = await fetchArticleVersionContent(versionTxId);
-				articleContent = {
-					title: currentVersionMeta?.title || '',
-					content,
-					summary: '',
-					tags: [],
-					createdAt: currentVersionMeta?.timestamp || Date.now(),
-					version: '1.0.0'
-				};
+				articleContent = await fetchArticleVersionContent(versionTxId);
 			} else if (!articleContent) {
 				// Content not loaded yet (initial load failed or skipped), try again
 				// article.id is now arweaveId
-				articleContent = await fetchArticleMetadata(article.id);
+				// 详情页只需要 content，不需要 summary
+				articleContent = await fetchArticleMarkdown(article.id);
 			}
 		} catch (e) {
 			contentError = e instanceof Error ? e.message : 'Failed to load article content';
@@ -1188,11 +1181,11 @@
 						</a>
 					{/if}
 				</div>
-			{:else if articleContent?.content && article}
+			{:else if articleContent && article}
 				<div class="prose prose-lg prose-gray max-w-none font-serif">
 					{@html DOMPurify.sanitize(
 						marked(
-							processContentImages(articleContent.content, versionTxId || article.id, !versionTxId)
+							processContentImages(articleContent, versionTxId || article.id, !versionTxId)
 						) as string
 					)}
 				</div>
@@ -1203,8 +1196,10 @@
 			{/if}
 		</div>
 
-		<!-- Interaction Bar (Bottom) -->
-		{@render interactionBar('bottom')}
+		<!-- Interaction Bar (Bottom) - only show when content is loaded and long enough -->
+		{#if articleContent && !contentLoading && (readingTime > 2 || articleContent.length > 800)}
+			{@render interactionBar('bottom')}
+		{/if}
 
 		<!-- Comments Section -->
 		<CommentSection

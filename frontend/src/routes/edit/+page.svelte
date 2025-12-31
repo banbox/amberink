@@ -2,7 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
-	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMetadata } from '$lib/arweave';
+	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMarkdown, fetchArticleSummaryFromTags } from '$lib/arweave';
 	import { editArticleWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 	import { getCoverImageUrl } from '$lib/arweave/folder';
 	import { onMount } from 'svelte';
@@ -153,12 +153,13 @@
 			// Check wallet connection
 			await checkWalletConnection();
 
-			// Load article content from Arweave
-			const articleContent = await fetchArticleMetadata(article.id);
-			if (articleContent) {
-				formData.content = articleContent.content || '';
-				formData.summary = articleContent.summary || '';
-			}
+			// Load article content and summary from Arweave in parallel
+			const [content, summary] = await Promise.all([
+				fetchArticleMarkdown(article.id),
+				fetchArticleSummaryFromTags(article.id)
+			]);
+			formData.content = content || '';
+			formData.summary = summary || '';
 			isLoadingContent = false;
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : 'Failed to load article';

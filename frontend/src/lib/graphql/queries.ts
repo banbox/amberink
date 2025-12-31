@@ -24,6 +24,7 @@ export const ARTICLES_QUERY = gql`
 			}
 			originalAuthor
 			title
+			summary
 			categoryId
 			collectPrice
 			maxCollectSupply
@@ -55,6 +56,7 @@ export const ALL_ARTICLES_QUERY = gql`
 			}
 			originalAuthor
 			title
+			summary
 			categoryId
 			collectPrice
 			maxCollectSupply
@@ -107,6 +109,7 @@ export interface ArticleData {
 	};
 	originalAuthor: string | null;
 	title: string;
+	summary?: string | null;
 	categoryId: string;
 	collectPrice: string;
 	maxCollectSupply: string;
@@ -146,6 +149,7 @@ export const ARTICLE_BY_ID_QUERY = gql`
 			}
 			originalAuthor
 			title
+			summary
 			categoryId
 			royaltyBps
 			collectPrice
@@ -241,6 +245,7 @@ export interface ArticleDetailData {
 	};
 	originalAuthor: string | null;
 	title: string;
+	summary?: string | null;
 	categoryId: string;
 	royaltyBps: number;
 	collectPrice: string;
@@ -300,6 +305,7 @@ export const ARTICLES_BY_AUTHOR_QUERY = gql`
 			}
 			originalAuthor
 			title
+			summary
 			categoryId
 			collectPrice
 			maxCollectSupply
@@ -410,6 +416,7 @@ export const USER_LIKED_ARTICLES_QUERY = gql`
 				}
 				originalAuthor
 				title
+				summary
 				categoryId
 				likeAmount
 				dislikeAmount
@@ -444,6 +451,7 @@ export const USER_DISLIKED_ARTICLES_QUERY = gql`
 				}
 				originalAuthor
 				title
+				summary
 				categoryId
 				likeAmount
 				dislikeAmount
@@ -478,6 +486,7 @@ export const USER_COLLECTED_ARTICLES_QUERY = gql`
 				}
 				originalAuthor
 				title
+				summary
 				categoryId
 				likeAmount
 				dislikeAmount
@@ -515,6 +524,7 @@ export const USER_COMMENTED_ARTICLES_QUERY = gql`
 				}
 				originalAuthor
 				title
+				summary
 				categoryId
 				likeAmount
 				dislikeAmount

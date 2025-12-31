@@ -218,47 +218,22 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 	return [];
 }
 
-
-
 /**
- * 获取文章元数据（直接请求，无缓存）
+ * 仅获取文章摘要（从 manifest 标签获取）
+ * 适用于编辑页面，需要获取摘要用于编辑
  * @param manifestId - 文章文件夹的 Manifest ID
+ * @returns 摘要字符串
  */
-export async function fetchArticleMetadata(manifestId: string): Promise<ArticleMetadata> {
-	// 获取 markdown 内容（使用 mutable URL 以获取最新版本）
-	console.log(`Fetching article content from mutable URL: ${manifestId}`);
-	const content = await fetchArticleMarkdown(manifestId, true);
-	console.log(`Fetched content preview (first 100 chars):`, content.substring(0, 100));
-
-	// 从内容中提取标题（第一个 # 开头的行）
-	let title = '';
-	const lines = content.split('\n');
-	for (const line of lines) {
-		if (line.startsWith('# ')) {
-			title = line.substring(2).trim();
-			break;
-		}
-	}
-
-	// 从 manifest 标签获取摘要
-	let summary = '';
+export async function fetchArticleSummaryFromTags(manifestId: string): Promise<string> {
 	try {
 		const tags = await fetchManifestTags(manifestId);
 		const summaryTag = tags.find(t => t.name === 'Article-Summary');
 		if (summaryTag) {
-			summary = summaryTag.value;
+			console.log(`Fetched summary from manifest tags: "${summaryTag.value.substring(0, 50)}..."`);
+			return summaryTag.value;
 		}
-		console.log(`Fetched summary from manifest tags: "${summary.substring(0, 50)}..."`);
 	} catch (error) {
 		console.warn('Failed to fetch manifest tags for summary:', error);
 	}
-
-	return {
-		title: title || 'Untitled',
-		summary,
-		content,
-		tags: [],
-		createdAt: Date.now(),
-		version: '2.0.0'
-	};
+	return '';
 }
