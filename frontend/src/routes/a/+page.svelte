@@ -139,10 +139,63 @@
 	}
 
 	// Calculate reading time (words per minute)
+	// Handles both space-separated languages and character-based languages
 	function getReadingTime(content: string): number {
-		const wordsPerMinute = 200;
-		const wordCount = content.trim().split(/\s+/).length;
-		return Math.max(1, Math.ceil(wordCount / wordsPerMinute));
+		const wordsPerMinute = 200; // Reading speed for space-separated languages (English, Arabic, Hebrew, Russian, etc.)
+		const charsPerMinute = 400; // Reading speed for character-based languages (CJK, Thai, etc.)
+		
+		// Strip markdown syntax for more accurate counting
+		const plainText = content
+			.replace(/```[\s\S]*?```/g, '') // Remove code blocks
+			.replace(/`[^`]+`/g, '') // Remove inline code
+			.replace(/!?\[[^\]]*\]\([^)]*\)/g, '') // Remove links and images
+			.replace(/[#*_~`>]/g, '') // Remove markdown formatting chars
+			.trim();
+		
+		// Character-based scripts that don't use spaces between words
+		// These need to be counted by character, not by word
+		const characterBasedRegex = new RegExp([
+			// CJK (Chinese, Japanese, Korean)
+			'[\u4e00-\u9fff]',           // CJK Unified Ideographs
+			'[\u3400-\u4dbf]',           // CJK Unified Ideographs Extension A
+			'[\u{20000}-\u{2a6df}]',     // CJK Unified Ideographs Extension B
+			'[\u{2a700}-\u{2b73f}]',     // CJK Unified Ideographs Extension C
+			'[\u{2b740}-\u{2b81f}]',     // CJK Unified Ideographs Extension D
+			'[\uf900-\ufaff]',           // CJK Compatibility Ideographs
+			'[\u3040-\u309f]',           // Hiragana
+			'[\u30a0-\u30ff]',           // Katakana
+			'[\uac00-\ud7af]',           // Hangul Syllables
+			'[\u1100-\u11ff]',           // Hangul Jamo
+			// Southeast Asian scripts (no spaces between words)
+			'[\u0e00-\u0e7f]',           // Thai
+			'[\u0e80-\u0eff]',           // Lao
+			'[\u1780-\u17ff]',           // Khmer (Cambodian)
+			'[\u1000-\u109f]',           // Myanmar (Burmese)
+			// Tibetan (uses tsheg as word separator, not spaces)
+			'[\u0f00-\u0fff]',           // Tibetan
+		].join('|'), 'gu');
+		
+		const charBasedMatches = plainText.match(characterBasedRegex);
+		const charBasedCount = charBasedMatches ? charBasedMatches.length : 0;
+		
+		// Remove character-based text and count remaining words
+		// This handles all space-separated languages:
+		// - Latin (English, Spanish, French, German, Vietnamese, etc.)
+		// - Cyrillic (Russian, Ukrainian, Bulgarian, etc.)
+		// - Greek
+		// - Arabic, Hebrew (RTL languages)
+		// - Devanagari (Hindi, Sanskrit, etc.)
+		// - Bengali, Tamil, Telugu, and other South Asian scripts
+		const remainingText = plainText.replace(characterBasedRegex, ' ').trim();
+		const words = remainingText.split(/\s+/).filter(w => w.length > 0);
+		const wordCount = words.length;
+		
+		// Calculate total reading time
+		const charMinutes = charBasedCount / charsPerMinute;
+		const wordMinutes = wordCount / wordsPerMinute;
+		const totalMinutes = charMinutes + wordMinutes;
+		
+		return Math.max(1, Math.ceil(totalMinutes));
 	}
 
 	// Get category name
@@ -721,7 +774,6 @@
 				if (versionInfo) {
 					currentVersionMeta = {
 						title: versionInfo.title,
-						summary: versionInfo.summary,
 						owner: versionInfo.owner,
 						timestamp: versionInfo.timestamp
 					};
@@ -730,7 +782,7 @@
 				articleContent = {
 					title: currentVersionMeta?.title || '',
 					content,
-					summary: currentVersionMeta?.summary || '',
+					summary: '',
 					tags: [],
 					createdAt: currentVersionMeta?.timestamp || Date.now(),
 					version: '1.0.0'
@@ -751,13 +803,6 @@
 
 <svelte:head>
 	<title>{currentVersionMeta?.title || article?.title || 'Article'} - AmberInk</title>
-	<meta
-		name="description"
-		content={articleContent?.summary ||
-			currentVersionMeta?.title ||
-			article?.title ||
-			'AmberInk Article'}
-	/>
 </svelte:head>
 
 {#if articleLoading}
@@ -1157,13 +1202,6 @@
 				</div>
 			{/if}
 		</div>
-
-		<!-- Summary -->
-		{#if articleContent?.summary}
-			<aside class="mt-12 border-l-2 border-gray-200 pl-5 text-gray-600 italic">
-				<p>{articleContent.summary}</p>
-			</aside>
-		{/if}
 
 		<!-- Interaction Bar (Bottom) -->
 		{@render interactionBar('bottom')}

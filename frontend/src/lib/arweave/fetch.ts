@@ -3,6 +3,7 @@
  */
 import type { ArticleMetadata } from './types';
 import { getArweaveGateways } from '$lib/config';
+import { getMutableFolderUrl, getStaticFolderUrl, ARTICLE_INDEX_FILE } from './folder';
 
 /**
  * 通用网关请求函数，遍历所有网关直到成功
@@ -71,40 +72,50 @@ export async function checkContentExists(arweaveId: string): Promise<boolean> {
 	}
 }
 
-/** 构建文件夹路径 */
-function buildFolderPath(manifestId: string, fileName: string, useMutable: boolean): string {
-	return `${useMutable ? 'mutable/' : ''}${manifestId}/${fileName}`;
-}
-
-/** 从文章文件夹获取内容（支持可变 URL） */
+/** 
+ * 从文章文件夹获取内容（支持可变 URL）
+ * 自动处理 devnet 和 mainnet 的不同 URL 格式：
+ * - devnet: https://devnet.irys.xyz/{manifestId}/{fileName}
+ * - mainnet: https://gateway.irys.xyz/mutable/{manifestId}/{fileName}
+ */
 export async function fetchFromFolder(
 	manifestId: string,
 	fileName: string,
 	useMutable = true,
 	bypassCache = true
 ): Promise<Response> {
-	const path = buildFolderPath(manifestId, fileName, useMutable);
+	// 使用 folder.ts 中的函数获取正确的 URL
+	const baseUrl = useMutable
+		? getMutableFolderUrl(manifestId, fileName)
+		: getStaticFolderUrl(manifestId, fileName);
+
 	const cacheBuster = bypassCache ? `?_t=${Date.now()}` : '';
-	return fetchWithGatewayFallback(
-		`${path}${cacheBuster}`,
-		{ cache: bypassCache ? 'no-store' : 'default' },
-		async r => r
-	);
+	const url = `${baseUrl}${cacheBuster}`;
+
+	const response = await fetch(url, { cache: bypassCache ? 'no-store' : 'default' });
+	if (!response.ok) {
+		throw new Error(`Failed to fetch ${fileName} from folder: ${response.status}`);
+	}
+	return response;
 }
 
 /** 从文章文件夹获取 Markdown 内容 */
 export async function fetchArticleMarkdown(manifestId: string, useMutable = true): Promise<string> {
-	return (await fetchFromFolder(manifestId, 'index.md', useMutable)).text();
+	return (await fetchFromFolder(manifestId, ARTICLE_INDEX_FILE, useMutable)).text();
 }
 
 /** 获取文章文件夹中封面图片的 URL */
 export function getFolderCoverImageUrl(manifestId: string, useMutable = true): string {
-	return getPrimaryGatewayUrl(buildFolderPath(manifestId, 'coverImage', useMutable));
+	return useMutable
+		? getMutableFolderUrl(manifestId, 'coverImage')
+		: getStaticFolderUrl(manifestId, 'coverImage');
 }
 
 /** 获取文章文件夹中任意文件的 URL */
 export function getFolderFileUrl(manifestId: string, fileName: string, useMutable = true): string {
-	return getPrimaryGatewayUrl(buildFolderPath(manifestId, fileName, useMutable));
+	return useMutable
+		? getMutableFolderUrl(manifestId, fileName)
+		: getStaticFolderUrl(manifestId, fileName);
 }
 
 /**
