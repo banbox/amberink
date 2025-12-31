@@ -386,5 +386,7 @@
 	"send_tip": "发送打赏",
 	"dislike_in_usd": "不喜欢金额（美元）",
 	"send_dislike": "发送不喜欢",
-	"wallet_cached_account": "已登录缓存账户。如需切换，请手动打开钱包更改。"
+	"wallet_cached_account": "已登录缓存账户。如需切换，请手动打开钱包更改。",
+	"contract_tx": "合约交易",
+	"storage_tx": "存储交易"
 }

@@ -3,7 +3,7 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
-	import { queryArticleVersions, fetchArticleVersionContent, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
+	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
 	import { marked } from 'marked';
@@ -14,7 +14,7 @@
 	import { page } from '$app/stores';
 	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
 	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork } from '$lib/config';
-	import { getBlockExplorerTxUrl } from '$lib/chain';
+	import { getBlockExplorerTxUrl, getViewblockArweaveUrl } from '$lib/chain';
 	import {
 		EvaluationScore,
 		collectArticle,
@@ -42,6 +42,7 @@
 
 	let article = $state<ArticleDetailData | null>(null);
 	let versionTxId = $state<string | null>(null);
+	let currentIrysTxId = $state<string | null>(null);
 	let articleLoading = $state(true);
 	let articleError = $state<string | null>(null);
 
@@ -209,16 +210,6 @@
 	// Get cover image URL from Irys mutable folder
 	function getCoverUrl(arweaveId: string): string {
 		return getCoverImageUrl(arweaveId, true);
-	}
-
-	// Get Irys explorer transaction URL
-	function getIrysExplorerUrl(txId: string): string {
-		const network = getIrysNetwork();
-		if (network === 'mainnet') {
-			return `https://gateway.irys.xyz/tx/${txId}`;
-		} else {
-			return `https://devnet.irys.xyz/tx/${txId}`;
-		}
 	}
 
 	// Share article
@@ -778,12 +769,16 @@
 						timestamp: versionInfo.timestamp
 					};
 				}
+				// Use the version tx ID for the Irys explorer link
+				currentIrysTxId = versionTxId;
 				articleContent = await fetchArticleVersionContent(versionTxId);
 			} else if (!articleContent) {
 				// Content not loaded yet (initial load failed or skipped), try again
 				// article.id is now arweaveId
 				// 详情页只需要 content，不需要 summary
 				articleContent = await fetchArticleMarkdown(article.id);
+				// Query the latest Irys tx ID for the explorer link
+				currentIrysTxId = await queryLatestIrysTxId(article.id);
 			}
 		} catch (e) {
 			contentError = e instanceof Error ? e.message : 'Failed to load article content';
@@ -1220,16 +1215,8 @@
 				{m.blockchain_info({})}
 			</summary>
 			<div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 rounded-lg bg-gray-50 p-4">
-				<div>
-					<span class="font-medium text-gray-700">{m.article_id({})}:</span>
-					{article.articleId}
-				</div>
-				<div>
-					<span class="font-medium text-gray-700">{m.block({})}:</span>
-					{article.blockNumber}
-				</div>
 				<div class="flex items-center gap-1">
-					<span class="font-medium text-gray-700">{m.transaction({})}:</span>
+					<span class="font-medium text-gray-700">{m.contract_tx()}:</span>
 					<a
 						href={getBlockExplorerTxUrl(article.txHash)}
 						target="_blank"
@@ -1240,14 +1227,14 @@
 					</a>
 				</div>
 				<div class="flex items-center gap-1">
-					<span class="font-medium text-gray-700">{m.arweave()}:</span>
+					<span class="font-medium text-gray-700">{m.storage_tx()}:</span>
 					<a
-						href={getIrysExplorerUrl(article.id)}
+						href={getViewblockArweaveUrl(currentIrysTxId || article.id, getIrysNetwork())}
 						target="_blank"
 						rel="noopener noreferrer"
 						class="text-blue-600 hover:underline"
 					>
-						{article.id.slice(0, 10)}...
+						{(currentIrysTxId || article.id).slice(0, 10)}...
 					</a>
 				</div>
 			</div>

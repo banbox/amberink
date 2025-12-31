@@ -386,5 +386,7 @@
 	"send_tip": "Send Tip",
 	"dislike_in_usd": "Dislike Amount (USD)",
 	"send_dislike": "Send Dislike",
-	"wallet_cached_account": "Connected with cached account. To switch to another, please open your wallet manually."
+	"wallet_cached_account": "Connected with cached account. To switch to another, please open your wallet manually.",
+	"contract_tx": "Contract TX",
+	"storage_tx": "Storage TX"
 }

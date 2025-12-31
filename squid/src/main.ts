@@ -49,7 +49,7 @@ function buildSelectorCache() {
     // 从 BlogHub 和 SessionKeyManager 的 TypeScript 模块中加载函数选择器
     loadSelectorsFromABI(blogHub.functions)
     loadSelectorsFromABI(sessionKeyManager.functions)
-    
+
     console.log(`Loaded ${selectorToFunctionName.size} function selectors from ABI modules`)
 }
 
@@ -190,7 +190,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         categoryId: BigInt(event.categoryId),
                         collectPrice: event.collectPrice,
                         maxCollectSupply: BigInt(event.maxCollectSupply),
-                        collectCount: 1n,
+                        collectCount: 0n,
                         originality: Number(event.originality),
                         royaltyBps: 0, // 事件中不包含此字段，可通过合约查询或前端处理
                         totalTips: 0n,
@@ -211,7 +211,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article.categoryId = BigInt(event.categoryId)
                     article.collectPrice = event.collectPrice
                     article.maxCollectSupply = BigInt(event.maxCollectSupply)
-                    article.collectCount = article.collectCount ?? 1n
+                    article.collectCount = article.collectCount ?? 0n
                     article.originality = Number(event.originality)
                     article.createdAt = new Date(block.header.timestamp)
                     article.blockNumber = block.header.height
@@ -407,7 +407,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
             if (log.topics[0] === SESSION_KEY_REGISTERED) {
                 const event = sessionKeyManager.events.SessionKeyRegistered.decode(log)
                 const user = await ensureUser(event.owner, block.header.timestamp)
-                
+
                 // 更新用户的当前 Session Key 地址
                 user.sessionKey = event.sessionKey.toLowerCase()
                 // user 已经在 usersToUpdate 中，会自动保存
@@ -416,7 +416,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
             if (log.topics[0] === SESSION_KEY_REVOKED) {
                 const event = sessionKeyManager.events.SessionKeyRevoked.decode(log)
                 const user = await ensureUser(event.owner, block.header.timestamp)
-                
+
                 // 清空用户的 Session Key
                 user.sessionKey = null
                 // user 已经在 usersToUpdate 中，会自动保存
@@ -425,7 +425,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
             if (log.topics[0] === SESSION_KEY_USED) {
                 const event = sessionKeyManager.events.SessionKeyUsed.decode(log)
                 const user = await ensureUser(event.owner, block.header.timestamp)
-                
+
                 // 计算实际消耗的手续费
                 let feeAmount = 0n
                 // 从 block.transactions 中查找对应的交易
@@ -434,7 +434,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     const gasUsed = txData.gasUsed ?? 0n
                     const gasPrice = txData.gasPrice ?? 0n
                     const l1Fee = txData.l1Fee ?? 0n
-                    
+
                     // L2 执行费 + L1 数据费（如果存在）
                     feeAmount = (gasUsed * gasPrice) + l1Fee
                 } else {
@@ -461,7 +461,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 // 清理超过3个月或超过500条的旧交易记录
                 const threeMonthsAgo = new Date(block.header.timestamp - MAX_TRANSACTION_AGE_MS)
                 const userId = event.owner.toLowerCase()
-                
+
                 // 删除超过3个月的交易
                 const oldTransactions = await ctx.store.find(Transaction, {
                     where: {

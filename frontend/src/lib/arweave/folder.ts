@@ -529,3 +529,68 @@ export async function fetchArticleVersionContent(versionTxId: string): Promise<s
 
 	return await response.text();
 }
+
+/**
+ * 查询文章的最新Irys交易ID
+ * 对于mutable folders，返回最新版本的manifest交易ID
+ * @param originalManifestId - 原始manifest ID
+ * @returns 最新版本的交易ID，如果没有更新则返回原始ID
+ */
+export async function queryLatestIrysTxId(originalManifestId: string): Promise<string> {
+	// 根据 Irys 网络选择正确的 GraphQL 端点
+	const network = getIrysNetwork();
+	const graphqlEndpoint = network === 'devnet'
+		? 'https://devnet.irys.xyz/graphql'
+		: 'https://uploader.irys.xyz/graphql';
+
+	// 查询带有 Root-TX = originalManifestId 标签的最新交易
+	const query = `
+		query getLatestVersion($rootTx: String!) {
+			transactions(
+				tags: [
+					{ name: "Root-TX", values: [$rootTx] }
+				]
+				order: DESC
+				limit: 1
+			) {
+				edges {
+					node {
+						id
+						timestamp
+					}
+				}
+			}
+		}
+	`;
+
+	try {
+		const response = await fetch(graphqlEndpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query,
+				variables: { rootTx: originalManifestId }
+			})
+		});
+
+		if (response.ok) {
+			const result = await response.json();
+			const edges = result?.data?.transactions?.edges || [];
+
+			if (edges.length > 0) {
+				// 返回最新版本的交易ID
+				return edges[0].node.id;
+			}
+		}
+
+		// 没有找到更新版本，返回原始ID
+		return originalManifestId;
+	} catch (error) {
+		console.error('Failed to query latest Irys tx:', error);
+		// 出错时返回原始ID
+		return originalManifestId;
+	}
+}
+

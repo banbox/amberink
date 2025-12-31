@@ -16,6 +16,15 @@ export function getBlockExplorerTxUrl(txHash: string): string {
 	return `${baseUrl}/tx/${txHash}`;
 }
 
+const VIEWBLOCK_ARWEAVE_BASE_URL = 'https://viewblock.io/arweave';
+
+export function getViewblockArweaveUrl(arweaveId: string, network: 'mainnet' | 'devnet'): string {
+	if (!arweaveId) return '';
+	// Viewblock only supports Arweave mainnet
+	if (network !== 'mainnet') return `https://devnet.irys.xyz/tx/${arweaveId}`;
+	return `${VIEWBLOCK_ARWEAVE_BASE_URL}/tx/${arweaveId}`;
+}
+
 /**
  * Get chain configuration based on chainId from config
  * Uses centralized chain configuration from chains.ts

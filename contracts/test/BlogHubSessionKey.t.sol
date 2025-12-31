@@ -5,7 +5,9 @@ import {BaseTest} from "./BaseTest.sol";
 import {BlogHub} from "../src/BlogHub.sol";
 import {ISessionKeyManager} from "../src/interfaces/ISessionKeyManager.sol";
 import {SessionKeyManager} from "../src/SessionKeyManager.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {
+    ERC1967Proxy
+} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 /**
  * @title BlogHubSessionKeyTest
@@ -95,7 +97,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint256(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         uint256 nonce = data.nonce;
 
         bytes memory signature = _signSessionOperation(
@@ -114,7 +117,11 @@ contract BlogHubSessionKeyTest is BaseTest {
         emit ArticleEvaluated(articleId, user1, 1, amount);
 
         vm.expectEmit(true, true, false, true);
-        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.evaluate.selector);
+        emit SessionKeyOperationExecuted(
+            user1,
+            sessionKey,
+            BlogHub.evaluate.selector
+        );
 
         // 由 relayer (owner) 代付 msg.value
         vm.prank(owner);
@@ -149,7 +156,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint256(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -191,7 +199,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint256(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -220,7 +229,9 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
     }
 
-    function test_EvaluateWithSessionKey_RevertSessionKeyManagerNotSet() public {
+    function test_EvaluateWithSessionKey_RevertSessionKeyManagerNotSet()
+        public
+    {
         // 创建一个没有设置 SessionKeyManager 的 BlogHub
         BlogHub newBlogHub = new BlogHub();
         bytes memory initData = abi.encodeWithSelector(
@@ -228,7 +239,9 @@ contract BlogHubSessionKeyTest is BaseTest {
             owner,
             treasury
         );
-        address proxy = address(new ERC1967Proxy(address(newBlogHub), initData));
+        address proxy = address(
+            new ERC1967Proxy(address(newBlogHub), initData)
+        );
         BlogHub blogHubNoManager = BlogHub(payable(proxy));
 
         vm.prank(user1);
@@ -259,7 +272,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             address(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -274,10 +288,19 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
 
         vm.expectEmit(true, true, false, true);
-        emit ArticleCollected(articleId, user1, amount, articleId);
+        emit ArticleCollected(
+            articleId,
+            user1,
+            amount,
+            articleId + blogHub.COLLECTOR_TOKEN_OFFSET()
+        );
 
         vm.expectEmit(true, true, false, true);
-        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.collect.selector);
+        emit SessionKeyOperationExecuted(
+            user1,
+            sessionKey,
+            BlogHub.collect.selector
+        );
 
         vm.prank(owner);
         blogHub.collectWithSessionKey{value: amount}(
@@ -289,8 +312,14 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature
         );
 
-        // 验证: Collect 应该铸造 NFT
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
+        // 验证: Collect 应该铸造 NFT (收藏者 tokenId = articleId + COLLECTOR_TOKEN_OFFSET)
+        assertEq(
+            blogHub.balanceOf(
+                user1,
+                articleId + blogHub.COLLECTOR_TOKEN_OFFSET()
+            ),
+            1
+        );
     }
 
     // ============ likeCommentWithSessionKey 测试 ============
@@ -310,7 +339,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             address(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -328,7 +358,11 @@ contract BlogHubSessionKeyTest is BaseTest {
         emit CommentLiked(articleId, commentId, user1, commenter, amount);
 
         vm.expectEmit(true, true, false, true);
-        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.likeComment.selector);
+        emit SessionKeyOperationExecuted(
+            user1,
+            sessionKey,
+            BlogHub.likeComment.selector
+        );
 
         vm.prank(owner);
         blogHub.likeCommentWithSessionKey{value: amount}(
@@ -358,7 +392,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             address(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -397,7 +432,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             true
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -415,7 +451,11 @@ contract BlogHubSessionKeyTest is BaseTest {
         emit FollowStatusChanged(user1, user2, true);
 
         vm.expectEmit(true, true, false, true);
-        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.follow.selector);
+        emit SessionKeyOperationExecuted(
+            user1,
+            sessionKey,
+            BlogHub.follow.selector
+        );
 
         blogHub.followWithSessionKey(
             user1,
@@ -436,7 +476,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             false
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -454,7 +495,11 @@ contract BlogHubSessionKeyTest is BaseTest {
         emit FollowStatusChanged(user1, user2, false);
 
         vm.expectEmit(true, true, false, true);
-        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.follow.selector);
+        emit SessionKeyOperationExecuted(
+            user1,
+            sessionKey,
+            BlogHub.follow.selector
+        );
 
         blogHub.followWithSessionKey(
             user1,
@@ -473,7 +518,9 @@ contract BlogHubSessionKeyTest is BaseTest {
             owner,
             treasury
         );
-        address proxy = address(new ERC1967Proxy(address(newBlogHub), initData));
+        address proxy = address(
+            new ERC1967Proxy(address(newBlogHub), initData)
+        );
         BlogHub blogHubNoManager = BlogHub(payable(proxy));
 
         vm.prank(user1);
@@ -505,7 +552,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
     function test_PublishWithSessionKey_Success() public {
         uint256 deadline = block.timestamp + 1 hours;
-        
+
         BlogHub.PublishParams memory params = BlogHub.PublishParams({
             arweaveId: "test-arweave-hash-session",
             categoryId: 1,
@@ -524,7 +571,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -555,7 +603,11 @@ contract BlogHubSessionKeyTest is BaseTest {
         );
 
         vm.expectEmit(true, true, false, true);
-        emit SessionKeyOperationExecuted(user1, sessionKey, BlogHub.publish.selector);
+        emit SessionKeyOperationExecuted(
+            user1,
+            sessionKey,
+            BlogHub.publish.selector
+        );
 
         uint256 articleId = blogHub.publishWithSessionKey(
             user1,
@@ -567,10 +619,10 @@ contract BlogHubSessionKeyTest is BaseTest {
 
         // 验证文章创建
         assertEq(articleId, expectedArticleId);
-        
+
         // 验证 NFT 铸造给 owner (user1) - creator gets 1
         assertEq(blogHub.balanceOf(user1, articleId), 1);
-        
+
         // 验证文章元数据
         (
             address storedAuthor,
@@ -582,14 +634,14 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint32 storedCount,
             string memory storedArweaveHash
         ) = blogHub.articles(articleId);
-        
+
         assertEq(storedArweaveHash, params.arweaveId);
         assertEq(storedCategoryId, params.categoryId);
         assertEq(storedTimestamp, uint64(block.timestamp));
         assertEq(storedAuthor, user1);
         assertEq(storedPrice, params.collectPrice);
         assertEq(storedSupply, params.maxCollectSupply);
-        assertEq(storedCount, 1);
+        assertEq(storedCount, 0);
         assertEq(uint(storedOriginality), uint(params.originality));
     }
 
@@ -614,7 +666,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -643,7 +696,8 @@ contract BlogHubSessionKeyTest is BaseTest {
 
     function test_PublishWithSessionKey_RevertOriginalAuthorTooLong() public {
         uint256 deadline = block.timestamp + 1 hours;
-        string memory longOriginalAuthor = "This is a very long original author name that exceeds the maximum allowed length of 64 bytes";
+        string
+            memory longOriginalAuthor = "This is a very long original author name that exceeds the maximum allowed length of 64 bytes";
 
         BlogHub.PublishParams memory params = BlogHub.PublishParams({
             arweaveId: "test-hash",
@@ -663,7 +717,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -689,7 +744,8 @@ contract BlogHubSessionKeyTest is BaseTest {
 
     function test_PublishWithSessionKey_RevertTitleTooLong() public {
         uint256 deadline = block.timestamp + 1 hours;
-        string memory longTitle = "This is a very long title that exceeds the maximum allowed length of 128 bytes. It keeps going and going until it is definitely too long for the contract to accept.";
+        string
+            memory longTitle = "This is a very long title that exceeds the maximum allowed length of 128 bytes. It keeps going and going until it is definitely too long for the contract to accept.";
 
         BlogHub.PublishParams memory params = BlogHub.PublishParams({
             arweaveId: "test-hash",
@@ -709,7 +765,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -740,7 +797,9 @@ contract BlogHubSessionKeyTest is BaseTest {
             owner,
             treasury
         );
-        address proxy = address(new ERC1967Proxy(address(newBlogHub), initData));
+        address proxy = address(
+            new ERC1967Proxy(address(newBlogHub), initData)
+        );
         BlogHub blogHubNoManager = BlogHub(payable(proxy));
 
         BlogHub.PublishParams memory params = BlogHub.PublishParams({
@@ -830,7 +889,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params1
         );
 
-        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature1 = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -870,7 +930,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params2
         );
 
-        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         assertEq(data2.nonce, data1.nonce + 1);
 
         bytes memory signature2 = _signSessionOperation(
@@ -912,7 +973,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint256(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature1 = _signSessionOperation(
             sessionKeyPrivateKey,
@@ -945,7 +1007,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             true
         );
 
-        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         assertEq(data2.nonce, data1.nonce + 1);
 
         bytes memory signature2 = _signSessionOperation(
@@ -978,9 +1041,12 @@ contract BlogHubSessionKeyTest is BaseTest {
         address referrer = makeAddr("referrer");
         uint256 amount = 1 ether;
 
-        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) / 10000;
+        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) /
+            10000;
         uint256 expectedReferralShare = (amount * 1000) / 10000;
-        uint256 expectedAuthorShare = amount - expectedPlatformShare - expectedReferralShare;
+        uint256 expectedAuthorShare = amount -
+            expectedPlatformShare -
+            expectedReferralShare;
 
         uint256 snap = vm.snapshot();
 
@@ -1007,7 +1073,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint256(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
             user1,
@@ -1049,7 +1116,8 @@ contract BlogHubSessionKeyTest is BaseTest {
         address referrer = user1;
         uint256 amount = 1 ether;
 
-        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) / 10000;
+        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) /
+            10000;
         uint256 expectedReferralShare = 0;
         uint256 expectedAuthorShare = amount - expectedPlatformShare;
 
@@ -1078,7 +1146,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             uint256(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
             user1,
@@ -1120,16 +1189,28 @@ contract BlogHubSessionKeyTest is BaseTest {
         address referrer = makeAddr("referrer");
         uint256 amount = 0.01 ether;
 
-        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) / 10000;
+        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) /
+            10000;
         uint256 expectedReferralShare = (amount * 1000) / 10000;
-        uint256 expectedAuthorShare = amount - expectedPlatformShare - expectedReferralShare;
+        uint256 expectedAuthorShare = amount -
+            expectedPlatformShare -
+            expectedReferralShare;
 
         uint256 snap = vm.snapshot();
 
-        (,,,, uint96 collectPrice0, uint32 maxSupply0, uint32 collectCount0, ) = blogHub.articles(articleId);
+        (
+            ,
+            ,
+            ,
+            ,
+            uint96 collectPrice0,
+            uint32 maxSupply0,
+            uint32 collectCount0,
+
+        ) = blogHub.articles(articleId);
         assertEq(collectPrice0, amount);
         assertEq(maxSupply0, 100);
-        assertEq(collectCount0, 1);
+        assertEq(collectCount0, 0);
 
         uint256 treasuryBefore = treasury.balance;
         uint256 authorBefore = user2.balance;
@@ -1138,10 +1219,16 @@ contract BlogHubSessionKeyTest is BaseTest {
         vm.prank(user1);
         blogHub.collect{value: amount}(articleId, referrer);
 
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
+        assertEq(
+            blogHub.balanceOf(
+                user1,
+                articleId + blogHub.COLLECTOR_TOKEN_OFFSET()
+            ),
+            1
+        );
 
-        (,,,, , , uint32 collectCount1, ) = blogHub.articles(articleId);
-        assertEq(collectCount1, 2);
+        (, , , , , , uint32 collectCount1, ) = blogHub.articles(articleId);
+        assertEq(collectCount1, 1);
 
         assertEq(treasury.balance - treasuryBefore, expectedPlatformShare);
         assertEq(referrer.balance - referrerBefore, expectedReferralShare);
@@ -1156,7 +1243,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             referrer
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
             user1,
@@ -1169,10 +1257,12 @@ contract BlogHubSessionKeyTest is BaseTest {
             deadline
         );
 
-        (,,,, collectPrice0, maxSupply0, collectCount0, ) = blogHub.articles(articleId);
+        (, , , , collectPrice0, maxSupply0, collectCount0, ) = blogHub.articles(
+            articleId
+        );
         assertEq(collectPrice0, amount);
         assertEq(maxSupply0, 100);
-        assertEq(collectCount0, 1);
+        assertEq(collectCount0, 0);
 
         treasuryBefore = treasury.balance;
         authorBefore = user2.balance;
@@ -1188,10 +1278,16 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature
         );
 
-        assertEq(blogHub.balanceOf(user1, articleId), 1);
+        assertEq(
+            blogHub.balanceOf(
+                user1,
+                articleId + blogHub.COLLECTOR_TOKEN_OFFSET()
+            ),
+            1
+        );
 
-        (,,,, , , collectCount1, ) = blogHub.articles(articleId);
-        assertEq(collectCount1, 2);
+        (, , , , , , collectCount1, ) = blogHub.articles(articleId);
+        assertEq(collectCount1, 1);
 
         assertEq(treasury.balance - treasuryBefore, expectedPlatformShare);
         assertEq(referrer.balance - referrerBefore, expectedReferralShare);
@@ -1212,7 +1308,7 @@ contract BlogHubSessionKeyTest is BaseTest {
                 summary: "",
                 trueAuthor: address(0),
                 collectPrice: uint96(amount),
-                maxCollectSupply: 2,
+                maxCollectSupply: 1,
                 originality: BlogHub.Originality.Original
             })
         );
@@ -1235,7 +1331,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             address(0)
         );
 
-        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data1 = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         bytes memory signature1 = _signSessionOperation(
             sessionKeyPrivateKey,
             user1,
@@ -1258,7 +1355,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             signature1
         );
 
-        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data2 = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         bytes memory signature2 = _signSessionOperation(
             sessionKeyPrivateKey,
             user1,
@@ -1290,11 +1388,15 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 commentId = 1;
         uint256 amount = 1 ether;
 
-        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) / 10000;
+        uint256 expectedPlatformShare = (amount * blogHub.platformFeeBps()) /
+            10000;
         uint256 expectedReferralShare = (amount * 1000) / 10000;
-        uint256 expectedRemaining = amount - expectedPlatformShare - expectedReferralShare;
+        uint256 expectedRemaining = amount -
+            expectedPlatformShare -
+            expectedReferralShare;
         uint256 expectedAuthorShare = expectedRemaining / 2;
-        uint256 expectedCommenterShare = expectedRemaining - expectedAuthorShare;
+        uint256 expectedCommenterShare = expectedRemaining -
+            expectedAuthorShare;
 
         uint256 snap = vm.snapshot();
 
@@ -1304,7 +1406,12 @@ contract BlogHubSessionKeyTest is BaseTest {
         uint256 referrerBefore = referrer.balance;
 
         vm.prank(user1);
-        blogHub.likeComment{value: amount}(articleId, commentId, commenter, referrer);
+        blogHub.likeComment{value: amount}(
+            articleId,
+            commentId,
+            commenter,
+            referrer
+        );
 
         assertEq(treasury.balance - treasuryBefore, expectedPlatformShare);
         assertEq(referrer.balance - referrerBefore, expectedReferralShare);
@@ -1322,7 +1429,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             referrer
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,
             user1,
@@ -1360,7 +1468,7 @@ contract BlogHubSessionKeyTest is BaseTest {
 
     function test_PublishWithSessionKey_RevertRoyaltyTooHigh() public {
         uint256 deadline = block.timestamp + 1 hours;
-        
+
         BlogHub.PublishParams memory params = BlogHub.PublishParams({
             arweaveId: "test-hash",
             categoryId: 1,
@@ -1388,7 +1496,8 @@ contract BlogHubSessionKeyTest is BaseTest {
             params.originality
         );
 
-        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager.getSessionKeyData(user1, sessionKey);
+        ISessionKeyManager.SessionKeyData memory data = sessionKeyManager
+            .getSessionKeyData(user1, sessionKey);
 
         bytes memory signature = _signSessionOperation(
             sessionKeyPrivateKey,

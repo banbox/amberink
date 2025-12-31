@@ -1426,7 +1426,15 @@ Claude: 前端请求时没带summary字段，已解决
 @doc/help.md fetchArticleMetadata函数，帮我拆分为两个函数：一个只返回content；另一个只返回summary；目前详情页只用到了content，edit编辑页面用到了content和summary字段；在编辑页面分别调用2个函数。  
 Claude: 修改完成
 
-### 2025-12-31 20:25  详情页内容太少时，两个bar太近
+### 2025-12-31 21:00  详情页内容太少时，两个bar太近
 @doc/help.md  frontend/src/routes/a/+page.svelte 文章详情页目前头部和尾部显示两次工具条，但是在正文太短时，这么搞就没必要了，请帮我判断内容太少时不显示尾部的工具条（内容未加载时也不显示）  
 Claude：修改完成
+
+### 2025-12-31 21:45  改为viewblock
+@doc/help.md 当前查看区块链交易是使用 frontend/src/lib/chain.ts 中的  getBlockExplorerTxUrl；后续打算直接用viewblock查看区块链交易。支持测试网和主网。请帮我根据Viwblock支持的格式和区块链网络，帮我修改，或许也需要 在 frontend/src/lib/chains.ts 中对每个链进行必要修改。确保代码可维护，减少代码冗余。  
+Claude: Viewblock不支持evm链，只支持arweave，已修改  
+
+### 2025-12-31 22:13  详情页NFT数量错误
+@doc/help.md 当前在发布文章时允许作者设置读者可赞赏收藏的数量，读者收藏时会铸造NFT；作者也默认会铸造一个NFT；目前前端详情页显示时，默认计算了作者的那个NFT，应该只显示读者的。请帮我梳理整个环节，检查是哪里的错误，帮我修复  
+Claude：squid中的错误，已解决
 
