@@ -162,42 +162,17 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 	return [];
 }
 
-/**
- * 解析文章内容，分离正文和附言
- * 附言以 `---` 分隔符与正文分开
- * @param fullContent - 完整的 Markdown 内容
- * @returns 分离后的正文和附言
- */
-function parseContentAndPostscript(fullContent: string): { content: string; postscript: string } {
-	// 查找 `\n\n---\n\n` 分隔符（发布时添加的格式）
-	const separator = '\n\n---\n\n';
-	const separatorIndex = fullContent.lastIndexOf(separator);
 
-	if (separatorIndex !== -1) {
-		return {
-			content: fullContent.substring(0, separatorIndex),
-			postscript: fullContent.substring(separatorIndex + separator.length)
-		};
-	}
-
-	return {
-		content: fullContent,
-		postscript: ''
-	};
-}
 
 /**
  * 获取文章元数据（直接请求，无缓存）
  * @param manifestId - 文章文件夹的 Manifest ID
  */
-export async function fetchArticleMetadata(manifestId: string): Promise<ArticleMetadata & { postscript?: string }> {
+export async function fetchArticleMetadata(manifestId: string): Promise<ArticleMetadata> {
 	// 获取 markdown 内容（使用 mutable URL 以获取最新版本）
 	console.log(`Fetching article content from mutable URL: ${manifestId}`);
-	const fullContent = await fetchArticleMarkdown(manifestId, true);
-	console.log(`Fetched content preview (first 100 chars):`, fullContent.substring(0, 100));
-
-	// 解析正文和附言
-	const { content, postscript } = parseContentAndPostscript(fullContent);
+	const content = await fetchArticleMarkdown(manifestId, true);
+	console.log(`Fetched content preview (first 100 chars):`, content.substring(0, 100));
 
 	// 从内容中提取标题（第一个 # 开头的行）
 	let title = '';
@@ -226,7 +201,6 @@ export async function fetchArticleMetadata(manifestId: string): Promise<ArticleM
 		title: title || 'Untitled',
 		summary,
 		content,
-		postscript,
 		tags: [],
 		createdAt: Date.now(),
 		version: '2.0.0'

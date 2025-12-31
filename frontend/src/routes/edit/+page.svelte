@@ -74,7 +74,6 @@
 		categoryId: 0n,
 		author: '',
 		content: '',
-		postscript: '',
 		coverImageFile: null,
 		contentImages: [],
 		royaltyBps: 500n,
@@ -159,7 +158,6 @@
 			if (articleContent) {
 				formData.content = articleContent.content || '';
 				formData.summary = articleContent.summary || '';
-				formData.postscript = articleContent.postscript || '';
 			}
 			isLoadingContent = false;
 		} catch (e) {

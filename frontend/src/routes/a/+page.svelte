@@ -1157,7 +1157,7 @@
 			{/if}
 		</div>
 
-		<!-- Postscript / Summary -->
+		<!-- Summary -->
 		{#if articleContent?.summary}
 			<aside class="mt-12 border-l-2 border-gray-200 pl-5 text-gray-600 italic">
 				<p>{articleContent.summary}</p>

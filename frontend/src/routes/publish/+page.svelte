@@ -63,7 +63,6 @@
 		categoryId: 0n,
 		author: '',
 		content: '',
-		postscript: '',
 		coverImageFile: null,
 		contentImages: [],
 		royaltyBps: 500n,
@@ -95,7 +94,6 @@
 			categoryId: 0n,
 			author: '',
 			content: '',
-			postscript: '',
 			coverImageFile: null,
 			contentImages: [],
 			royaltyBps: 500n,
@@ -144,10 +142,7 @@
 			const selectedKey = CATEGORY_KEYS[Number(formData.categoryId)];
 			const tags = selectedKey ? [getCategoryLabel(selectedKey)] : [];
 
-			// Combine content with postscript if provided
-			const fullContent = formData.postscript.trim()
-				? `${formData.content.trim()}\n\n---\n\n${formData.postscript.trim()}`
-				: formData.content.trim();
+			const fullContent = formData.content.trim();
 
 			// Update status for cover upload
 			if (formData.coverImageFile) {

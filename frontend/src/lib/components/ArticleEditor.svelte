@@ -31,7 +31,6 @@
 		categoryId: bigint;
 		author: string;
 		content: string;
-		postscript: string;
 		coverImageFile: File | null;
 		contentImages: ContentImage[];
 		royaltyBps: bigint;
@@ -95,7 +94,6 @@
 			categoryId: 0n,
 			author: '',
 			content: '',
-			postscript: '',
 			coverImageFile: null,
 			contentImages: [],
 			royaltyBps: 500n,
@@ -380,23 +378,6 @@
 			{disabled}
 		></textarea>
 	</div>
-
-	<!-- Postscript (only for publish mode) -->
-	{#if mode === 'publish'}
-		<div>
-			<label for="postscript" class="mb-2 block text-sm font-medium text-gray-700">
-				{m.postscript()}
-			</label>
-			<textarea
-				id="postscript"
-				bind:value={formData.postscript}
-				placeholder={m.optional_note()}
-				rows="4"
-				class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-				{disabled}
-			></textarea>
-		</div>
-	{/if}
 
 	<!-- NFT Settings (only for publish mode) -->
 	{#if showNftSettings && mode === 'publish'}
