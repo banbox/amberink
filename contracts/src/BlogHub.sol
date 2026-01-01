@@ -50,7 +50,7 @@ contract BlogHub is
     error CannotSelfFollow();
     error CannotSelfCollect();
     error CannotLikeOwnComment();
-    
+
     // 定义常量：最大评论长度（字节）
     // 140单词英文大约 700-1000 字节，中文约 400 汉字 = 1200 字节
     uint256 public constant MAX_COMMENT_LENGTH = 1024;
@@ -66,9 +66,9 @@ contract BlogHub is
 
     // --- 枚举 ---
     enum Originality {
-        Original,       // 完全原创
-        SemiOriginal,   // 部分原创
-        Reprint         // 转载
+        Original, // 完全原创
+        SemiOriginal, // 部分原创
+        Reprint // 转载
     }
 
     // --- 参数结构体（避免 Stack Too Deep）---
@@ -96,16 +96,14 @@ contract BlogHub is
     // --- 结构体 ---
     struct Article {
         // --- Slot 0 (31 bytes，剩余1 bytes) ---
-        address author;       // 20 bytes
-        uint64 timestamp;     // 8 bytes
-        uint16 categoryId;    // 2 bytes
+        address author; // 20 bytes
+        uint64 timestamp; // 8 bytes
+        uint16 categoryId; // 2 bytes
         Originality originality; // enum uint8 (1 byte)
-        
         // --- Slot 1 (20 bytes，剩余 12 bytes) ---
         uint96 collectPrice; // 12 bytes
-        uint32 maxCollectSupply;  // 4 bytes
-        uint32 collectCount;  // 4 bytes
-        
+        uint32 maxCollectSupply; // 4 bytes
+        uint32 collectCount; // 4 bytes
         // --- String Slots ---
         // string 类型因为长度不固定，通常无法与普通变量打包，会开启新 Slot
         string arweaveHash;
@@ -131,7 +129,7 @@ contract BlogHub is
 
     // 文章存储
     mapping(uint256 => Article) public articles;
-    
+
     // ArweaveID 到 ArticleID 的映射（用于通过 ArweaveID 查找文章）
     mapping(string => uint256) public arweaveIdToArticleId;
 
@@ -148,7 +146,7 @@ contract BlogHub is
         uint256 indexed articleId,
         address indexed author,
         uint16 indexed categoryId,
-        string arweaveId,       // Irys 可变文件夹的 manifest ID
+        string arweaveId, // Irys 可变文件夹的 manifest ID
         string originalAuthor,
         string title,
         string summary,
@@ -166,12 +164,7 @@ contract BlogHub is
     );
 
     // 收藏事件
-    event ArticleCollected(
-        uint256 indexed articleId,
-        address indexed collector,
-        uint256 amount,
-        uint256 tokenId
-    );
+    event ArticleCollected(uint256 indexed articleId, address indexed collector, uint256 amount, uint256 tokenId);
 
     // 评论事件：只在 content 不为空时触发
     event CommentAdded(
@@ -182,11 +175,7 @@ contract BlogHub is
         uint8 score // 关联该评论的态度
     );
 
-    event FollowStatusChanged(
-        address indexed follower,
-        address indexed target,
-        bool isFollowing
-    );
+    event FollowStatusChanged(address indexed follower, address indexed target, bool isFollowing);
 
     event ReferralPaid(address indexed referrer, uint256 amount);
 
@@ -202,11 +191,7 @@ contract BlogHub is
     event PlatformFeeUpdated(uint96 newFeeBps);
     event TreasuryUpdated(address newTreasury);
     event SessionKeyManagerUpdated(address indexed newManager);
-    event SessionKeyOperationExecuted(
-        address indexed owner,
-        address indexed sessionKey,
-        bytes4 selector
-    );
+    event SessionKeyOperationExecuted(address indexed owner, address indexed sessionKey, bytes4 selector);
     event MinActionValueUpdated(uint256 newValue);
 
     // 文章编辑事件 (author/arweaveId/originality 不可修改，SubSquid可从 ArticlePublished 获取)
@@ -219,12 +204,7 @@ contract BlogHub is
     );
 
     // 用户资料更新事件
-    event UserProfileUpdated(
-        address indexed user,
-        string nickname,
-        string avatar,
-        string bio
-    );
+    event UserProfileUpdated(address indexed user, string nickname, string avatar, string bio);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -236,10 +216,7 @@ contract BlogHub is
      * @param _initialOwner 合约初始管理员
      * @param _treasury 平台国库地址
      */
-    function initialize(
-        address _initialOwner,
-        address _treasury
-    ) public initializer {
+    function initialize(address _initialOwner, address _treasury) public initializer {
         __ERC1155_init(""); // 实际 URI 建议由前端根据 ID 拼接，或者实现 uri() 函数
         __ERC2981_init();
         __AccessControl_init();
@@ -316,14 +293,10 @@ contract BlogHub is
         _validateStringParams(originalAuthor, title, summary);
     }
 
-
     /**
      * @dev 创建文章的核心逻辑（内部函数，避免代码重复）
      */
-    function _createArticle(
-        address publisher,
-        PublishParams calldata params
-    ) internal returns (uint256 newId) {
+    function _createArticle(address publisher, PublishParams calldata params) internal returns (uint256 newId) {
         address author = params.trueAuthor != address(0) ? params.trueAuthor : publisher;
         newId = nextArticleId++;
 
@@ -362,29 +335,20 @@ contract BlogHub is
      * @param sender 操作发起人
      * @param params 编辑参数结构体
      */
-    function _executeEditArticle(
-        address sender,
-        EditArticleParams calldata params
-    ) internal {
+    function _executeEditArticle(address sender, EditArticleParams calldata params) internal {
         if (params.articleId == 0 || params.articleId >= nextArticleId) revert ArticleNotFound();
-        
+
         Article storage article = articles[params.articleId];
-        
+
         // 只有文章作者可以编辑
         if (article.author != sender) revert NotArticleAuthor();
-        
+
         // 验证参数
         _validateStringParams(params.originalAuthor, params.title, params.summary);
         // 更新文章信息
         article.categoryId = params.categoryId;
-        
-        emit ArticleEdited(
-            params.articleId,
-            params.originalAuthor,
-            params.title,
-            params.summary,
-            params.categoryId
-        );
+
+        emit ArticleEdited(params.articleId, params.originalAuthor, params.title, params.summary, params.categoryId);
     }
 
     /**
@@ -416,8 +380,7 @@ contract BlogHub is
             revert ContentRequiredForScore();
         }
 
-        if (contentLength > 0 && amount < minActionValue)
-            revert SpamProtection();
+        if (contentLength > 0 && amount < minActionValue) revert SpamProtection();
 
         Article storage article = articles[_articleId];
         address articleAuthor = article.author;
@@ -436,34 +399,18 @@ contract BlogHub is
                 if (authorShare > 0) _safeTransferETH(articleAuthor, authorShare);
             }
 
-            emit ArticleEvaluated(
-                _articleId,
-                sender,
-                _score,
-                amount
-            );
+            emit ArticleEvaluated(_articleId, sender, _score, amount);
         }
 
         if (contentLength > 0) {
-            emit CommentAdded(
-                _articleId,
-                sender,
-                _content,
-                _parentCommentId,
-                _score
-            );
+            emit CommentAdded(_articleId, sender, _content, _parentCommentId, _score);
         }
     }
 
     /**
      * @dev 执行收藏的核心逻辑
      */
-    function _executeCollect(
-        address sender,
-        uint256 _articleId,
-        address _referrer,
-        uint256 amount
-    ) internal {
+    function _executeCollect(address sender, uint256 _articleId, address _referrer, uint256 amount) internal {
         if (_articleId >= nextArticleId) revert ArticleNotFound();
 
         Article storage article = articles[_articleId];
@@ -495,12 +442,7 @@ contract BlogHub is
         uint256 authorShare = _distributePlatformAndReferralFees(amount, validReferrer);
         if (authorShare > 0) _safeTransferETH(articleAuthor, authorShare);
 
-        emit ArticleCollected(
-            _articleId,
-            sender,
-            amount,
-            collectorTokenId
-        );
+        emit ArticleCollected(_articleId, sender, amount, collectorTokenId);
     }
 
     /**
@@ -530,12 +472,7 @@ contract BlogHub is
         address articleAuthor = article.author;
 
         // --- 资金分配 ---
-        address validReferrer = _validateReferrer(
-            _referrer,
-            sender,
-            articleAuthor,
-            _commenter
-        );
+        address validReferrer = _validateReferrer(_referrer, sender, articleAuthor, _commenter);
 
         uint256 remaining = _distributePlatformAndReferralFees(amount, validReferrer);
 
@@ -544,13 +481,7 @@ contract BlogHub is
         uint256 commenterShare = remaining - authorShare;
         if (commenterShare > 0) _safeTransferETH(_commenter, commenterShare);
 
-        emit CommentLiked(
-            _articleId,
-            _commentId,
-            sender,
-            _commenter,
-            amount
-        );
+        emit CommentLiked(_articleId, _commentId, sender, _commenter, amount);
     }
 
     /**
@@ -562,12 +493,8 @@ contract BlogHub is
         address invalid0,
         address invalid1
     ) internal pure returns (address) {
-        if (
-            referrer == address(0) ||
-            referrer == sender ||
-            referrer == invalid0 ||
-            referrer == invalid1
-        ) return address(0);
+        if (referrer == address(0) || referrer == sender || referrer == invalid0 || referrer == invalid1)
+            return address(0);
         return referrer;
     }
 
@@ -580,9 +507,7 @@ contract BlogHub is
     ) internal returns (uint256 remaining) {
         uint256 platformShare = (_amount * platformFeeBps) / 10000;
         // 固定推荐费率 10%
-        uint256 referralShare = (_referrer != address(0))
-            ? (_amount * 1000) / 10000
-            : 0;
+        uint256 referralShare = (_referrer != address(0)) ? (_amount * 1000) / 10000 : 0;
 
         if (platformShare > 0) _safeTransferETH(platformTreasury, platformShare);
         if (referralShare > 0) {
@@ -603,9 +528,7 @@ contract BlogHub is
      * @dev 发布文章 (铸造 NFT)
      * @param params 发布参数结构体（避免 Stack Too Deep）
      */
-    function publish(
-        PublishParams calldata params
-    ) external whenNotPaused returns (uint256) {
+    function publish(PublishParams calldata params) external whenNotPaused returns (uint256) {
         _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary);
         return _createArticle(_msgSender(), params);
     }
@@ -627,10 +550,7 @@ contract BlogHub is
      * @dev 收藏文章 (Collect)
      * 铸造 NFT
      */
-    function collect(
-        uint256 _articleId,
-        address _referrer
-    ) external payable nonReentrant whenNotPaused {
+    function collect(uint256 _articleId, address _referrer) external payable nonReentrant whenNotPaused {
         _executeCollect(_msgSender(), _articleId, _referrer, msg.value);
     }
 
@@ -659,9 +579,7 @@ contract BlogHub is
      * @dev 编辑文章信息（仅作者可调用）
      * @param params 编辑参数结构体（避免 Stack Too Deep）
      */
-    function editArticle(
-        EditArticleParams calldata params
-    ) external whenNotPaused {
+    function editArticle(EditArticleParams calldata params) external whenNotPaused {
         _executeEditArticle(_msgSender(), params);
     }
 
@@ -686,31 +604,21 @@ contract BlogHub is
         uint256 articleId = getArticleIdFromTokenId(_id);
         if (articleId == 0 || articleId >= nextArticleId) revert ArticleNotFound();
         return
-            string(
-                abi.encodePacked(
-                    "https://gateway.irys.xyz/mutable/",
-                    articles[articleId].arweaveHash,
-                    "/index.md"
-                )
-            );
+            string(abi.encodePacked("https://gateway.irys.xyz/mutable/", articles[articleId].arweaveHash, "/index.md"));
     }
 
     // =============================================================
     //                      管理功能
     // =============================================================
 
-    function setPlatformFee(
-        uint96 _feeBps
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPlatformFee(uint96 _feeBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
         // 这里限制平台费最高 30%
         if (_feeBps > 3000) revert FeeTooHigh();
         platformFeeBps = _feeBps;
         emit PlatformFeeUpdated(_feeBps);
     }
 
-    function setPlatformTreasury(
-        address _treasury
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPlatformTreasury(address _treasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_treasury == address(0)) revert InvalidAddress();
         platformTreasury = _treasury;
         emit TreasuryUpdated(_treasury);
@@ -728,9 +636,7 @@ contract BlogHub is
      * @notice 设置 Session Key 管理器地址
      * @param _sessionKeyManager Session Key 管理器合约地址
      */
-    function setSessionKeyManager(
-        address _sessionKeyManager
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSessionKeyManager(address _sessionKeyManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_sessionKeyManager == address(0)) revert InvalidAddress();
         sessionKeyManager = ISessionKeyManager(_sessionKeyManager);
         emit SessionKeyManagerUpdated(_sessionKeyManager);
@@ -740,9 +646,7 @@ contract BlogHub is
      * @notice 设置最低操作金额（防 Spam）
      * @param _minActionValue 新的最低金额（wei）
      */
-    function setMinActionValue(
-        uint256 _minActionValue
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMinActionValue(uint256 _minActionValue) external onlyRole(DEFAULT_ADMIN_ROLE) {
         minActionValue = _minActionValue;
         emit MinActionValueUpdated(_minActionValue);
     }
@@ -768,7 +672,14 @@ contract BlogHub is
         {
             ISessionKeyManager manager = _requireSessionKeyManager();
             bytes4 selector = BlogHub.evaluate.selector;
-            bytes memory callData = abi.encodeWithSelector(selector, _articleId, _score, _content, _referrer, _parentCommentId);
+            bytes memory callData = abi.encodeWithSelector(
+                selector,
+                _articleId,
+                _score,
+                _content,
+                _referrer,
+                _parentCommentId
+            );
             _validateAndUseSessionKey(manager, owner, sessionKey, selector, callData, msg.value, deadline, signature);
         }
         _executeEvaluate(owner, _articleId, _score, _content, _referrer, _parentCommentId, msg.value);
@@ -863,7 +774,6 @@ contract BlogHub is
         emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.editArticle.selector);
     }
 
-
     /**
      * @notice 使用 Session Key 发布文章（无感交互）
      */
@@ -878,35 +788,32 @@ contract BlogHub is
             ISessionKeyManager manager = _requireSessionKeyManager();
             _validatePublishParams(params.royaltyBps, params.originalAuthor, params.title, params.summary);
             bytes4 selector = BlogHub.publish.selector;
-            _validateAndUseSessionKey(manager, owner, sessionKey, selector, abi.encodeWithSelector(selector, params), 0, deadline, signature);
+            _validateAndUseSessionKey(
+                manager,
+                owner,
+                sessionKey,
+                selector,
+                abi.encodeWithSelector(selector, params),
+                0,
+                deadline,
+                signature
+            );
         }
         uint256 newId = _createArticle(owner, params);
         emit SessionKeyOperationExecuted(owner, sessionKey, BlogHub.publish.selector);
         return newId;
     }
 
-
     // =============================================================
     //                      底层 Override (必须实现)
     // =============================================================
 
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyRole(UPGRADER_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 
     // 解决多重继承导致的 supportsInterface 冲突
     function supportsInterface(
         bytes4 interfaceId
-    )
-        public
-        view
-        override(
-            ERC1155Upgradeable,
-            ERC2981Upgradeable,
-            AccessControlUpgradeable
-        )
-        returns (bool)
-    {
+    ) public view override(ERC1155Upgradeable, ERC2981Upgradeable, AccessControlUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -929,12 +836,7 @@ contract BlogHub is
         if (bytes(_avatar).length > MAX_AVATAR_LENGTH) revert InvalidLength();
         if (bytes(_bio).length > MAX_BIO_LENGTH) revert InvalidLength();
 
-        emit UserProfileUpdated(
-            _msgSender(),
-            _nickname,
-            _avatar,
-            _bio
-        );
+        emit UserProfileUpdated(_msgSender(), _nickname, _avatar, _bio);
     }
 
     // =============================================================

@@ -2,6 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
+	import EditorSkeleton from '$lib/components/EditorSkeleton.svelte';
 	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMarkdown, fetchArticleSummaryFromTags } from '$lib/arweave';
 	import { editArticleWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 	import { getCoverImageUrl } from '$lib/arweave/folder';
@@ -342,12 +343,8 @@
 <div class="min-h-screen bg-white">
 	<div class="mx-auto max-w-3xl px-6 py-12">
 		{#if isLoadingArticle}
-			<div class="flex items-center justify-center py-16">
-				<div class="flex items-center gap-3 text-gray-500">
-					<SpinnerIcon size={20} class="text-gray-500" />
-					<span>{m.loading()}</span>
-				</div>
-			</div>
+			<!-- Show skeleton during metadata loading -->
+			<EditorSkeleton />
 		{:else if loadError}
 			<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
 				<p class="text-red-800">{loadError}</p>
@@ -371,12 +368,8 @@
 				</a>
 			</div>
 		{:else if isLoadingContent}
-			<div class="flex items-center justify-center py-16">
-				<div class="flex items-center gap-3 text-gray-500">
-					<SpinnerIcon size={20} class="text-gray-500" />
-					<span>{m.loading_content()}</span>
-				</div>
-			</div>
+			<!-- Show skeleton during content loading -->
+			<EditorSkeleton />
 		{:else}
 			<header class="mb-12">
 				<h1 class="mb-2 text-4xl font-light tracking-tight">{m.edit_article()}</h1>
