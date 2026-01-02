@@ -26,6 +26,7 @@ export interface PublishArticleParams {
 	collectPrice?: bigint;
 	maxCollectSupply?: bigint;
 	originality?: number;
+	visibility?: number; // 0:Public, 1:Private, 2:Encrypted
 }
 
 export interface PublishArticleResult {
@@ -85,7 +86,8 @@ async function publishArticleWithSessionKeyInternal(
 		trueAuthor = '0x0000000000000000000000000000000000000000',
 		collectPrice = 0n,
 		maxCollectSupply = 0n,
-		originality = 0
+		originality = 0,
+		visibility = 0
 	} = params;
 
 	// Note: Session key balance is already ensured by ensureSessionKeyReady
@@ -120,7 +122,8 @@ async function publishArticleWithSessionKeyInternal(
 		trueAuthor,
 		collectPrice,
 		maxCollectSupply,
-		originality
+		originality,
+		visibility
 	);
 	console.log(`Article published to blockchain: ${txHash}`);
 

@@ -388,5 +388,9 @@
 	"send_dislike": "发送不喜欢",
 	"wallet_cached_account": "已登录缓存账户。如需切换，请手动打开钱包更改。",
 	"contract_tx": "合约交易",
-	"storage_tx": "存储交易"
+	"storage_tx": "存储交易",
+	"visibility": "可见性",
+	"public": "公开",
+	"non_public": "不公开",
+	"encrypted": "加密"
 }

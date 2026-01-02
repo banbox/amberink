@@ -23,16 +23,16 @@ abstract contract BaseTest is Test {
     // ============ 测试账户 ============
     address public owner;
     uint256 public ownerPrivateKey;
-    
+
     address public user1;
     uint256 public user1PrivateKey;
-    
+
     address public user2;
     uint256 public user2PrivateKey;
-    
+
     address public sessionKey;
     uint256 public sessionKeyPrivateKey;
-    
+
     address public treasury;
     address public sponsor;
     uint256 public sponsorPrivateKey;
@@ -43,13 +43,15 @@ abstract contract BaseTest is Test {
     uint256 public constant SPENDING_LIMIT = 10 ether;
 
     // ============ EIP-712 相关 ============
-    bytes32 public constant REGISTER_SESSION_KEY_TYPEHASH = keccak256(
-        "RegisterSessionKey(address owner,address sessionKey,uint48 validAfter,uint48 validUntil,address allowedContract,bytes4[] allowedSelectors,uint256 spendingLimit,uint256 nonce,uint256 deadline)"
-    );
+    bytes32 public constant REGISTER_SESSION_KEY_TYPEHASH =
+        keccak256(
+            "RegisterSessionKey(address owner,address sessionKey,uint48 validAfter,uint48 validUntil,address allowedContract,bytes4[] allowedSelectors,uint256 spendingLimit,uint256 nonce,uint256 deadline)"
+        );
 
-    bytes32 public constant SESSION_OPERATION_TYPEHASH = keccak256(
-        "SessionOperation(address owner,address sessionKey,address target,bytes4 selector,bytes callData,uint256 value,uint256 nonce,uint256 deadline)"
-    );
+    bytes32 public constant SESSION_OPERATION_TYPEHASH =
+        keccak256(
+            "SessionOperation(address owner,address sessionKey,address target,bytes4 selector,bytes callData,uint256 value,uint256 nonce,uint256 deadline)"
+        );
 
     // ============ 设置函数 ============
     function setUp() public virtual {
@@ -86,11 +88,7 @@ abstract contract BaseTest is Test {
 
         // 部署 BlogHub (使用代理模式)
         blogHubImpl = new BlogHub();
-        bytes memory initData = abi.encodeWithSelector(
-            BlogHub.initialize.selector,
-            owner,
-            treasury
-        );
+        bytes memory initData = abi.encodeWithSelector(BlogHub.initialize.selector, owner, treasury);
         ERC1967Proxy proxy = new ERC1967Proxy(address(blogHubImpl), initData);
         blogHub = BlogHub(payable(address(proxy)));
     }
@@ -149,13 +147,7 @@ abstract contract BaseTest is Test {
             )
         );
 
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                _getSessionKeyManagerDomainSeparator(),
-                structHash
-            )
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _getSessionKeyManagerDomainSeparator(), structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         return abi.encodePacked(r, s, v);
@@ -189,13 +181,7 @@ abstract contract BaseTest is Test {
             )
         );
 
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                _getSessionKeyManagerDomainSeparator(),
-                structHash
-            )
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _getSessionKeyManagerDomainSeparator(), structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         return abi.encodePacked(r, s, v);
@@ -204,11 +190,7 @@ abstract contract BaseTest is Test {
     /**
      * @dev 注册一个标准的 Session Key
      */
-    function _registerStandardSessionKey(
-        address _owner,
-        address _sessionKey,
-        address allowedContract
-    ) internal {
+    function _registerStandardSessionKey(address _owner, address _sessionKey, address allowedContract) internal {
         bytes4[] memory selectors = new bytes4[](5);
         selectors[0] = BlogHub.evaluate.selector;
         selectors[1] = BlogHub.likeComment.selector;
@@ -232,41 +214,48 @@ abstract contract BaseTest is Test {
      */
     function _publishTestArticle(address author) internal returns (uint256) {
         vm.prank(author);
-        return blogHub.publish(
-            BlogHub.PublishParams({
-                arweaveId: "test-arweave-hash",
-                categoryId: 1,
-                royaltyBps: 500,
-                originalAuthor: "",
-                title: "Test Title",
-                summary: "",
-                trueAuthor: address(0),
-                collectPrice: 0.01 ether,
-                maxCollectSupply: 100,
-                originality: BlogHub.Originality.Original
-            })
-        );
+        return
+            blogHub.publish(
+                BlogHub.PublishParams({
+                    arweaveId: "test-arweave-hash",
+                    categoryId: 1,
+                    royaltyBps: 500,
+                    originalAuthor: "",
+                    title: "Test Title",
+                    summary: "",
+                    trueAuthor: address(0),
+                    collectPrice: 0.01 ether,
+                    maxCollectSupply: 100,
+                    originality: BlogHub.Originality.Original,
+                    visibility: BlogHub.Visibility.Public
+                })
+            );
     }
 
     /**
      * @dev 发布一篇带原作者的测试文章（代发场景）
      */
-    function _publishTestArticleWithOriginalAuthor(address publisher, string memory originalAuthor) internal returns (uint256) {
+    function _publishTestArticleWithOriginalAuthor(
+        address publisher,
+        string memory originalAuthor
+    ) internal returns (uint256) {
         vm.prank(publisher);
-        return blogHub.publish(
-            BlogHub.PublishParams({
-                arweaveId: "test-arweave-hash",
-                categoryId: 1,
-                royaltyBps: 500,
-                originalAuthor: originalAuthor,
-                title: "Test Title",
-                summary: "",
-                trueAuthor: address(0),
-                collectPrice: 0.01 ether,
-                maxCollectSupply: 100,
-                originality: BlogHub.Originality.Original
-            })
-        );
+        return
+            blogHub.publish(
+                BlogHub.PublishParams({
+                    arweaveId: "test-arweave-hash",
+                    categoryId: 1,
+                    royaltyBps: 500,
+                    originalAuthor: originalAuthor,
+                    title: "Test Title",
+                    summary: "",
+                    trueAuthor: address(0),
+                    collectPrice: 0.01 ether,
+                    maxCollectSupply: 100,
+                    originality: BlogHub.Originality.Original,
+                    visibility: BlogHub.Visibility.Public
+                })
+            );
     }
 
     /**

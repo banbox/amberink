@@ -334,8 +334,9 @@ const BLOGHUB_ABI = [
 					{ name: 'summary', type: 'string' },
 					{ name: 'trueAuthor', type: 'address' },
 					{ name: 'collectPrice', type: 'uint96' },
-					{ name: 'maxCollectSupply', type: 'uint32' },
-					{ name: 'originality', type: 'uint8' }
+					{ name: 'maxCollectSupply', type: 'uint16' },
+					{ name: 'originality', type: 'uint8' },
+					{ name: 'visibility', type: 'uint8' }
 				]
 			}
 		],
@@ -419,8 +420,9 @@ const BLOGHUB_ABI = [
 					{ name: 'summary', type: 'string' },
 					{ name: 'trueAuthor', type: 'address' },
 					{ name: 'collectPrice', type: 'uint96' },
-					{ name: 'maxCollectSupply', type: 'uint32' },
-					{ name: 'originality', type: 'uint8' }
+					{ name: 'maxCollectSupply', type: 'uint16' },
+					{ name: 'originality', type: 'uint8' },
+					{ name: 'visibility', type: 'uint8' }
 				]
 			},
 			{ name: 'deadline', type: 'uint256' },
@@ -645,7 +647,8 @@ export async function publishToContract(
 	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
 	collectPrice: bigint = 0n,
 	maxCollectSupply: bigint = 0n,
-	originality: number = 0
+	originality: number = 0,
+	visibility: number = 0  // 0:Public, 1:Private, 2:Encrypted
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required');
@@ -690,7 +693,8 @@ export async function publishToContract(
 					trueAuthor,
 					collectPrice: BigInt(collectPrice),
 					maxCollectSupply: Number(maxCollectSupply),
-					originality: Number(originality)
+					originality: Number(originality),
+					visibility: Number(visibility)
 				}
 			]
 		});
@@ -1037,7 +1041,7 @@ async function getSessionKeyNonce(
 // 可从 squid\src\abi\BlogHub.ts 查阅squid配置的最新函数签名
 // 修改这里需要一并更新：frontend\src\lib\sessionKey.ts  ALLOWED_SELECTORS
 export const FUNCTION_SELECTORS = {
-	publish: '0x21a25d60' as `0x${string}`,      // publish((string,uint16,uint96,string,string,string,address,uint96,uint32,uint8)) - PublishParams struct
+	publish: '0x2801f5df' as `0x${string}`,      // publish((string,uint16,uint96,string,string,string,address,uint96,uint16,uint8,uint8)) - PublishParams struct
 	evaluate: '0xff1f090a' as `0x${string}`,     // evaluate(uint256,uint8,string,address,uint256)
 	follow: '0x63c3cc16' as `0x${string}`,       // follow(address,bool)
 	likeComment: '0xdffd40f2' as `0x${string}`,  // likeComment(uint256,uint256,address,address)
@@ -1110,7 +1114,8 @@ export async function publishToContractWithSessionKey(
 	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
 	collectPrice: bigint = 0n,
 	maxCollectSupply: bigint = 0n,
-	originality: number = 0
+	originality: number = 0,
+	visibility: number = 0  // 0:Public, 1:Private, 2:Encrypted
 ): Promise<string> {
 	if (!arweaveId) {
 		throw new Error('Arweave ID is required');
@@ -1144,7 +1149,7 @@ export async function publishToContractWithSessionKey(
 	try {
 		const chain = getChainConfig();
 		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-		
+
 		// Create wallet client with session key
 		const walletClient = createWalletClient({
 			account: sessionKeyAccount,
@@ -1170,7 +1175,8 @@ export async function publishToContractWithSessionKey(
 					trueAuthor,
 					collectPrice: BigInt(collectPrice),
 					maxCollectSupply: Number(maxCollectSupply),
-					originality: Number(originality)
+					originality: Number(originality),
+					visibility: Number(visibility)
 				}
 			]
 		});
@@ -1210,7 +1216,7 @@ export async function publishToContractWithSessionKey(
 			deadline,
 			nonce
 		);
-		
+
 		console.log('signature:', signature);
 
 		// Call publishWithSessionKey
@@ -1232,7 +1238,8 @@ export async function publishToContractWithSessionKey(
 					trueAuthor: trueAuthor,
 					collectPrice: BigInt(collectPrice),
 					maxCollectSupply: Number(maxCollectSupply),
-					originality: Number(originality)
+					originality: Number(originality),
+					visibility: Number(visibility)
 				},
 				deadline,
 				signature

@@ -30,6 +30,7 @@ export const ARTICLES_QUERY = gql`
 			maxCollectSupply
 			collectCount
 			originality
+			visibility
 			likeAmount
 			dislikeAmount
 			totalTips
@@ -62,6 +63,7 @@ export const ALL_ARTICLES_QUERY = gql`
 			maxCollectSupply
 			collectCount
 			originality
+			visibility
 			likeAmount
 			dislikeAmount
 			totalTips
@@ -115,6 +117,7 @@ export interface ArticleData {
 	maxCollectSupply: string;
 	collectCount: string;
 	originality: number;
+	visibility: number;
 	likeAmount: string;
 	dislikeAmount: string;
 	totalTips: string;
@@ -156,6 +159,7 @@ export const ARTICLE_BY_ID_QUERY = gql`
 			maxCollectSupply
 			collectCount
 			originality
+			visibility
 			likeAmount
 			dislikeAmount
 			totalTips
@@ -252,6 +256,7 @@ export interface ArticleDetailData {
 	maxCollectSupply: string;
 	collectCount: string;
 	originality: number;
+	visibility: number;
 	likeAmount: string;
 	dislikeAmount: string;
 	totalTips: string;
@@ -311,6 +316,7 @@ export const ARTICLES_BY_AUTHOR_QUERY = gql`
 			maxCollectSupply
 			collectCount
 			originality
+			visibility
 			likeAmount
 			dislikeAmount
 			totalTips

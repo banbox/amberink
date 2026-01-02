@@ -71,6 +71,12 @@ contract BlogHub is
         Reprint // 转载
     }
 
+    enum Visibility {
+        Public, // 公开 - 所有人可见
+        Private, // 不公开 - 仅作者可见
+        Encrypted // 加密 - 内容加密存储
+    }
+
     // --- 参数结构体（避免 Stack Too Deep）---
     struct PublishParams {
         string arweaveId;
@@ -81,8 +87,9 @@ contract BlogHub is
         string summary;
         address trueAuthor;
         uint96 collectPrice;
-        uint32 maxCollectSupply;
+        uint16 maxCollectSupply;
         Originality originality;
+        Visibility visibility;
     }
 
     struct EditArticleParams {
@@ -95,15 +102,16 @@ contract BlogHub is
 
     // --- 结构体 ---
     struct Article {
-        // --- Slot 0 (31 bytes，剩余1 bytes) ---
+        // --- Slot 0 (32 bytes，完全填满) ---
         address author; // 20 bytes
         uint64 timestamp; // 8 bytes
         uint16 categoryId; // 2 bytes
         Originality originality; // enum uint8 (1 byte)
-        // --- Slot 1 (20 bytes，剩余 12 bytes) ---
+        Visibility visibility; // enum uint8 (1 byte)
+        // --- Slot 1 (16 bytes，剩余 16 bytes) ---
         uint96 collectPrice; // 12 bytes
-        uint32 maxCollectSupply; // 4 bytes
-        uint32 collectCount; // 4 bytes
+        uint16 maxCollectSupply; // 2 bytes
+        uint16 collectCount; // 2 bytes
         // --- String Slots ---
         // string 类型因为长度不固定，通常无法与普通变量打包，会开启新 Slot
         string arweaveHash;
@@ -151,8 +159,9 @@ contract BlogHub is
         string title,
         string summary,
         uint96 collectPrice,
-        uint32 maxCollectSupply,
-        Originality originality
+        uint16 maxCollectSupply,
+        Originality originality,
+        Visibility visibility
     );
 
     // 核心评价事件：SubSquid 可通过 score 区分喜欢(1)还是不喜欢(2)
@@ -308,7 +317,8 @@ contract BlogHub is
             collectPrice: params.collectPrice,
             maxCollectSupply: params.maxCollectSupply,
             collectCount: 0,
-            originality: params.originality
+            originality: params.originality,
+            visibility: params.visibility
         });
         arweaveIdToArticleId[params.arweaveId] = newId;
 
@@ -326,7 +336,8 @@ contract BlogHub is
             params.summary,
             params.collectPrice,
             params.maxCollectSupply,
-            params.originality
+            params.originality,
+            params.visibility
         );
     }
 

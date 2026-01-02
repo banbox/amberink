@@ -254,7 +254,7 @@ VALID_UNTIL=$((CURRENT_TIME + 604800))  # 7天后过期
 # evaluate: 0xff1f090a
 # likeComment: 0xdffd40f2
 # follow: 0x63c3cc16
-# publish: 0x21a25d60
+# publish: 0x2801f5df
 # collect: 0x8d3c100a
 # editArticle: 0x... (需查询)
 # updateUserProfile: 0x... (需查询)
@@ -266,7 +266,7 @@ cast send $SESSION_KEY_MANAGER \
   $CURRENT_TIME \
   $VALID_UNTIL \
   $BLOG_HUB_PROXY \
-  "[0xff1f090a,0xdffd40f2,0x63c3cc16,0x21a25d60,0x8d3c100a]" \
+  "[0xff1f090a,0xdffd40f2,0x63c3cc16,0x2801f5df,0x8d3c100a]" \
   10000000000000000000 \
   --private-key $USER_SECOND_KEY \
   --rpc-url $ETHERSCAN_RPC
@@ -573,7 +573,7 @@ cast call $PAYMASTER \
 
 | 函数 | 选择器 |
 |------|--------|
-| `publish((string,uint16,uint96,string,string,string,address,uint96,uint32,uint8))` | `0x21a25d60` |
+| `publish((string,uint16,uint96,string,string,string,address,uint96,uint16,uint8,uint8))` | `0x2801f5df` |
 | `evaluate(uint256,uint8,string,address,uint256)` | `0xff1f090a` |
 | `likeComment(uint256,uint256,address,address)` | `0xdffd40f2` |
 | `follow(address,bool)` | `0x63c3cc16` |

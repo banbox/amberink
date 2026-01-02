@@ -74,7 +74,7 @@ const SESSION_KEY_MANAGER_ABI = [
 	}
 ] as const;
 
-const PUBLISH_SELECTOR = '0x21a25d60' as const;
+const PUBLISH_SELECTOR = '0x2801f5df' as const;
 
 // Allowed function selectors for session key
 // Use: cast sig "functionName(params)" to get selector
@@ -83,7 +83,7 @@ const ALLOWED_SELECTORS: `0x${string}`[] = [
 	'0xff1f090a', // evaluate(uint256,uint8,string,address,uint256)
 	'0xdffd40f2', // likeComment(uint256,uint256,address,address)
 	'0x63c3cc16', // follow(address,bool)
-	'0x21a25d60', // publish((string,uint16,uint96,string,string,string,address,uint96,uint32,uint8)) - PublishParams struct
+	'0x2801f5df', // publish((string,uint16,uint96,string,string,string,address,uint96,uint16,uint8,uint8)) - PublishParams struct
 	'0x8d3c100a', // collect(uint256,address)
 	'0x461e2378'  // editArticle((uint256,string,string,string,uint16)) - EditArticleParams struct
 ];
@@ -141,18 +141,18 @@ export async function fundSessionKey(
 	const minBalance = await calculateGasAmount(getMinGasFeeMultiplier());
 	const fundAmount = amount ?? await calculateGasAmount(getDefaultGasFeeMultiplier());
 	const actualAmount = fundAmount >= minBalance ? fundAmount : minBalance;
-	
+
 	console.log(`Funding session key with ${formatEther(actualAmount)} ETH (min: ${formatEther(minBalance)} ETH)`);
-	
+
 	const txHash = await walletClient.sendTransaction({
 		to: sessionKeyAddress as `0x${string}`,
 		value: actualAmount
 	});
-	
+
 	// Wait for transaction confirmation
 	const publicClient = getPublicClient();
 	await publicClient.waitForTransactionReceipt({ hash: txHash });
-	
+
 	console.log(`Funded session key ${sessionKeyAddress} with ${formatEther(actualAmount)} ETH. Tx: ${txHash}`);
 	return txHash;
 }
@@ -167,12 +167,12 @@ export async function ensureSessionKeyBalance(sessionKeyAddress: string): Promis
 		getSessionKeyBalance(sessionKeyAddress),
 		calculateGasAmount(getMinGasFeeMultiplier())
 	]);
-	
+
 	if (balance >= minBalance) {
 		console.log(`Session key balance sufficient: ${formatEther(balance)} ETH`);
 		return true;
 	}
-	
+
 	console.log(`Session key balance low (${formatEther(balance)} ETH), funding...`);
 	try {
 		await fundSessionKey(sessionKeyAddress);
@@ -246,7 +246,7 @@ async function createIrysBalanceApproval(
 		// Create a large approval amount (1 ETH worth in atomic units)
 		// This should be enough for many uploads
 		const approvalAmount = uploader.utils.toAtomic(1);
-		
+
 		console.log(`Creating Irys Balance Approval for ${sessionKeyAddress}...`);
 		const receipt = await uploader.approval.createApproval({
 			amount: approvalAmount,
@@ -275,7 +275,7 @@ export async function createSessionKey(options?: {
 	skipIrysApproval?: boolean;
 }): Promise<StoredSessionKey> {
 	const { skipFunding = true, skipIrysApproval = true } = options ?? {};
-	
+
 	const account = await getEthereumAccount();
 	const sessionKeyManager = getSessionKeyManagerAddress();
 	const blogHub = getBlogHubContractAddress();
@@ -376,7 +376,7 @@ export async function reauthorizeSessionKey(
 		]
 	});
 	const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-	
+
 	// Check if transaction was successful
 	if (receipt.status === 'reverted') {
 		throw new Error('Transaction reverted: session key may still be active. Use extend instead.');
@@ -427,7 +427,7 @@ export async function extendSessionKey(
 		args: [existingSessionKey.address as `0x${string}`]
 	});
 	const revokeReceipt = await publicClient.waitForTransactionReceipt({ hash: revokeTxHash });
-	
+
 	if (revokeReceipt.status === 'reverted') {
 		throw new Error('Failed to revoke existing session key');
 	}
@@ -454,7 +454,7 @@ export async function extendSessionKey(
 		]
 	});
 	const registerReceipt = await publicClient.waitForTransactionReceipt({ hash: registerTxHash });
-	
+
 	if (registerReceipt.status === 'reverted') {
 		throw new Error('Failed to re-register session key after revocation');
 	}
@@ -513,7 +513,7 @@ export function getSessionKeyAccount() {
 /**
  * Check if session key is valid on-chain (registered, not expired, has required selectors)
  * @param sessionKey - Session key to validate
- * @param requiredSelector - Optional specific selector to check for (e.g., PUBLISH_SELECTOR '0x21a25d60')
+ * @param requiredSelector - Optional specific selector to check for (e.g., PUBLISH_SELECTOR '0x2801f5df')
  * @returns true if session key is valid on-chain
  */
 export async function isSessionKeyValidOnChain(
@@ -575,10 +575,10 @@ export async function getOrCreateValidSessionKey(options?: {
 	autoCreate?: boolean;
 }): Promise<StoredSessionKey | null> {
 	const { requiredSelector, autoCreate = true } = options ?? {};
-	
+
 	// 1. Check if we have a stored session key (including expired ones)
 	let sessionKey = getStoredSessionKey();
-	
+
 	if (sessionKey) {
 		// 2. Verify it belongs to current wallet
 		const isOwnerValid = await isSessionKeyValidForCurrentWallet();
@@ -589,16 +589,16 @@ export async function getOrCreateValidSessionKey(options?: {
 		} else {
 			// 3. Check if expired locally
 			const isExpired = isSessionKeyExpired(sessionKey);
-			
+
 			if (isExpired) {
 				console.log('Session key expired, checking balance...');
-				
+
 				// Check if session key has balance - if so, automatically reauthorize
 				const balance = await getSessionKeyBalance(sessionKey.address);
 				if (balance > 0n) {
 					const balanceEth = formatEther(balance);
 					console.log(`Session key expired but contains ${balanceEth} ETH, reauthorizing...`);
-					
+
 					// Automatically reauthorize (triggers MetaMask popup)
 					try {
 						sessionKey = await reauthorizeSessionKey(sessionKey);
@@ -609,7 +609,7 @@ export async function getOrCreateValidSessionKey(options?: {
 						throw new Error('Failed to reauthorize session key. Please try again.');
 					}
 				}
-				
+
 				// No balance, safe to clear and create new
 				console.log('Session key expired and has no balance, clearing...');
 				clearLocalSessionKey();
@@ -619,13 +619,13 @@ export async function getOrCreateValidSessionKey(options?: {
 				const isOnChainValid = await isSessionKeyValidOnChain(sessionKey, requiredSelector);
 				if (!isOnChainValid) {
 					console.log('Session key invalid on-chain, checking balance...');
-					
+
 					// Check balance before discarding
 					const balance = await getSessionKeyBalance(sessionKey.address);
 					if (balance > 0n) {
 						const balanceEth = formatEther(balance);
 						console.log(`Session key invalid but contains ${balanceEth} ETH, reauthorizing...`);
-						
+
 						// Automatically reauthorize (triggers MetaMask popup)
 						try {
 							sessionKey = await extendSessionKey(sessionKey);
@@ -636,7 +636,7 @@ export async function getOrCreateValidSessionKey(options?: {
 							throw new Error('Failed to reauthorize session key. Please try again.');
 						}
 					}
-					
+
 					console.log('Session key invalid and has no balance, clearing...');
 					clearLocalSessionKey();
 					sessionKey = null;
@@ -647,16 +647,16 @@ export async function getOrCreateValidSessionKey(options?: {
 			}
 		}
 	}
-	
+
 	// 5. No valid session key - create new one if autoCreate is enabled
 	if (!autoCreate) {
 		return null;
 	}
-	
+
 	console.log('Creating new session key (requires MetaMask signature)...');
 	sessionKey = await createSessionKey();
 	console.log(`New session key created: ${sessionKey.address}`);
-	
+
 	return sessionKey;
 }
 
@@ -680,14 +680,14 @@ export async function ensureSessionKeyReady(options?: {
 		if (!sessionKey) {
 			return null;
 		}
-		
+
 		// 2. Ensure sufficient balance (may trigger MetaMask for funding)
 		const hasBalance = await ensureSessionKeyBalance(sessionKey.address);
 		if (!hasBalance) {
 			console.log('User rejected session key funding');
 			return null;
 		}
-		
+
 		return sessionKey;
 	} catch (error) {
 		console.error('Failed to ensure session key ready:', error);
@@ -776,20 +776,20 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
  */
 export async function createNewSessionKey(forceCreate: boolean = false): Promise<StoredSessionKey> {
 	const existingKey = getStoredSessionKey();
-	
+
 	if (existingKey && !forceCreate) {
 		// Check if existing key has balance
 		const balance = await getSessionKeyBalance(existingKey.address);
 		if (balance > 0n) {
 			const balanceEth = formatEther(balance);
 			const confirmMsg = `Your current Session Key contains ${balanceEth} ETH. Creating a new Session Key will replace the old one. You should withdraw the balance first.\n\nDo you want to continue anyway?`;
-			
+
 			if (typeof window !== 'undefined' && !confirm(confirmMsg)) {
 				throw new Error('User cancelled Session Key creation');
 			}
 		}
 	}
-	
+
 	// Create new session key (this will overwrite the old one in localStorage)
 	return await createSessionKey();
 }

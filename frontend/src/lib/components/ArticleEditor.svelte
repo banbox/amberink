@@ -37,6 +37,7 @@
 		collectPriceUsd: string | number; // Changed from ETH to USD
 		maxCollectSupply: string | number;
 		originality: '0' | '1' | '2';
+		visibility: '0' | '1' | '2'; // 0:Public, 1:Private, 2:Encrypted
 	}
 
 	interface Props {
@@ -99,7 +100,8 @@
 			royaltyBps: 500n,
 			collectPriceUsd: getDefaultCollectPriceUsd(),
 			maxCollectSupply: '0',
-			originality: '0'
+			originality: '0',
+			visibility: '0'
 		}),
 		disabled = false,
 		mode = 'publish',
@@ -238,8 +240,8 @@
 		/>
 	</div>
 
-	<!-- Category & Originality -->
-	<div class="grid grid-cols-2 gap-4">
+	<!-- Category & Originality & Visibility -->
+	<div class="grid grid-cols-3 gap-4">
 		<div>
 			<span id="category-label" class="mb-2 block text-sm font-medium text-gray-700">
 				{m.category()} *
@@ -266,6 +268,21 @@
 				<option value="0">{m.original()}</option>
 				<option value="1">{m.semi_original()}</option>
 				<option value="2">{m.reprint()}</option>
+			</select>
+		</div>
+		<div>
+			<label for="visibility" class="mb-2 block text-sm font-medium text-gray-700">
+				{m.visibility()}
+			</label>
+			<select
+				id="visibility"
+				bind:value={formData.visibility}
+				{disabled}
+				class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+			>
+				<option value="0">{m.public()}</option>
+				<option value="1">{m.non_public()}</option>
+				<option value="2">{m.encrypted()}</option>
 			</select>
 		</div>
 	</div>

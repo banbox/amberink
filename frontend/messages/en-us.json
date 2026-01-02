@@ -388,5 +388,9 @@
 	"send_dislike": "Send Dislike",
 	"wallet_cached_account": "Connected with cached account. To switch to another, please open your wallet manually.",
 	"contract_tx": "Contract TX",
-	"storage_tx": "Storage TX"
+	"storage_tx": "Storage TX",
+	"visibility": "Visibility",
+	"public": "Public",
+	"non_public": "Non-Public",
+	"encrypted": "Encrypted"
 }

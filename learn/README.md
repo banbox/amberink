@@ -1450,3 +1450,16 @@ Claude: 修改完成
 只给出方案，不修改任何文件。  
 Cluade Sonnect 4.5 Think：给出3次方案，都有明显缺陷，要么需要作者持续签名授权，要么获得的秘钥无法使用。  
 Gemini/Claude Opus 4.5 Think：使用去中心化密钥管理网络Lit Protocol根据NFT进行授权。
+
+### 2026-01-02 10:25  solidity类型
+solidity中有uint4吗？uint16范围？uint24范围？  
+Gemini：solidity中没有uint4，最少是uint8的整数倍。uint16最大是65535，uint24最大是16777215。  
+开发者：[Article结构体代码]如果有上面的智能合约结构体，originality这个枚举值目前只有3个，后续可能最多十来个，所以uint4足以；我现在有一个新字段要添加，也是十个以内的枚举。我应该将一个uint8拆分为两部分使用吗？现状看空余空间很多，如果不拆，以后再拆，历史数据是否会受影响？一般最佳实践是什么？需要的时候再将两个uint8合并为一个uint8？还是最开始就拆分好？  
+Gemini：当前空余空间多，不建议为了省4bit拆uin8；最佳实践是用两个独立uint8 enum，以后再“拆 / 合并”会影响 storage layout，历史数据会受影响。  
+
+### 2026-01-02 11:20  新增可见性字段
+@help.md  contracts/src/BlogHub.sol 帮我新增一个枚举字段，放在Article结构体中。记录当前文章的可见性：公开、不公开，加密。
+* 然后把maxCollectSupply和collectCount都改为uint16，外部参数传入也改为uint16；
+* 也对squid和frontend中进行必要的修改（可见性和NFT数量字段的类型变化）。
+* 加密时直接使用作者钱包对带arweaveId的固定消息签名，然后通过HKDF/PBKDF2 派生 AES-256 密钥用于内容加密。只加密content，其他字段公开。
+* squid中依然存储公开、不公开、加密三种文章到数据库中，但是在搜索时，默认只搜索公开的文章；用户传入钱包地址时，则忽略可见性属性，搜索此用户的所有文章。  

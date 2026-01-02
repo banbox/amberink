@@ -68,7 +68,8 @@
 		royaltyBps: 500n,
 		collectPriceUsd: getDefaultCollectPriceUsd(),
 		maxCollectSupply: '0',
-		originality: '0'
+		originality: '0',
+		visibility: '0'
 	});
 
 	// Submit state
@@ -99,7 +100,8 @@
 			royaltyBps: 500n,
 			collectPriceUsd: getDefaultCollectPriceUsd(),
 			maxCollectSupply: '0',
-			originality: '0'
+			originality: '0',
+			visibility: '0'
 		};
 		resetImageKey++;
 		isSubmitting = false;
@@ -189,6 +191,11 @@
 				);
 			}
 
+			const visibilityNum = Number.parseInt(formData.visibility, 10);
+			if (![0, 1, 2].includes(visibilityNum)) {
+				throw new Error('Invalid visibility value: must be 0, 1, or 2');
+			}
+
 			// Call publishArticle from lib
 			const result = await publishArticle({
 				title: formData.title.trim(),
@@ -202,7 +209,8 @@
 				originalAuthor: formData.author.trim() || undefined,
 				collectPrice,
 				maxCollectSupply: maxSupply,
-				originality: originalityNum
+				originality: originalityNum,
+				visibility: visibilityNum
 			});
 
 			// Success

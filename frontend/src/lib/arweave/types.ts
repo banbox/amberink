@@ -2,6 +2,13 @@
  * Arweave/Irys 相关类型定义
  */
 
+/** 文章可见性枚举 */
+export enum Visibility {
+	Public = 0,    // 公开 - 所有人可见
+	Private = 1,   // 不公开 - 仅作者可见
+	Encrypted = 2  // 加密 - 内容加密存储
+}
+
 /** 文章元数据 */
 export interface ArticleMetadata {
 	title: string;
@@ -66,6 +73,7 @@ export interface ArticleFolderUploadParams {
 	coverImage?: File;       // 封面图片文件
 	contentImages?: ContentImageInfo[]; // 内容图片列表
 	tags: string[];
+	visibility?: Visibility; // 文章可见性 (默认 Public)
 }
 
 /** 文章文件夹上传结果 */

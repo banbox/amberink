@@ -192,6 +192,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         maxCollectSupply: BigInt(event.maxCollectSupply),
                         collectCount: 0n,
                         originality: Number(event.originality),
+                        visibility: Number(event.visibility),  // 0:Public, 1:Private, 2:Encrypted
                         royaltyBps: 0, // 事件中不包含此字段，可通过合约查询或前端处理
                         totalTips: 0n,
                         likeAmount: 0n,
@@ -213,6 +214,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     article.maxCollectSupply = BigInt(event.maxCollectSupply)
                     article.collectCount = article.collectCount ?? 0n
                     article.originality = Number(event.originality)
+                    article.visibility = Number(event.visibility)  // 0:Public, 1:Private, 2:Encrypted
                     article.createdAt = new Date(block.header.timestamp)
                     article.blockNumber = block.header.height
                     article.txHash = log.transactionHash

@@ -47,6 +47,9 @@ export class Article {
     @IntColumn_({nullable: false})
     originality!: number
 
+    @IntColumn_({nullable: false})
+    visibility!: number
+
     @BigIntColumn_({nullable: false})
     totalTips!: bigint
 

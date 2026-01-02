@@ -19,16 +19,12 @@ contract BlogHubTest is BaseTest {
         string title,
         string summary,
         uint96 collectPrice,
-        uint32 maxCollectSupply,
-        BlogHub.Originality originality
+        uint16 maxCollectSupply,
+        BlogHub.Originality originality,
+        BlogHub.Visibility visibility
     );
 
-    event ArticleEvaluated(
-        uint256 indexed articleId,
-        address indexed user,
-        uint8 score,
-        uint256 amountPaid
-    );
+    event ArticleEvaluated(uint256 indexed articleId, address indexed user, uint8 score, uint256 amountPaid);
 
     event CommentAdded(
         uint256 indexed articleId,
@@ -38,11 +34,7 @@ contract BlogHubTest is BaseTest {
         uint8 score
     );
 
-    event FollowStatusChanged(
-        address indexed follower,
-        address indexed target,
-        bool isFollowing
-    );
+    event FollowStatusChanged(address indexed follower, address indexed target, bool isFollowing);
 
     event CommentLiked(
         uint256 indexed articleId,
@@ -75,8 +67,9 @@ contract BlogHubTest is BaseTest {
         string memory title = "Test Article Title";
         address trueAuthor = address(0);
         uint96 collectPrice = 0.01 ether;
-        uint32 maxCollectSupply = 100;
+        uint16 maxCollectSupply = 100;
         BlogHub.Originality originality = BlogHub.Originality.Original;
+        BlogHub.Visibility visibility = BlogHub.Visibility.Public;
 
         vm.expectEmit(true, true, true, true);
         emit ArticlePublished(
@@ -86,10 +79,11 @@ contract BlogHubTest is BaseTest {
             arweaveHash,
             originalAuthor,
             title,
-            "",  // summary
+            "", // summary
             collectPrice,
             maxCollectSupply,
-            originality
+            originality,
+            visibility
         );
 
         vm.prank(user1);
@@ -104,22 +98,24 @@ contract BlogHubTest is BaseTest {
                 trueAuthor: trueAuthor,
                 collectPrice: collectPrice,
                 maxCollectSupply: maxCollectSupply,
-                originality: originality
+                originality: originality,
+                visibility: visibility
             })
         );
 
         assertEq(articleId, 1);
         assertEq(blogHub.nextArticleId(), 2);
-        
+
         // 验证文章数据
         (
             address storedAuthor,
             uint64 storedTimestamp,
             uint16 catId,
             BlogHub.Originality storedOriginality,
+            BlogHub.Visibility storedVisibility,
             uint96 storedCollectPrice,
-            uint32 storedMaxCollectSupply,
-            uint32 storedCollectCount,
+            uint16 storedMaxCollectSupply,
+            uint16 storedCollectCount,
             string memory hash
         ) = blogHub.articles(articleId);
         assertEq(hash, arweaveHash);
@@ -128,8 +124,9 @@ contract BlogHubTest is BaseTest {
         assertEq(storedTimestamp, block.timestamp);
         assertEq(storedCollectPrice, collectPrice);
         assertEq(storedMaxCollectSupply, maxCollectSupply);
-        assertEq(storedCollectCount, 1);
+        assertEq(storedCollectCount, 0);
         assertEq(uint256(storedOriginality), uint256(originality));
+        assertEq(uint256(storedVisibility), uint256(visibility));
 
         // 验证 NFT 铸造
         assertEq(blogHub.balanceOf(user1, articleId), 1);
@@ -143,8 +140,9 @@ contract BlogHubTest is BaseTest {
         string memory title = "Another Article";
         address trueAuthor = address(0);
         uint96 collectPrice = 0.01 ether;
-        uint32 maxCollectSupply = 100;
+        uint16 maxCollectSupply = 100;
         BlogHub.Originality originality = BlogHub.Originality.Original;
+        BlogHub.Visibility visibility = BlogHub.Visibility.Public;
 
         vm.expectEmit(true, true, true, true);
         emit ArticlePublished(
@@ -154,10 +152,11 @@ contract BlogHubTest is BaseTest {
             arweaveHash,
             originalAuthor,
             title,
-            "",  // summary
+            "", // summary
             collectPrice,
             maxCollectSupply,
-            originality
+            originality,
+            visibility
         );
 
         vm.prank(user1);
@@ -172,12 +171,15 @@ contract BlogHubTest is BaseTest {
                 trueAuthor: trueAuthor,
                 collectPrice: collectPrice,
                 maxCollectSupply: maxCollectSupply,
-                originality: originality
+                originality: originality,
+                visibility: visibility
             })
         );
 
         // 验证文章数据
-        (address storedAuthor, uint64 storedTs, uint16 catId, , , , , string memory hash) = blogHub.articles(articleId);
+        (address storedAuthor, uint64 storedTs, uint16 catId, , , , , , string memory hash) = blogHub.articles(
+            articleId
+        );
         assertEq(hash, arweaveHash);
         assertEq(storedAuthor, user1); // 存储的 author 为收款作者（trueAuthor 为空则为发布者）
         assertEq(catId, categoryId);
@@ -204,7 +206,8 @@ contract BlogHubTest is BaseTest {
                 trueAuthor: address(0),
                 collectPrice: 0,
                 maxCollectSupply: 0,
-                originality: BlogHub.Originality.Original
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
             })
         );
     }
@@ -223,16 +226,59 @@ contract BlogHubTest is BaseTest {
                 trueAuthor: address(0),
                 collectPrice: 0,
                 maxCollectSupply: 0,
-                originality: BlogHub.Originality.Original
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
             })
         ); // 超过 100%
     }
 
     function test_Publish_MultipleArticles() public {
         vm.startPrank(user1);
-        uint256 id1 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash1", categoryId: 1, royaltyBps: 500, originalAuthor: "", title: "Title1", summary: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
-        uint256 id2 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash2", categoryId: 2, royaltyBps: 300, originalAuthor: "Author2", title: "Title2", summary: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
-        uint256 id3 = blogHub.publish(BlogHub.PublishParams({arweaveId: "hash3", categoryId: 1, royaltyBps: 1000, originalAuthor: "Author3.eth", title: "Title3", summary: "", trueAuthor: address(0), collectPrice: 0.01 ether, maxCollectSupply: 100, originality: BlogHub.Originality.Original}));
+        uint256 id1 = blogHub.publish(
+            BlogHub.PublishParams({
+                arweaveId: "hash1",
+                categoryId: 1,
+                royaltyBps: 500,
+                originalAuthor: "",
+                title: "Title1",
+                summary: "",
+                trueAuthor: address(0),
+                collectPrice: 0.01 ether,
+                maxCollectSupply: 100,
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
+            })
+        );
+        uint256 id2 = blogHub.publish(
+            BlogHub.PublishParams({
+                arweaveId: "hash2",
+                categoryId: 2,
+                royaltyBps: 300,
+                originalAuthor: "Author2",
+                title: "Title2",
+                summary: "",
+                trueAuthor: address(0),
+                collectPrice: 0.01 ether,
+                maxCollectSupply: 100,
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
+            })
+        );
+        uint256 id3 = blogHub.publish(
+            BlogHub.PublishParams({
+                arweaveId: "hash3",
+                categoryId: 1,
+                royaltyBps: 1000,
+                originalAuthor: "Author3.eth",
+                title: "Title3",
+                summary: "",
+                trueAuthor: address(0),
+                collectPrice: 0.01 ether,
+                maxCollectSupply: 100,
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
+            })
+        );
         vm.stopPrank();
 
         assertEq(id1, 1);
@@ -263,7 +309,7 @@ contract BlogHubTest is BaseTest {
         // 验证资金直接转账 (10% 平台费)
         uint256 platformFee = (paymentAmount * 1000) / 10000;
         uint256 authorShare = paymentAmount - platformFee;
-        
+
         assertEq(treasury.balance, treasuryBalanceBefore + platformFee);
         assertEq(user1.balance, authorBalanceBefore + authorShare);
     }
@@ -282,7 +328,7 @@ contract BlogHubTest is BaseTest {
         // Dislike 时全部直接转给平台
         assertEq(treasury.balance, treasuryBalanceBefore + paymentAmount);
         assertEq(user1.balance, authorBalanceBefore); // 作者余额不变
-        
+
         // Dislike 不铸造 NFT
         assertEq(blogHub.balanceOf(user2, articleId), 0);
     }
@@ -333,7 +379,7 @@ contract BlogHubTest is BaseTest {
 
     function test_Evaluate_RevertCommentTooLong() public {
         uint256 articleId = _publishTestArticle(user1);
-        
+
         // 创建超长评论
         bytes memory longComment = new bytes(1025);
         for (uint256 i = 0; i < 1025; i++) {
@@ -439,12 +485,15 @@ contract BlogHubTest is BaseTest {
                 trueAuthor: address(0),
                 collectPrice: 0.01 ether,
                 maxCollectSupply: 100,
-                originality: BlogHub.Originality.Original
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
             })
         );
 
         // URI 现在使用 Irys 可变文件夹格式
-        string memory expectedUri = string(abi.encodePacked("https://gateway.irys.xyz/mutable/", arweaveHash, "/index.md"));
+        string memory expectedUri = string(
+            abi.encodePacked("https://gateway.irys.xyz/mutable/", arweaveHash, "/index.md")
+        );
         assertEq(blogHub.uri(articleId), expectedUri);
     }
 
@@ -497,7 +546,8 @@ contract BlogHubTest is BaseTest {
                 trueAuthor: address(0),
                 collectPrice: 0,
                 maxCollectSupply: 0,
-                originality: BlogHub.Originality.Original
+                originality: BlogHub.Originality.Original,
+                visibility: BlogHub.Visibility.Public
             })
         );
     }

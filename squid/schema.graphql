@@ -32,6 +32,7 @@ type Article @entity {
   maxCollectSupply: BigInt!        # 最大收藏数量
   collectCount: BigInt!            # 当前收藏数量
   originality: Int!                # 0:Original, 1:SemiOriginal, 2:Reprint
+  visibility: Int!                 # 0:Public, 1:Private, 2:Encrypted
   
   totalTips: BigInt!               # 累计打赏金额
   likeAmount: BigInt!

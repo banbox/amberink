@@ -1,5 +1,5 @@
-module.exports = class Data1766988630481 {
-    name = 'Data1766988630481'
+module.exports = class Data1767344238348 {
+    name = 'Data1767344238348'
 
     async up(db) {
         await db.query(`CREATE TABLE "comment" ("id" character varying NOT NULL, "comment_id" numeric NOT NULL, "content" text NOT NULL, "parent_comment_id" numeric, "likes" integer NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text NOT NULL, "article_id" character varying, "user_id" character varying, CONSTRAINT "PK_0b0e4bbc8415ec426f87f3a88e2" PRIMARY KEY ("id"))`)
@@ -11,7 +11,7 @@ module.exports = class Data1766988630481 {
         await db.query(`CREATE TABLE "collection" ("id" character varying NOT NULL, "token_id" numeric NOT NULL, "amount" numeric NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text NOT NULL, "user_id" character varying, "article_id" character varying, CONSTRAINT "PK_ad3f485bbc99d875491f44d7c85" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_4f925485b013b52e32f43d430f" ON "collection" ("user_id") `)
         await db.query(`CREATE INDEX "IDX_27cfffb5c2f57530d9eb459ff1" ON "collection" ("article_id") `)
-        await db.query(`CREATE TABLE "article" ("id" character varying NOT NULL, "article_id" numeric NOT NULL, "original_author" text, "title" text NOT NULL, "summary" text, "category_id" numeric NOT NULL, "royalty_bps" integer NOT NULL, "collect_price" numeric NOT NULL, "max_collect_supply" numeric NOT NULL, "collect_count" numeric NOT NULL, "originality" integer NOT NULL, "total_tips" numeric NOT NULL, "like_amount" numeric NOT NULL, "dislike_amount" numeric NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "edited_at" TIMESTAMP WITH TIME ZONE, "block_number" integer NOT NULL, "tx_hash" text NOT NULL, "author_id" character varying, CONSTRAINT "PK_40808690eb7b915046558c0f81b" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "article" ("id" character varying NOT NULL, "article_id" numeric NOT NULL, "original_author" text, "title" text NOT NULL, "summary" text, "category_id" numeric NOT NULL, "royalty_bps" integer NOT NULL, "collect_price" numeric NOT NULL, "max_collect_supply" numeric NOT NULL, "collect_count" numeric NOT NULL, "originality" integer NOT NULL, "visibility" integer NOT NULL, "total_tips" numeric NOT NULL, "like_amount" numeric NOT NULL, "dislike_amount" numeric NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "edited_at" TIMESTAMP WITH TIME ZONE, "block_number" integer NOT NULL, "tx_hash" text NOT NULL, "author_id" character varying, CONSTRAINT "PK_40808690eb7b915046558c0f81b" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_16d4ce4c84bd9b8562c6f39626" ON "article" ("author_id") `)
         await db.query(`CREATE TABLE "follow" ("id" character varying NOT NULL, "is_active" boolean NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL, "follower_id" character varying, "following_id" character varying, CONSTRAINT "PK_fda88bc28a84d2d6d06e19df6e5" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_e65ef3268d3d5589f94b09c237" ON "follow" ("follower_id") `)
