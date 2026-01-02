@@ -74,7 +74,15 @@ export interface ArticleFolderUploadParams {
 	contentImages?: ContentImageInfo[]; // 内容图片列表
 	tags: string[];
 	visibility?: Visibility; // 文章可见性 (默认 Public)
+	/**
+	 * 签名提供回调（当 visibility 为 Encrypted 时需要）
+	 * 在获取到初始 manifestId 后调用，用于派生加密密钥
+	 * @param arweaveId - 初始 manifest ID
+	 * @returns 钱包签名 (hex string)
+	 */
+	signatureProvider?: (arweaveId: string) => Promise<string>;
 }
+
 
 /** 文章文件夹上传结果 */
 export interface ArticleFolderUploadResult {

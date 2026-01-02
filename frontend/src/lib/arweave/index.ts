@@ -34,6 +34,9 @@ export type {
 	ContentImageInfo
 } from './types';
 
+// 枚举导出
+export { Visibility } from './types';
+
 // Irys 客户端（包含 MetaMask 模式和 Session Key 模式）
 export {
 	// MetaMask 模式

@@ -4,6 +4,7 @@
 import type { ArticleMetadata } from './types';
 import { getArweaveGateways } from '$lib/config';
 import { getMutableFolderUrl, getStaticFolderUrl, ARTICLE_INDEX_FILE } from './folder';
+import { decryptContent, isEncryptedContent } from './crypto';
 
 /**
  * 通用网关请求函数，遍历所有网关直到成功
@@ -99,9 +100,34 @@ export async function fetchFromFolder(
 	return response;
 }
 
-/** 从文章文件夹获取 Markdown 内容 */
-export async function fetchArticleMarkdown(manifestId: string, useMutable = true): Promise<string> {
-	return (await fetchFromFolder(manifestId, ARTICLE_INDEX_FILE, useMutable)).text();
+/** 
+ * 从文章文件夹获取 Markdown 内容
+ * @param manifestId - 文章文件夹的 Manifest ID
+ * @param useMutable - 是否使用可变 URL
+ * @param decryptionKey - 可选，解密密钥（用于加密文章）
+ * @returns 文章内容（如果是加密文章且提供了密钥，则返回解密后的内容）
+ */
+export async function fetchArticleMarkdown(
+	manifestId: string,
+	useMutable = true,
+	decryptionKey?: CryptoKey
+): Promise<string> {
+	const content = await (await fetchFromFolder(manifestId, ARTICLE_INDEX_FILE, useMutable)).text();
+
+	// 如果提供了解密密钥且内容是加密的，解密内容
+	if (decryptionKey && isEncryptedContent(content)) {
+		try {
+			console.log('Decrypting article content...');
+			const decrypted = await decryptContent(content, decryptionKey);
+			console.log('Article content decrypted successfully');
+			return decrypted;
+		} catch (error) {
+			console.error('Failed to decrypt article content:', error);
+			throw new Error('Failed to decrypt article. Please ensure you have the correct encryption key.');
+		}
+	}
+
+	return content;
 }
 
 /** 获取文章文件夹中封面图片的 URL */

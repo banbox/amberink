@@ -254,22 +254,13 @@ export async function uploadUpdatedManifest(
 
 /**
  * 获取文章文件夹的可变 URL
- * 根据 irysNetwork 配置使用正确的域名，避免 302 重定向问题：
- * - devnet: https://devnet.irys.xyz/{manifestId}
- * - mainnet: https://gateway.irys.xyz/mutable/{manifestId}
  * @param manifestId - 原始 manifest ID
  * @param fileName - 文件名（可选）
  */
 export function getMutableFolderUrl(manifestId: string, fileName?: string): string {
-	const network = getIrysNetwork();
-	const gateways = getArweaveGateways();
-	// devnet 需要直接使用 devnet.irys.xyz 域名，避免 gateway.irys.xyz 的 302 重定向
-	let baseHost = gateways[0];
-	let baseUrl = `${baseHost}/mutable/${manifestId}`;
-	if (network === 'devnet') {
-		baseHost = 'https://devnet.irys.xyz';
-		baseUrl = `${baseHost}/${manifestId}`;
-	}
+	// 始终使用 gateway.irys.xyz/mutable/ 路径，这对 devnet 和 mainnet 都有效
+	// devnet.irys.xyz 不支持 /mutable/ 路径，会返回 404
+	const baseUrl = `https://gateway.irys.xyz/mutable/${manifestId}`;
 	return fileName ? `${baseUrl}/${fileName}` : baseUrl;
 }
 

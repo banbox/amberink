@@ -13,7 +13,7 @@ export const ARTICLES_QUERY = gql`
 			orderBy: createdAt_DESC
 			limit: $limit
 			offset: $offset
-			where: { categoryId_eq: $categoryId }
+			where: { categoryId_eq: $categoryId, visibility_eq: 0 }
 		) {
 			id
 			articleId
@@ -47,7 +47,7 @@ export const ARTICLES_QUERY = gql`
  */
 export const ALL_ARTICLES_QUERY = gql`
 	query AllArticles($limit: Int!, $offset: Int!) {
-		articles(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
+		articles(orderBy: createdAt_DESC, limit: $limit, offset: $offset, where: { visibility_eq: 0 }) {
 			id
 			articleId
 			author {

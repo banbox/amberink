@@ -19,9 +19,11 @@ import {
 	generateArticleFolderManifest,
 	uploadManifest,
 	uploadManifestWithPayer,
+	uploadUpdatedManifest,
 	ARTICLE_INDEX_FILE,
 	ARTICLE_COVER_IMAGE_FILE
 } from './folder';
+import { encryptContent, deriveEncryptionKey } from './crypto';
 
 /**
  * 上传文章到 Arweave
@@ -329,14 +331,25 @@ export async function uploadDataWithSessionKey(
  * @param title - 文章标题（用于标签）
  * @param articleTags - 文章标签
  * @param paidBy - 可选，付费账户地址（Balance Approvals 机制）
+ * @param encryptionKey - 可选，加密密钥（用于加密文章内容）
  */
 async function uploadMarkdownContent(
 	uploader: IrysUploader,
 	content: string,
 	title: string,
 	articleTags: string[],
-	paidBy?: string
+	paidBy?: string,
+	encryptionKey?: CryptoKey
 ): Promise<string> {
+	// 如果提供了加密密钥，加密内容
+	let contentToUpload = content;
+	let contentType = 'text/markdown';
+	if (encryptionKey) {
+		console.log('Encrypting article content...');
+		contentToUpload = await encryptContent(content, encryptionKey);
+		contentType = 'application/octet-stream'; // 加密内容使用二进制类型
+		console.log('Content encrypted successfully');
+	}
 	const appCfg = getConfig();
 	const appName = appCfg.appName;
 	const appVersion = appCfg.appVersion;
@@ -356,11 +369,12 @@ async function uploadMarkdownContent(
 	}
 
 	const tags: IrysTag[] = [
-		{ name: 'Content-Type', value: 'text/markdown' },
+		{ name: 'Content-Type', value: contentType },
 		{ name: 'App-Name', value: appName },
 		{ name: 'App-Version', value: appVersion },
 		{ name: 'Type', value: 'article-content' },
 		{ name: 'Title', value: title },
+		{ name: 'Encrypted', value: encryptionKey ? 'true' : 'false' },
 		...articleTags.map((tag) => ({ name: 'Tag', value: tag }))
 	];
 
@@ -368,7 +382,7 @@ async function uploadMarkdownContent(
 		const uploadOptions = effectivePaidBy
 			? { tags, upload: { paidBy: effectivePaidBy } }
 			: { tags };
-		const receipt = await uploader.upload(content, uploadOptions);
+		const receipt = await uploader.upload(contentToUpload, uploadOptions);
 		console.log(`Markdown content uploaded ==> https://gateway.irys.xyz/${receipt.id}`);
 		return receipt.id;
 	} catch (e) {
@@ -473,6 +487,11 @@ async function uploadContentImageFile(
  * 使用指定 uploader 上传文章文件夹
  * 将文章内容和封面图片打包为一个链上文件夹
  * 
+ * 对于加密文章，使用两阶段上传：
+ * 1. 先上传非内容文件，创建初始 manifest 获取 manifestId
+ * 2. 用 manifestId 派生加密密钥，加密内容后上传
+ * 3. 创建更新后的 manifest，设置 Root-TX 指向原始 manifestId
+ * 
  * @param uploader - Irys uploader 实例
  * @param params - 文章文件夹上传参数
  * @param paidBy - 可选，付费账户地址（Balance Approvals 机制）
@@ -482,7 +501,8 @@ export async function uploadArticleFolderWithUploader(
 	params: ArticleFolderUploadParams,
 	paidBy?: string
 ): Promise<ArticleFolderUploadResult> {
-	const { title, summary, content, coverImage, contentImages, tags: articleTags } = params;
+	const { title, summary, content, coverImage, contentImages, tags: articleTags, signatureProvider } = params;
+	const isEncrypted = !!signatureProvider;
 
 	// Step 1: 上传封面图片（如果有）- 先上传封面
 	let coverImageTxId: string | undefined;
@@ -502,7 +522,90 @@ export async function uploadArticleFolderWithUploader(
 		}
 	}
 
-	// Step 3: 上传文章内容（index.md）
+	// 构建 manifest 元数据标签
+	const manifestTags: IrysTag[] = [
+		{ name: 'Article-Title', value: title },
+		{ name: 'Article-Summary', value: summary.substring(0, 200) }, // 限制长度
+		...articleTags.map((tag) => ({ name: 'Article-Tag', value: tag }))
+	];
+
+	// === 加密文章：两阶段上传 ===
+	if (isEncrypted) {
+		console.log('Step 3: Creating initial manifest for encrypted article...');
+
+		// Step 3a: 上传空占位文件作为初始 index.md
+		const placeholderContent = 'empty text';
+		const placeholderTxId = await uploadMarkdownContent(uploader, placeholderContent, title, articleTags, paidBy);
+
+		// Step 3b: 创建初始 manifest（包含占位内容和其他文件）
+		const initialFiles = new Map<string, string>();
+		initialFiles.set(ARTICLE_INDEX_FILE, placeholderTxId);
+		if (coverImageTxId) {
+			initialFiles.set(ARTICLE_COVER_IMAGE_FILE, coverImageTxId);
+		}
+		for (const [filename, txId] of Object.entries(contentImageTxIds)) {
+			initialFiles.set(filename, txId);
+		}
+
+		const initialManifest = await generateArticleFolderManifest(uploader, initialFiles, ARTICLE_INDEX_FILE);
+
+		// 如果没有 paidBy，需要确保余额
+		if (!paidBy) {
+			const manifestData = JSON.stringify(initialManifest);
+			const manifestSize = new TextEncoder().encode(manifestData).length;
+			const hasBalance = await ensureIrysBalance(uploader, manifestSize);
+			if (!hasBalance) {
+				throw new Error('Failed to fund Irys for manifest. Please try again.');
+			}
+		}
+
+		const originalManifestId = await uploadManifestWithPayer(uploader, initialManifest, manifestTags, paidBy);
+		console.log(`Initial manifest created: ${originalManifestId}`);
+
+		// Step 4: 用 manifestId 派生加密密钥
+		console.log('Step 4: Deriving encryption key from wallet signature...');
+		const signature = await signatureProvider(originalManifestId);
+		const encryptionKey = await deriveEncryptionKey(signature);
+		console.log('Encryption key derived successfully');
+
+		// Step 5: 加密内容并上传
+		console.log('Step 5: Uploading encrypted article content...');
+		const encryptedIndexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, paidBy, encryptionKey);
+
+		// Step 6: 创建更新后的 manifest，设置 Root-TX
+		console.log('Step 6: Creating updated manifest with Root-TX...');
+		const updatedFiles = new Map<string, string>();
+		updatedFiles.set(ARTICLE_INDEX_FILE, encryptedIndexTxId);
+		if (coverImageTxId) {
+			updatedFiles.set(ARTICLE_COVER_IMAGE_FILE, coverImageTxId);
+		}
+		for (const [filename, txId] of Object.entries(contentImageTxIds)) {
+			updatedFiles.set(filename, txId);
+		}
+
+		const updatedManifest = await generateArticleFolderManifest(uploader, updatedFiles, ARTICLE_INDEX_FILE);
+
+		// 上传更新后的 manifest，带 Root-TX 标签
+		await uploadUpdatedManifest(uploader, updatedManifest, originalManifestId, manifestTags);
+
+		console.log(`Encrypted article folder created:`);
+		console.log(`  - Original Manifest: ${originalManifestId}`);
+		console.log(`  - Mutable URL: https://gateway.irys.xyz/mutable/${originalManifestId}`);
+		console.log(`  - Content:  https://gateway.irys.xyz/mutable/${originalManifestId}/${ARTICLE_INDEX_FILE}`);
+		if (coverImageTxId) {
+			console.log(`  - Cover:    https://gateway.irys.xyz/mutable/${originalManifestId}/${ARTICLE_COVER_IMAGE_FILE}`);
+		}
+
+		// 返回原始 manifestId（稳定的 mutable URL 入口）
+		return {
+			manifestId: originalManifestId,
+			indexTxId: encryptedIndexTxId,
+			coverImageTxId,
+			contentImageTxIds: Object.keys(contentImageTxIds).length > 0 ? contentImageTxIds : undefined
+		};
+	}
+
+	// === 普通文章：一阶段上传 ===
 	console.log('Step 3: Uploading article content (index.md)...');
 	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, paidBy);
 
@@ -520,13 +623,6 @@ export async function uploadArticleFolderWithUploader(
 
 	// 使用 SDK 的 generateFolder 方法生成正确格式的 manifest
 	const manifest = await generateArticleFolderManifest(uploader, files, ARTICLE_INDEX_FILE);
-
-	// Step 5: 上传 manifest，添加文章元数据标签
-	const manifestTags: IrysTag[] = [
-		{ name: 'Article-Title', value: title },
-		{ name: 'Article-Summary', value: summary.substring(0, 200) }, // 限制长度
-		...articleTags.map((tag) => ({ name: 'Article-Tag', value: tag }))
-	];
 
 	// 如果没有 paidBy，需要确保余额
 	if (!paidBy) {
@@ -557,6 +653,7 @@ export async function uploadArticleFolderWithUploader(
 		contentImageTxIds: Object.keys(contentImageTxIds).length > 0 ? contentImageTxIds : undefined
 	};
 }
+
 
 /**
  * 上传文章文件夹到 Arweave

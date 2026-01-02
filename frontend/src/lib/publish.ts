@@ -4,13 +4,15 @@
  */
 
 import { uploadArticleFolderWithSessionKey } from '$lib/arweave';
-import type { ArticleFolderUploadParams, ContentImageInfo } from '$lib/arweave';
+import type { ArticleFolderUploadParams, ContentImageInfo, Visibility } from '$lib/arweave';
 import { publishToContractWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 import {
 	ensureSessionKeyReady,
 	getStoredSessionKey,
 	type StoredSessionKey
 } from '$lib/sessionKey';
+import { getWalletClient, getEthereumAccount } from '$lib/wallet';
+import { getSignMessageForArticle } from '$lib/arweave/crypto';
 
 export interface PublishArticleParams {
 	title: string;
@@ -93,21 +95,48 @@ async function publishArticleWithSessionKeyInternal(
 	// Note: Session key balance is already ensured by ensureSessionKeyReady
 	// Step 1: Upload article folder with session key (content + cover image + content images)
 	console.log('Step 1: Uploading article folder to Arweave with Session Key...');
+
+	// For encrypted articles (visibility=2), provide a signatureProvider callback
+	// that will be called by upload.ts after getting the initial manifestId
+	let signatureProvider: ((arweaveId: string) => Promise<string>) | undefined;
+	if (visibility === 2) {
+		console.log('Preparing signatureProvider for encrypted article...');
+		signatureProvider = async (arweaveId: string) => {
+			const walletClient = await getWalletClient();
+			const account = await getEthereumAccount();
+			if (!walletClient || !account) {
+				throw new Error('Wallet not connected. Please connect your wallet.');
+			}
+
+			const message = getSignMessageForArticle(arweaveId);
+			console.log('Requesting wallet signature for encryption key derivation...');
+			const signature = await walletClient.signMessage({
+				account,
+				message
+			});
+			console.log('Wallet signature obtained');
+			return signature;
+		};
+	}
+
 	const folderParams: ArticleFolderUploadParams = {
 		title: title.trim(),
 		summary: summary.trim(),
 		content: content.trim(),
 		coverImage: coverImage || undefined,
 		contentImages: contentImages,
-		tags
+		tags,
+		visibility: visibility as Visibility,
+		signatureProvider
 	};
 
 	const folderResult = await uploadArticleFolderWithSessionKey(sessionKey, folderParams, 'devnet');
-	console.log(`Article folder uploaded: ${folderResult.manifestId}`);
+	const arweaveId = folderResult.manifestId;
+	console.log(`Article folder uploaded: ${arweaveId}`);
+
 
 	// 使用 manifest ID 作为 arweaveId（文章的唯一标识）
 	// 封面图片通过 arweaveId/coverImage 路径访问（在 Irys 可变文件夹内）
-	const arweaveId = folderResult.manifestId;
 
 	// Step 2: Publish to blockchain with session key
 	console.log('Step 2: Publishing to blockchain with Session Key...');

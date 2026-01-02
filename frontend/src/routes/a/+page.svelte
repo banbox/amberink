@@ -3,6 +3,8 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
+	import { requestEncryptionKeyFromWallet } from '$lib/arweave/crypto';
+	import { getWalletClient, getEthereumAccount } from '$lib/wallet';
 	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
@@ -776,7 +778,36 @@
 				// Content not loaded yet (initial load failed or skipped), try again
 				// article.id is now arweaveId
 				// 详情页只需要 content，不需要 summary
-				articleContent = await fetchArticleMarkdown(article.id);
+				
+				// Check if article is encrypted (visibility === 2)
+				if (article.visibility === 2) {
+					console.log('Encrypted article detected, checking if current user is author...');
+					// Check if current user is the author
+					if (walletAddress && walletAddress.toLowerCase() === article.author.id.toLowerCase()) {
+						console.log('Current user is author, requesting decryption key...');
+						try {
+							const wClient = await getWalletClient();
+							const account = await getEthereumAccount();
+							if (wClient && account) {
+								const decryptionKey = await requestEncryptionKeyFromWallet(article.id, wClient, account);
+								articleContent = await fetchArticleMarkdown(article.id, true, decryptionKey);
+								console.log('Article decrypted successfully');
+							} else {
+								contentError = 'Please connect your wallet to decrypt this article.';
+							}
+						} catch (decryptError) {
+							console.error('Failed to decrypt article:', decryptError);
+							contentError = 'Failed to decrypt article. Please try again.';
+						}
+					} else {
+						// Not the author - show encrypted message
+						console.log('Current user is not author, showing encrypted message');
+						contentError = 'This article is encrypted and can only be read by the author.';
+					}
+				} else {
+					// Normal (non-encrypted) article
+					articleContent = await fetchArticleMarkdown(article.id);
+				}
 				// Query the latest Irys tx ID for the explorer link
 				currentIrysTxId = await queryLatestIrysTxId(article.id);
 			}
