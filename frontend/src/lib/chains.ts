@@ -38,6 +38,7 @@ export interface ChainInfo {
     explorerUrl: string;
     pythContractAddress: `0x${string}`;
     blogHubAddress?: `0x${string}`;
+    payMasterAddress?: `0x${string}`;
     sessionKeyManagerAddress?: `0x${string}`;
 }
 
@@ -85,8 +86,9 @@ export const SUPPORTED_CHAINS: Record<number, ChainInfo> = {
         nativeToken: 'ETH',
         explorerUrl: 'https://sepolia-optimism.etherscan.io',
         pythContractAddress: '0x0708325268dF9F66270F1401206434524814508b',
-        blogHubAddress: '0xa60eE127a075B62C3B5513F99CF91A15Cea238b6',
-        sessionKeyManagerAddress: '0x67284350C1B935Ca80A1e6658f472F3156cF7313',
+        blogHubAddress: '0x1eda8263bb3fB598871163247B3ea8cD926AA36C',
+        payMasterAddress: '0xfaD74cc410dFBf8ddC0f12023a2F045C9a14F108',
+        sessionKeyManagerAddress: '0xcFAa8395E839d2FE5aaECB772681E5c10D82096e',
     },
 
     // Arbitrum

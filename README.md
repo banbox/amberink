@@ -54,4 +54,3 @@ Web3交互：viem + @wagmi/core
 * 支持多标签索引（类别，话题，地区等）
 * 支持markdown编辑器[cherry-markdown](https://github.com/Tencent/cherry-markdown)
 * 接入去中心化身份DID
-* 支持发布加密内容、支持可见性属性
