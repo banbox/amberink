@@ -1480,3 +1480,18 @@ Claude：修改完成，加密正确，但详情页显示的是原始内容。
 开发者：@doc/help.md  doc/irys/features/onchain-folders.mdx 目前发布加密文章时，先上传一些初始文件集（除正文外其他文件，如果为空，则放{index.md: emptyID}），得到manifestID；然后计算签名和加密秘钥，对文章内容加密，单独上传加密后的文件；再创建新的链上文件夹，包含初始文件集和刚才的加密文件，将Root=TX设置为原始manifestID；（emptyID：将一个空文件上传到irys得到其交易ID，记为emptyID）。目前我发现查看加密文章时，看到的依然是原始内容占位符，"empty text"（frontend/src/lib/arweave/upload.ts：537行）；并未正确加载加密后的文件内容。我在浏览器network中看到了详情页请求https://devnet.irys.xyz/HzctQ2iAEPnLPCqoTSLa6E85EC5ANwvwbDyzNPFLTJvt/index.md?_t=1767351593674，我测试了这个url，确实返回的是原始的empty text；请阅读相关代码，帮我分析定位问题。下面是控制台日志（每行行首文件名是上一行的）：[logs...]  
 Claude：已解决，getMutableFolderUrl的bug导致
 
+### 2026-01-02 19:00  秘钥缓存
+@doc/help.md 当前支持了发布加密文章，帮我在每次用户签名后，将文章的arweaveID和密钥的对应关系缓存到localstorage中，下次需要时先检查缓存，如果不存在或者无效才请求用户签名。注意文章的秘钥不应设置过期时间，是永久有效的。也无需存储account；  
+Claude：修改完成
+
+### 2026-01-02 19:23  加密兼容性优化
+@doc/help.md 帮我在文章发布页面，当用户选择加密时，在旁边显示文本提示，类似：将使用您的钱包签名特征加密正文，钱包丢失将导致永远无法解密，钱包泄露则文章内容可能被公开。  
+Claude：修改完成  
+开发者：@doc/help.md 
+frontend/src/lib/components/ArticleEditor.svelte
+在发布或编辑文章时。帮我针对visibility为1也就是非公开时，显示提示内容类似：不加密，默认不会被其他用户看到或搜索到，但任何拥有文章链接的人都可阅读；使用多语言；注意避免代码冗余，确保更加容易维护  
+Claude：修改完成  
+开发者：frontend/src/routes/a/+page.svelte 这是文章详情页，阅读加密文章时，不应该显示1184行的分享按钮。  
+Gemini：修改完成  
+开发者：@doc/help.md frontend/src/lib/components/ArticleSearch.svelte 帮我去掉原创与否的过滤条件，然后再类别前面添加一个过滤：所有公开、我的文章。当未登录时，选择我的文章发出错误提示。当选择【所有公开】时，应该只搜索visibility为0的文章。选择【我的文章】时，传入当前用户钱包地址，筛选此钱包创建的文章  
+Gemini：修改完成

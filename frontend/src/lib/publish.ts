@@ -13,6 +13,7 @@ import {
 } from '$lib/sessionKey';
 import { getWalletClient, getEthereumAccount } from '$lib/wallet';
 import { getSignMessageForArticle } from '$lib/arweave/crypto';
+import { cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
 
 export interface PublishArticleParams {
 	title: string;
@@ -115,6 +116,10 @@ async function publishArticleWithSessionKeyInternal(
 				message
 			});
 			console.log('Wallet signature obtained');
+
+			// 缓存签名到 localStorage，以便后续查看时无需重复签名
+			cacheEncryptionSignature(arweaveId, signature);
+
 			return signature;
 		};
 	}

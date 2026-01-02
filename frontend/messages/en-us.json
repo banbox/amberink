@@ -341,6 +341,9 @@
 	"invalid_originality": "Invalid originality: expected 0, 1, or 2. Got: {value}",
 	"search_articles": "Search Articles",
 	"all_originality": "All Types",
+	"scope_all_public": "All Public",
+	"scope_my_articles": "My Articles",
+	"error_login_required_for_mine": "Please login to view your articles",
 	"sort_date": "Date",
 	"sort_likes": "Likes",
 	"sort_tips": "Tips",
@@ -392,5 +395,7 @@
 	"visibility": "Visibility",
 	"public": "Public",
 	"non_public": "Non-Public",
-	"encrypted": "Encrypted"
+	"encrypted": "Encrypted",
+	"encrypted_warning": "Your wallet signature will be used to encrypt the content. Losing your wallet will make decryption impossible forever. If your wallet is compromised, the article content may be exposed.",
+	"non_public_warning": "Not encrypted. By default, it won't be visible or searchable by other users, but anyone with the article link can read it."
 }

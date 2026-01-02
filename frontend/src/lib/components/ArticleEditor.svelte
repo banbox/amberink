@@ -222,6 +222,29 @@
 			}
 		}, 0);
 	}
+
+	// Visibility hint configuration map
+	const visibilityHintMap = {
+		'1': {
+			// Non-Public: Info style (blue)
+			className: 'border-blue-200 bg-blue-50 text-blue-800',
+			iconPath:
+				'M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z',
+			message: () => m.non_public_warning()
+		},
+		'2': {
+			// Encrypted: Warning style (orange)
+			className: 'border-orange-200 bg-orange-50 text-orange-800',
+			iconPath:
+				'M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z',
+			message: () => m.encrypted_warning()
+		}
+	} as const;
+
+	// Get current visibility hint config based on selected visibility
+	let visibilityHintConfig = $derived(
+		visibilityHintMap[formData.visibility as keyof typeof visibilityHintMap] ?? null
+	);
 </script>
 
 <div class="article-editor space-y-8">
@@ -286,6 +309,18 @@
 			</select>
 		</div>
 	</div>
+
+	<!-- Visibility Info/Warning Message -->
+	{#if visibilityHintConfig}
+		<div class="rounded-lg border p-3 text-sm {visibilityHintConfig.className}">
+			<div class="flex items-start gap-2">
+				<svg class="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+					<path fill-rule="evenodd" d={visibilityHintConfig.iconPath} clip-rule="evenodd" />
+				</svg>
+				<p class="leading-relaxed">{visibilityHintConfig.message()}</p>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Author (only show for non-original content) -->
 	{#if formData.originality !== '0'}

@@ -117,3 +117,9 @@ export {
 	parseArticleFolderManifest,
 	fetchArticleFromFolder
 } from './folder';
+
+// 加密密钥缓存功能
+export {
+	cacheEncryptionSignature,
+	getCachedEncryptionKey
+} from './encryptionKeyCache';

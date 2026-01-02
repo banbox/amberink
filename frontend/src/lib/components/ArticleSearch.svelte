@@ -5,6 +5,7 @@
 	import { formatEth } from '$lib/utils';
 	import { client } from '$lib/graphql';
 	import { gql } from '@urql/svelte';
+	import { getWalletAddress } from '$lib/stores/wallet.svelte';
 	import { CloseIcon, SearchIcon, SpinnerIcon } from '$lib/components/icons';
 
 	interface Props {
@@ -17,7 +18,8 @@
 	// Search state
 	let searchQuery = $state('');
 	let selectedCategory = $state<number | null>(null);
-	let selectedOriginality = $state<number | null>(null);
+	let selectedScope = $state<'all' | 'mine'>('all');
+	let userAddress = $derived(getWalletAddress());
 	let orderBy = $state<'createdAt' | 'likeAmount' | 'totalTips' | 'collectCount'>('createdAt');
 	let orderDirection = $state<'DESC' | 'ASC'>('DESC');
 
@@ -86,12 +88,17 @@
 				});
 			}
 
-			if (selectedCategory !== null) {
-				whereConditions.push({ categoryId_eq: selectedCategory.toString() });
+			if (selectedScope === 'mine') {
+				if (!userAddress) {
+					throw new Error(m.error_login_required_for_mine());
+				}
+				whereConditions.push({ author: { id_eq: userAddress } });
+			} else {
+				whereConditions.push({ visibility_eq: 0 });
 			}
 
-			if (selectedOriginality !== null) {
-				whereConditions.push({ originality_eq: selectedOriginality });
+			if (selectedCategory !== null) {
+				whereConditions.push({ categoryId_eq: selectedCategory.toString() });
 			}
 
 			const where = whereConditions.length > 0 ? { AND: whereConditions } : {};
@@ -140,7 +147,7 @@
 	function resetFilters() {
 		searchQuery = '';
 		selectedCategory = null;
-		selectedOriginality = null;
+		selectedScope = 'all';
 		orderBy = 'createdAt';
 		orderDirection = 'DESC';
 		currentPage = 1;
@@ -246,6 +253,23 @@
 
 			<!-- Filters Row -->
 			<div class="flex flex-wrap gap-2">
+				<!-- Scope Filter -->
+				<select
+					bind:value={selectedScope}
+					onchange={() => {
+						if (selectedScope === 'mine' && !userAddress) {
+							searchError = m.error_login_required_for_mine();
+						} else {
+							searchError = null;
+						}
+					}}
+					class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none"
+					disabled={isSearching}
+				>
+					<option value="all">{m.scope_all_public()}</option>
+					<option value="mine">{m.scope_my_articles()}</option>
+				</select>
+
 				<!-- Category Filter -->
 				<select
 					bind:value={selectedCategory}
@@ -258,18 +282,6 @@
 							<option value={index}>{getCategoryLabel(key)}</option>
 						{/if}
 					{/each}
-				</select>
-
-				<!-- Originality Filter -->
-				<select
-					bind:value={selectedOriginality}
-					class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none"
-					disabled={isSearching}
-				>
-					<option value={null}>{m.all_originality()}</option>
-					<option value={0}>{m.original()}</option>
-					<option value={1}>{m.semi_original()}</option>
-					<option value={2}>{m.reprint()}</option>
 				</select>
 
 				<!-- Sort By -->

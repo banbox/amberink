@@ -3,7 +3,8 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
-	import { requestEncryptionKeyFromWallet } from '$lib/arweave/crypto';
+	import { requestEncryptionKeyFromWallet, getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
+	import { getCachedEncryptionKey, cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
 	import { getWalletClient, getEthereumAccount } from '$lib/wallet';
 	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import type { ArticleMetadata } from '$lib/arweave/types';
@@ -784,14 +785,41 @@
 					console.log('Encrypted article detected, checking if current user is author...');
 					// Check if current user is the author
 					if (walletAddress && walletAddress.toLowerCase() === article.author.id.toLowerCase()) {
-						console.log('Current user is author, requesting decryption key...');
+						console.log('Current user is author, attempting to decrypt...');
 						try {
 							const wClient = await getWalletClient();
 							const account = await getEthereumAccount();
 							if (wClient && account) {
-								const decryptionKey = await requestEncryptionKeyFromWallet(article.id, wClient, account);
-								articleContent = await fetchArticleMarkdown(article.id, true, decryptionKey);
-								console.log('Article decrypted successfully');
+								// 首先尝试从缓存获取解密密钥
+								let decryptionKey = await getCachedEncryptionKey(article.id);
+								
+								if (decryptionKey) {
+									console.log('Using cached encryption key');
+									try {
+										articleContent = await fetchArticleMarkdown(article.id, true, decryptionKey);
+										console.log('Article decrypted successfully with cached key');
+									} catch (cacheDecryptError) {
+										// 缓存的密钥无效，清除缓存并重新请求签名
+										console.warn('Cached key failed, requesting new signature...', cacheDecryptError);
+										decryptionKey = null;
+									}
+								}
+								
+								// 如果缓存不存在或无效，请求新签名
+								if (!decryptionKey || !articleContent) {
+									console.log('Requesting wallet signature for decryption key...');
+									const message = getSignMessageForArticle(article.id);
+									const signature = await wClient.signMessage({ account, message });
+									console.log('Wallet signature obtained');
+									
+									// 缓存签名以供下次使用
+									cacheEncryptionSignature(article.id, signature);
+									
+									// 从签名派生密钥
+									decryptionKey = await deriveEncryptionKey(signature);
+									articleContent = await fetchArticleMarkdown(article.id, true, decryptionKey);
+									console.log('Article decrypted successfully with new key');
+								}
 							} else {
 								contentError = 'Please connect your wallet to decrypt this article.';
 							}
@@ -1153,14 +1181,16 @@
 									<EditIcon size={20} />
 								</a>
 							{/if}
-							<button
-								type="button"
-								onclick={handleShare}
-								class="text-gray-500 transition-colors hover:text-gray-900"
-								title={m.share({})}
-							>
-								<ShareIcon size={20} />
-							</button>
+							{#if article.visibility !== 2}
+								<button
+									type="button"
+									onclick={handleShare}
+									class="text-gray-500 transition-colors hover:text-gray-900"
+									title={m.share({})}
+								>
+									<ShareIcon size={20} />
+								</button>
+							{/if}
 						</div>
 					</div>
 				</div>
