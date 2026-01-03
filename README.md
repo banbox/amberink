@@ -1,56 +1,68 @@
-# AmberInk 永久性发布平台
+# AmberInk 去中心化永久内容发布平台
 > Ink Once, Exist Forever
 
-完全去中心化，无后端参与，相关角色：前端 + 智能合约 + 索引查询 + 存储。
-基于Optimism(solidity) + Arweave(Irys) + Subsquid + SvelteKit
+完全去中心化的永久内容发布平台，无后端参与。用户可发布、评价、收藏文章，所有数据存储在区块链和 Arweave 上。
+
+**核心特性**：文章即 NFT（ERC-1155）、无感交互（Session Keys）、Gas 代付（ERC-4337）、内容加密
 
 ## 如何学习？
 [最细节的手把手开发日志](learn/README.md)
 
 此项目基本都是AI开发完成的，上面包含了最细的完整项目开发细节，逐步尝试即可复现你的dapp
 
+## 技术架构
 
 ```perl
 amberink/
-├── contracts/        # Foundry 智能合约
-├── frontend/         # SvelteKit
+├── contracts/        # Foundry 智能合约 (Solidity)
+├── frontend/         # SvelteKit + TypeScript
 ├── squid/            # Subsquid 链上索引
 ├── learn/            # 学习教程
-├── .gitmodules       # 统一管理所有 submodules（如 foundry 的 lib/）
 ```
 
-## 关键点说明
-* 文章即NFT：每个文章对应一个NFT，用户可收藏文章
-* 内容存储：文章一次付费，永久存储在Arweave上。
-* 数据索引：使用SubSquid去中心化索引，查询文章列表等
+| 层级 | 技术栈 | 说明 |
+|------|--------|------|
+| 智能合约 | Solidity + Foundry | ERC-1155 NFT、ERC-2981 版税、UUPS 可升级 |
+| 区块链 | Optimism | 低成本、高速交易 |
+| 存储 | Arweave + Irys | 去中心化永久存储 |
+| 索引 | Subsquid | 事件处理 + GraphQL 查询 |
+| 前端 | SvelteKit + TailwindCSS | 响应式 Web 应用 |
+| Web3 | viem + @wagmi/core + @reown/appkit | 钱包交互与连接 |
 
-## 智能合约设计
-标准：ERC-1155和ERC-2981（二手交易版税）
-特性：可升级、支持打赏&NFT、版权、易读签名、文章编辑、用户资料更新
-采用 ERC-4337 账户抽象实现去中心化代付，结合 Session Keys 实现无感交互体验。
-核心功能：
-* publish: 发布文章（支持原创/转载标记、收藏价格、版税）
-* evaluate: 评价文章（点赞/踩/打赏）、评论、关注
-* collect: 收藏文章NFT
-* editArticle: 编辑文章元数据（标题、摘要、分类）
-* updateUserProfile: 更新用户资料（昵称、头像、简介）
-所有操作支持 Session Key 无感交互（无需每次 MetaMask 签名）
+## 核心功能
 
-## SubSquid索引设计
-只索引“关系”和“状态”，不索引文章全文。文章的标题、摘要等 Metadata 由前端获取 Arweave Hash 后在客户端（或 SSR 层）懒加载，或者由 Indexer 的 Worker 异步获取。 为了简化 MVP，我们采用前端懒加载策略，Indexer 只存 Hash。
-用 Subsquid 的 Archive（block history ingestion）做可靠回溯，用 Processor 做高吞吐低延迟的事件->实体映射，且把对 Arweave 的 fetch 作为异步任务（避免阻塞事件处理）。
+### 1. 文章即 NFT
+- 每篇文章对应 ERC-1155 NFT，支持收藏和二手交易版税
+- TokenID 设计：创作者用 `articleId`，收藏者用 `articleId + 2^250` 区分
 
-## 数据存储
-使用Arweave永久存储文章内容
-基于Irys作为数据上传获取链；（官方AR.IO的Turbo是中心化的）
+### 2. 无感交互（Session Keys）
+用户仅需一次主钱包签名授权临时密钥，后续点赞、评论等操作由临时私钥签名，**无需反复唤起钱包**。
 
-## 前端集成
-Web3交互：viem + @wagmi/core
-钱包连接UI：@reown/appkit
-数据查询：@urql/svelte
-其他：prettier，eslint，tailwindcss，vitest，playwright，@inlang/paraglide-sveltekit
+### 3. Gas 代付（ERC-4337）
+- **资金池模式**：项目方/赞助商存款到 Paymaster 合约，授权用户使用
+- **Token 模式**：用户可用 USDT/USDC 等 ERC-20 代币支付 Gas
+
+### 4. 文章可见性 & 加密
+- **公开**：所有人可见  
+- **不公开**：仅链接可访问，不出现在公开列表  
+- **加密**：使用钱包签名派生 AES-256-GCM 密钥加密内容，仅作者可解密
+
+### 5. 智能合约功能
+| 功能 | 说明 |
+|------|------|
+| `publish` | 发布文章（原创/转载、收藏价格、版税） |
+| `evaluate` | 评价文章（点赞/踩/打赏）、评论、关注 |
+| `collect` | 收藏文章 NFT |
+| `editArticle` | 编辑元数据（标题、摘要、分类） |
+| `updateUserProfile` | 更新用户资料（昵称、头像、简介） |
+
+## 数据流简述
+```
+发布文章 → Arweave 存储内容(获得 arweaveId) → BlogHub 合约记录链上 
+       → Subsquid 监听事件 → 索引数据 → 前端 GraphQL 查询展示
+```
 
 ## TODO
-* 支持多标签索引（类别，话题，地区等）
-* 支持markdown编辑器[cherry-markdown](https://github.com/Tencent/cherry-markdown)
-* 接入去中心化身份DID
+- 多标签索引（类别、话题、地区）
+- Markdown 编辑器 [cherry-markdown](https://github.com/Tencent/cherry-markdown)
+- 去中心化身份 DID 接入

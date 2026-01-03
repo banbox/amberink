@@ -13,7 +13,7 @@ import {ISessionKeyManager} from "./interfaces/ISessionKeyManager.sol";
 
 /**
  * @title BlogHub V2
- * @dev 集成了 UUPS 可升级、权限管理的博客合约。
+ * @dev 集成了 UUPS 可升级、权限管理的永久内容发布合约。
  * 支持 ERC-4337 账户抽象，配合 BlogPaymaster 实现完全去中心化的代付功能。
  */
 contract BlogHub is

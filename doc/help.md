@@ -2,7 +2,7 @@
 
 ## 项目整体概述
 
-AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 Optimism（Solidity）+ Arweave（Irys）+ Subsquid + SvelteKit 技术栈。用户可发布文章、评价、点赞、关注、收藏等，所有数据存储在链上和 Arweave 上，通过 Subsquid 索引查询。核心特性：文章即 NFT（ERC-1155），支持 ERC-4337 账户抽象和 Session Keys 实现无感交互体验。
+AmberInk 是一个完全去中心化的永久内容发布平台，无后端参与。采用 Optimism（Solidity）+ Arweave（Irys）+ Subsquid + SvelteKit 技术栈。用户可发布文章、评价、点赞、关注、收藏等，所有数据存储在链上和 Arweave 上，通过 Subsquid 索引查询。核心特性：文章即 NFT（ERC-1155），支持 ERC-4337 账户抽象和 Session Keys 实现无感交互体验。
 
 ## 技术架构与实现方案
 
@@ -97,52 +97,71 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 
 - **chain.ts**: 链配置工具。管理不同网络的 RPC、合约地址、链 ID、网络参数等配置。
 
-- **config.ts**: 全局配置管理。包含 RPC URL、链 ID、Arweave 网关、Gas 费用倍数等配置。BlogHub 合约地址、SessionKeyManager 地址根据链 ID 自动从 chains.ts 获取，Irys 网络根据环境名称自动确定（prod -> mainnet, dev/test -> devnet）。
+- **config.ts**: 全局配置管理。从 stores/config.svelte.ts 读取配置，提供 getter 函数。包含 RPC URL、链 ID、Arweave 网关、Gas 费用倍数、USD 定价等配置。支持用户在设置页面覆盖默认配置。
 
-- **priceService.ts**: 价格服务。从 Pyth Network 预言机获取原生代币价格（USD），支持多链，包含缓存机制。
+- **constants.ts**: 集中管理前端固定常量。包含 Irys 网关 URL、Session Key 配置（有效期、消费限额）、价格服务阈值、零地址等硬编码值。
 
-- **data.ts**: 数据处理工具函数。包含数据转换、格式化等通用函数。
+- **priceService.ts**: 价格服务。从 Pyth Network 预言机获取原生代币价格（USD），支持多链，包含缓存机制。提供 USD/Wei 互转、格式化显示等工具函数。
 
-- **utils.ts**: 通用工具函数。
+- **data.ts**: 文章分类定义。定义 CATEGORY_KEYS 常量数组（40+ 分类），提供 formatEthDisplay 格式化函数。
 
-- **wallet.ts**: 钱包工具函数。
+- **categoryUtils.ts**: 分类工具函数。提供分类名称国际化、分类 ID 与 Key 转换等功能。
+
+- **formatUtils.ts**: 格式化工具函数。提供 formatWeiToEth 等数值格式化函数，支持精度控制和阈值显示。
+
+- **utils.ts**: 通用工具函数。包含 NFT TokenID 工具（COLLECTOR_TOKEN_OFFSET）、地址格式化（shortAddress）、日期格式化、零地址检查、infiniteScroll Svelte action。
+
+- **wallet.ts**: 钱包工具函数。提供 getEthereumAccount、switchToTargetChain、getWalletClient、getPublicClient 等钱包交互函数。
+
+- **contractErrors.ts**: 合约错误码定义。定义 ContractErrorCode 枚举，用于国际化错误消息。
 
 - **index.ts**: 库导出文件，导出公共 API。
 
 ### 状态管理 (src/lib/stores/)
 
-- **config.svelte.ts**: 配置状态管理，管理全局配置和设置。支持 localStorage 持久化，允许用户在部署后覆盖默认配置。
-- **wallet.svelte.ts**: 钱包状态管理，管理钱包连接状态、用户地址、余额等。
+- **config.svelte.ts**: 响应式配置状态管理，使用 Svelte 5 runes ($state)。支持 localStorage 持久化，允许用户覆盖默认配置。定义 envDefaults、configFields 元数据、Pyth 预言机地址映射。
+- **wallet.svelte.ts**: 钱包状态管理，使用 Svelte 5 runes。管理钱包连接状态、用户地址，提供 connectWallet、disconnectWallet、handleAccountsChanged 等函数。
 
 ### 组件库 (src/lib/components/)
 
 - **WalletButton.svelte**: 钱包连接按钮，支持连接/断开钱包、显示地址。
-- **SessionKeyStatus.svelte**: Session Key 状态显示，显示有效期、权限范围、创建时间。
-- **ArticleListItem.svelte**: 文章列表项组件，展示文章标题、摘要、作者、评分、发布时间、收藏状态。
-- **ArticleSearch.svelte**: 文章搜索组件，支持关键词搜索、分类筛选、排序、分页。
-- **ArticleEditor.svelte**: 文章编辑器组件，支持 Markdown 编辑、实时预览、图片上传。
+- **SessionKeyStatus.svelte**: Session Key 状态显示，显示有效期、权限范围、余额信息。
+- **ArticleListItem.svelte**: 文章列表项组件，展示文章标题、摘要、作者、评分、发布时间。
+- **ArticleSearch.svelte**: 文章搜索组件，支持关键词搜索、范围筛选（全部/我的）、分类筛选、排序。
+- **ArticleEditor.svelte**: 文章编辑器组件，支持 Markdown 编辑、实时预览、可见性设置（公开/不公开/加密）。
 - **CategoryFilter.svelte**: 分类筛选组件，展示分类列表、支持多选。
-- **CommentSection.svelte**: 评论区组件，支持评论展示、回复、删除、点赞、分页。
+- **CommentSection.svelte**: 评论区组件，支持评论展示、回复、点赞、分页。
 - **ImageProcessor.svelte**: 图片处理组件，支持上传、预览、压缩、裁剪。
 - **ContentImageManager.svelte**: 内容图片管理组件，管理文章中的图片。
 - **SearchButton.svelte**: 搜索按钮组件，触发搜索操作。
 - **SearchSelect.svelte**: 搜索选择组件，支持搜索和下拉选择。
-- **Sidebar.svelte**: 侧边栏组件，导航菜单、用户信息、快速链接。
-- **icons/**: 图标组件库（35+ 个 SVG 图标）。
+- **Sidebar.svelte**: 侧边栏组件，导航菜单、用户信息、无限滚动加载。
+- **UserAvatar.svelte**: 用户头像组件，统一显示用户头像和默认占位符。
+- **LoadingState.svelte**: 加载状态组件，显示加载动画和提示。
+- **LoadingSpinner.svelte**: 加载动画组件，SVG 旋转动画。
+- **EndOfList.svelte**: 列表结束提示组件，显示"没有更多"信息。
+- **EmptyState.svelte**: 空状态组件，显示无数据时的提示。
+- **ErrorAlert.svelte**: 错误提示组件，显示错误信息。
+- **OriginalityTag.svelte**: 原创性标签组件，显示原创/部分原创/转载标识。
+- **EditorSkeleton.svelte**: 编辑器骨架屏组件，编辑器加载占位。
+- **ProfileSkeleton.svelte**: 用户资料骨架屏组件，资料页加载占位。
+- **icons/**: 图标组件库（35 个 SVG 图标）。
 
 ### Arweave 集成 (src/lib/arweave/)
 
-- **irys.ts**: Irys 客户端初始化和管理。支持 Mainnet（永久存储）和 Devnet（测试用，约60天后删除）两种网络。支持 MetaMask 模式和 Session Key 模式。创建 Irys Uploader、管理余额、处理上传。
+- **irys.ts**: Irys 客户端初始化和管理。支持 Mainnet（永久存储）和 Devnet（测试用）两种网络。支持 MetaMask 模式和 Session Key 模式。创建 Irys Uploader、管理余额、处理上传。
 
-- **folder.ts**: Irys 可更新文件夹功能。实现文章文件夹结构（index.md 文章内容、coverImage 封面）、Manifest 下载、文件夹更新。支持 mutable folders 获取最新版本。
+- **folder.ts**: Irys 可更新文件夹功能。实现文章文件夹结构（index.md 文章内容、coverImage 封面、内容图片）、Manifest 下载、文件夹更新。支持 mutable folders 获取最新版本。
 
-- **upload.ts**: Arweave 上传功能。上传文章文件夹、图片、元数据到 Arweave。支持 MetaMask 和 Session Key 两种模式。支持免费上传额度检查。
+- **upload.ts**: Arweave 上传功能。上传文章文件夹、图片到 Arweave。支持 MetaMask 和 Session Key 两种模式。支持加密文章两阶段上传（先上传获取 manifestId，再加密内容后更新）。
 
-- **cache.ts**: 文章元数据获取。从 Arweave 获取文章内容并构建元数据对象（直接请求，无缓存）。
+- **fetch.ts**: Arweave 内容获取。从 Arweave 网关下载文章、图片、Manifest，支持多网关重试。自动处理 devnet/mainnet 不同的 mutable folder URL。
 
-- **fetch.ts**: Arweave 内容获取。从 Arweave 网关下载文章、图片、Manifest，支持多网关重试。
+- **crypto.ts**: 文章内容加密/解密模块。使用钱包签名派生 AES-256-GCM 密钥（通过 HKDF），支持加密/解密内容、检测加密内容。
 
-- **types.ts**: Arweave 相关类型定义。定义 ArticleMetadata、IrysTag、IrysConfig、ArticleFolderManifest 等类型。
+- **encryptionKeyCache.ts**: 加密密钥缓存。将 arweaveId 与加密签名的映射缓存到 localStorage，避免每次查看加密文章时重复签名。
+
+- **types.ts**: Arweave 相关类型定义。定义 Visibility 枚举（Public/Private/Encrypted）、ArticleMetadata、ArticleFolderUploadParams（含 signatureProvider 回调）、ContentImageInfo 等类型。
 
 - **index.ts**: Arweave 模块导出，导出公共 API。
 
@@ -156,26 +175,24 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 
 ### 路由页面 (src/routes/)
 
-- **+page.svelte**: 首页，展示文章列表、热门文章、分类筛选、搜索功能。
+- **+page.svelte**: 首页，展示文章列表、热门文章、分类筛选、搜索功能。仅显示公开可见文章。
 - **+layout.svelte**: 全局布局组件，处理钱包连接初始化、主题管理、模态框、警告消息、国际化。
 - **+layout.ts**: 布局数据加载，获取初始化数据。
 - **layout.css**: 全局样式，定义布局相关的 CSS。
 
-- **a/[id]/+page.svelte**: 文章详情页面，按 Arweave ID 显示完整文章内容、评论、评分。
-- **a/[id]/+page.ts**: 文章详情页面数据加载。
+- **a/+page.svelte**: 文章详情页面，按 Arweave ID 显示完整文章内容、评论、评分。支持加密文章解密（需作者钱包签名）。
 
-- **edit/[id]/+page.svelte**: 文章编辑页面，修改已发布文章的元数据（标题、摘要、分类）。
-- **edit/[id]/+page.ts**: 文章编辑页面数据加载。
+- **edit/+page.svelte**: 文章编辑页面，修改已发布文章的元数据（标题、摘要、分类）。
 
-- **publish/+page.svelte**: 文章发布页面，编辑文章内容、上传封面、设置元数据、发布到链。
+- **publish/+page.svelte**: 文章发布页面，编辑文章内容、上传封面、设置元数据、可见性（公开/不公开/加密）、发布到链。
 
 - **library/+page.svelte**: 用户文库页面，展示用户发布的所有文章、收藏的文章。
 
-- **profile/articles/[id]/+page.svelte**: 用户资料页面，展示用户信息、发布的文章列表。
+- **profile/+page.svelte**: 用户资料页面，展示用户信息、发布的文章列表。
 
 - **settings/+page.svelte**: 用户设置页面，修改用户资料、管理 Session Key、设置偏好。
 
-- **u/[id]/+page.svelte**: 用户主页，展示用户信息、发布的文章、粉丝关注。
+- **u/+page.svelte**: 用户主页，展示用户信息、发布的文章、粉丝关注。
 
 ### 配置文件
 
@@ -183,13 +200,12 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 - **svelte.config.js**: SvelteKit 配置，定义适配器、预处理、路由等。
 - **vite.config.ts**: Vite 构建配置，定义插件、优化、服务器设置。
 - **tsconfig.json**: TypeScript 配置，定义编译选项、路径别名。
-- **tailwind.config.js**: TailwindCSS 配置，定义主题、插件、内容路径。
+- **eslint.config.js**: ESLint 配置，定义代码检查规则。
 - **.env.dev**: 开发环境变量，包含开发网络配置。
 - **.env.prod**: 生产环境变量，包含生产网络配置。
 - **.env.example**: 环境变量示例，展示所需的环境变量。
 - **.prettierrc**: Prettier 配置，定义代码格式化规则。
 - **.prettierignore**: Prettier 忽略文件列表。
-- **.eslintrc.cjs**: ESLint 配置，定义代码检查规则。
 - **.npmrc**: npm 配置，定义包管理器设置。
 
 ---
@@ -206,7 +222,7 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 
 ### 数据模型 (src/model/generated/)
 
-- **article.model.ts**: Article 实体模型，包含 arweaveId（主键）、articleId、作者、标题、摘要、分类、原创性、收藏价格、收藏数、点赞/踩数、打赏总额、创建/编辑时间、区块号、交易哈希等字段。
+- **article.model.ts**: Article 实体模型，包含 arweaveId（主键）、articleId、作者、标题、摘要、分类、原创性、可见性、收藏价格、收藏数、点赞/踩数、打赏总额、创建/编辑时间、区块号、交易哈希等字段。
 - **user.model.ts**: User 实体模型，包含钱包地址、昵称、头像、简介、文章总数、粉丝数、关注数、当前 Session Key、资料更新时间、创建时间等字段。
 - **evaluation.model.ts**: Evaluation 实体模型，记录用户对文章的评价（点赞/踩/打赏）、评价者、被评价文章、评价分数、打赏金额、评论内容、推荐人、创建时间、交易哈希。
 - **comment.model.ts**: Comment 实体模型，记录用户评论、评论 ID、评论者、所属文章、评论内容、父评论 ID（回复时）、点赞数、创建时间、交易哈希。
@@ -222,7 +238,6 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 - **BlogHub.json**: BlogHub 合约 ABI JSON 文件，包含所有函数和事件的定义。
 - **SessionKeyManager.ts**: 由 squid-evm-typegen 生成的 SessionKeyManager 合约类型。
 - **SessionKeyManager.json**: SessionKeyManager 合约 ABI JSON 文件。
-- **multicall.ts**: Multicall 工具，支持批量调用合约函数。
 
 ### 服务器扩展 (src/server-extension/)
 
@@ -258,6 +273,8 @@ AmberInk 是一个完全去中心化的博客平台，无后端参与。采用 O
 10. **高效索引**: Subsquid 提供低延迟的链上数据查询
 11. **多语言支持**: 前端支持中英文切换
 12. **响应式设计**: 支持移动端和桌面端适配
+13. **文章可见性**: 支持公开、不公开（仅作者可见）、加密三种可见性模式
+14. **文章加密**: 使用钱包签名派生 AES-256-GCM 密钥加密文章内容，仅作者可解密
 
 ---
 
