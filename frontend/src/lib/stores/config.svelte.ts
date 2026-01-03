@@ -1,54 +1,11 @@
 /**
  * Reactive configuration store with localStorage persistence
  * Allows users to override default config values after deployment
+ * 
+ * Environment configuration is hardcoded - no .env files needed.
+ * Users can switch environments at runtime via Settings page.
  */
 import { browser } from '$app/environment';
-
-// Import env defaults (build-time values)
-import {
-	PUBLIC_RPC_URL,
-	PUBLIC_CHAIN_ID,
-	PUBLIC_ARWEAVE_GATEWAYS,
-	PUBLIC_SUBSQUID_ENDPOINT
-} from '$env/static/public';
-
-import * as publicEnv from '$env/static/public';
-const PUBLIC_MIN_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_MIN_GAS_FEE_MULTIPLIER'] || '';
-const PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER'] || '';
-const PUBLIC_ENV_NAME = (publicEnv as Record<string, string>)['PUBLIC_ENV_NAME'] || 'dev';
-
-// Dynamic localStorage key based on environment to avoid conflicts when switching environments
-const CONFIG_STORAGE_KEY_PREFIX = 'amberink_user_config';
-function getConfigStorageKey(): string {
-	const currentEnvName = getEnvName();
-	return `${CONFIG_STORAGE_KEY_PREFIX}_${currentEnvName}`;
-}
-
-/**
- * Get current environment name (supports user override)
- */
-function getEnvName(): 'dev' | 'test' | 'prod' {
-	if (!browser) return PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod';
-	try {
-		// Try to read from localStorage with a fixed key (not environment-dependent)
-		const stored = localStorage.getItem('amberink_env_override');
-		if (stored) {
-			const parsed = JSON.parse(stored);
-			if (parsed.envName && ['dev', 'test', 'prod'].includes(parsed.envName)) {
-				return parsed.envName as 'dev' | 'test' | 'prod';
-			}
-		}
-	} catch (e) {
-		// Ignore errors
-	}
-	return PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod';
-}
-
-/**
- * Get and export current environment name (supports user override)
- * This is a function that should be called to get the current envName
- */
-export { getEnvName as envName };
 
 // Import chain configuration from centralized file (for local use and re-export)
 import {
@@ -62,21 +19,30 @@ import {
 // Re-export for external consumers
 export { PYTH_CONTRACT_ADDRESSES, PYTH_PRICE_FEED_IDS, CHAIN_NATIVE_TOKEN, ALLOWED_CHAINS_BY_ENV, SUPPORTED_CHAINS };
 
+// ============================================
+// Environment-specific defaults (hardcoded)
+// ============================================
 
-
-// Default values (used when env vars are not set)
+/**
+ * Default configuration (shared across all environments)
+ */
 export const defaults = {
-	blogHubContractAddress: '0x000000',
-	sessionKeyManagerAddress: '0x000000',
-	rpcUrl: 'http://localhost:8545',
-	chainId: 31337,
-	irysNetwork: 'devnet' as const,
+	// App info
 	appName: 'AmberInk',
 	appVersion: '1.0.0',
+	// Contract addresses (derived from chainId, not directly configurable)
+	blogHubContractAddress: '0x000000',
+	sessionKeyManagerAddress: '0x000000',
+	// Network settings
+	rpcUrl: 'http://localhost:8545',
+	chainId: 31337,
 	arweaveGateways: ['https://gateway.irys.xyz', 'https://arweave.net', 'https://arweave.dev'],
 	subsquidEndpoint: 'http://localhost:4350/graphql',
+	irysNetwork: 'devnet' as 'mainnet' | 'devnet',
+	// Gas settings
 	minGasFeeMultiplier: 10,
 	defaultGasFeeMultiplier: 30,
+	// Irys settings
 	irysFreeUploadLimit: 102400,
 	minActionValue: '20000000000000', // Store as string for JSON serialization
 	// USD pricing defaults
@@ -90,31 +56,75 @@ export const defaults = {
 	fallbackEthPriceUsd: 3000
 };
 
-// Environment-based defaults (build-time values from .env)
-export const envDefaults = {
-	rpcUrl: PUBLIC_RPC_URL || defaults.rpcUrl,
-	chainId: PUBLIC_CHAIN_ID ? parseInt(PUBLIC_CHAIN_ID, 10) : defaults.chainId,
-	arweaveGateways: PUBLIC_ARWEAVE_GATEWAYS
-		? PUBLIC_ARWEAVE_GATEWAYS.split(',').map((g: string) => g.trim())
-		: defaults.arweaveGateways,
-	subsquidEndpoint: PUBLIC_SUBSQUID_ENDPOINT || defaults.subsquidEndpoint,
-	minGasFeeMultiplier: PUBLIC_MIN_GAS_FEE_MULTIPLIER
-		? parseInt(PUBLIC_MIN_GAS_FEE_MULTIPLIER, 10)
-		: defaults.minGasFeeMultiplier,
-	defaultGasFeeMultiplier: PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER
-		? parseInt(PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER, 10)
-		: defaults.defaultGasFeeMultiplier,
-	irysFreeUploadLimit: defaults.irysFreeUploadLimit,
-	minActionValue: defaults.minActionValue,
-	// USD pricing defaults
-	defaultTipAmountUsd: defaults.defaultTipAmountUsd,
-	defaultDislikeAmountUsd: defaults.defaultDislikeAmountUsd,
-	defaultCollectPriceUsd: defaults.defaultCollectPriceUsd,
-	minActionValueUsd: defaults.minActionValueUsd,
-	priceCacheDuration: defaults.priceCacheDuration,
-	fallbackEthPriceUsd: defaults.fallbackEthPriceUsd,
-	envName: PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod'
+/**
+ * Type for defaults
+ */
+export type DefaultsConfig = typeof defaults;
+
+/**
+ * Environment-specific overrides (partial, only override what's different)
+ */
+export const ENVIRONMENT_DEFAULTS: Record<'dev' | 'test' | 'prod', Partial<DefaultsConfig>> = {
+	dev: {
+		// dev uses all defaults, no overrides needed
+	},
+	test: {
+		rpcUrl: 'https://sepolia.optimism.io',
+		chainId: 11155420,
+		subsquidEndpoint: 'https://amberink.banbot.site/graphql'
+	},
+	prod: {
+		rpcUrl: 'https://mainnet.optimism.io',
+		chainId: 10,
+		subsquidEndpoint: 'https://amberink.banbot.site/graphql',
+		irysNetwork: 'mainnet'
+	}
 };
+
+// Default environment when nothing is set
+const DEFAULT_ENV: 'dev' | 'test' | 'prod' = 'dev';
+
+// ============================================
+// Environment name management
+// ============================================
+
+// Dynamic localStorage key based on environment to avoid conflicts when switching environments
+const CONFIG_STORAGE_KEY_PREFIX = 'amberink_user_config';
+function getConfigStorageKey(): string {
+	const currentEnvName = getEnvName();
+	return `${CONFIG_STORAGE_KEY_PREFIX}_${currentEnvName}`;
+}
+
+/**
+ * Get current environment name (supports user override)
+ * Defaults to 'dev' if nothing is set
+ */
+function getEnvName(): 'dev' | 'test' | 'prod' {
+	if (!browser) return DEFAULT_ENV;
+	try {
+		// Try to read from localStorage with a fixed key (not environment-dependent)
+		const stored = localStorage.getItem('amberink_env_override');
+		if (stored) {
+			const parsed = JSON.parse(stored);
+			if (parsed.envName && ['dev', 'test', 'prod'].includes(parsed.envName)) {
+				return parsed.envName as 'dev' | 'test' | 'prod';
+			}
+		}
+	} catch (e) {
+		// Ignore errors
+	}
+	return DEFAULT_ENV;
+}
+
+/**
+ * Get and export current environment name (supports user override)
+ * This is a function that should be called to get the current envName
+ */
+export { getEnvName as envName };
+
+// ============================================
+// Type definitions
+// ============================================
 
 // User-overridable config keys
 // NOT overridable: minGasFeeMultiplier, irysFreeUploadLimit, minActionValue, blogHubContractAddress, sessionKeyManagerAddress, irysNetwork
@@ -156,6 +166,10 @@ export interface ConfigFieldMeta {
 // Minimum value for defaultGasFeeMultiplier
 export const MIN_DEFAULT_GAS_FEE_MULTIPLIER = 10;
 
+// ============================================
+// Helper functions
+// ============================================
+
 /**
  * Get allowed chain IDs for current environment
  */
@@ -176,6 +190,10 @@ export function getChainOptions(): { value: string; label: string }[] {
 		};
 	});
 }
+
+// ============================================
+// Config fields metadata for Settings UI
+// ============================================
 
 export const configFields: ConfigFieldMeta[] = [
 	{
@@ -246,6 +264,10 @@ export const configFields: ConfigFieldMeta[] = [
 	}
 ];
 
+// ============================================
+// localStorage persistence
+// ============================================
+
 // Load user config from localStorage
 function loadUserConfig(): UserConfig {
 	if (!browser) return {};
@@ -272,7 +294,10 @@ function saveUserConfig(config: UserConfig): void {
 	}
 }
 
+// ============================================
 // Reactive state using Svelte 5 runes
+// ============================================
+
 // Version counter to notify when envName changes (for reactive chain options)
 let envNameVersion = $state(0);
 
@@ -286,33 +311,45 @@ export function getEnvNameVersion(): number {
 
 let userConfig = $state<UserConfig>(loadUserConfig());
 
-// Merged config (user overrides + env defaults)
+// ============================================
+// Config getters
+// ============================================
+
+/**
+ * Get current environment defaults (merged: defaults + environment overrides)
+ */
+function getCurrentEnvDefaults(): DefaultsConfig {
+	const envOverrides = ENVIRONMENT_DEFAULTS[getEnvName()];
+	return { ...defaults, ...envOverrides };
+}
+
+/**
+ * Merged config (user overrides + environment defaults)
+ */
 export function getConfig() {
+	const envDefaults = getCurrentEnvDefaults();
 	const chainId = userConfig.chainId ?? envDefaults.chainId;
 
 	// Get contract addresses from chain configuration
 	const chainContracts = SUPPORTED_CHAINS[chainId];
-	const blogHubContractAddress = chainContracts?.blogHubAddress || defaults.blogHubContractAddress as `0x${string}`;
-	const sessionKeyManagerAddress = chainContracts?.sessionKeyManagerAddress || defaults.sessionKeyManagerAddress as `0x${string}`;
-
-	// Auto-determine Irys network: prod -> mainnet, otherwise -> devnet
-	const irysNetwork: 'mainnet' | 'devnet' = getEnvName() === 'prod' ? 'mainnet' : 'devnet';
+	const blogHubContractAddress = chainContracts?.blogHubAddress || envDefaults.blogHubContractAddress as `0x${string}`;
+	const sessionKeyManagerAddress = chainContracts?.sessionKeyManagerAddress || envDefaults.sessionKeyManagerAddress as `0x${string}`;
 
 	return {
-		appName: defaults.appName,
-		appVersion: defaults.appVersion,
+		appName: envDefaults.appName,
+		appVersion: envDefaults.appVersion,
 		// Derived from chainId (not user-overridable)
 		blogHubContractAddress,
 		sessionKeyManagerAddress,
-		// Auto-determined from environment (not user-overridable)
-		irysNetwork,
-		// Overridable
+		// From environment config (not user-overridable)
+		irysNetwork: envDefaults.irysNetwork,
+		// Overridable (user config > environment defaults)
 		rpcUrl: userConfig.rpcUrl || envDefaults.rpcUrl,
 		chainId,
 		arweaveGateways: userConfig.arweaveGateways || envDefaults.arweaveGateways,
 		subsquidEndpoint: userConfig.subsquidEndpoint || envDefaults.subsquidEndpoint,
 		defaultGasFeeMultiplier: userConfig.defaultGasFeeMultiplier ?? envDefaults.defaultGasFeeMultiplier,
-		// USD pricing (user-overridable)
+		// USD pricing (user-overridable, uses fixed defaults)
 		defaultTipAmountUsd: userConfig.defaultTipAmountUsd || envDefaults.defaultTipAmountUsd,
 		defaultDislikeAmountUsd: userConfig.defaultDislikeAmountUsd || envDefaults.defaultDislikeAmountUsd,
 		defaultCollectPriceUsd: userConfig.defaultCollectPriceUsd || envDefaults.defaultCollectPriceUsd,
@@ -342,13 +379,17 @@ export function getPythPriceFeedId(): `0x${string}` {
 // Get current user overrides
 export function getUserConfig(): UserConfig {
 	const config = { ...userConfig };
-	// Include envName from separate storage
+	// Include envName if it's been overridden (not default)
 	const currentEnvName = getEnvName();
-	if (currentEnvName !== PUBLIC_ENV_NAME) {
-		config.envName = currentEnvName as 'dev' | 'test' | 'prod';
+	if (currentEnvName !== DEFAULT_ENV) {
+		config.envName = currentEnvName;
 	}
 	return config;
 }
+
+// ============================================
+// Config setters
+// ============================================
 
 // Update a single config value
 export function setConfigValue<K extends UserConfigKey>(key: K, value: UserConfig[K]): void {
@@ -385,6 +426,9 @@ export function resetConfigValue(key: UserConfigKey): void {
 		if (browser) {
 			try {
 				localStorage.removeItem('amberink_env_override');
+				// Reload userConfig for the default environment
+				userConfig = loadUserConfig();
+				envNameVersion++;
 			} catch (e) {
 				console.warn('Failed to remove envName override:', e);
 			}
@@ -404,6 +448,7 @@ export function resetAllConfig(): void {
 	if (browser) {
 		try {
 			localStorage.removeItem('amberink_env_override');
+			envNameVersion++;
 		} catch (e) {
 			console.warn('Failed to remove envName override:', e);
 		}
@@ -425,9 +470,23 @@ export function isConfigOverridden(key: UserConfigKey): boolean {
 	return key in userConfig && userConfig[key] !== undefined;
 }
 
-// Get env default value for a key
-export function getEnvDefault<K extends UserConfigKey>(key: K): typeof envDefaults[K] {
-	return envDefaults[key];
+/**
+ * Get env default value for a key
+ * Returns the default value from merged defaults for the current environment
+ */
+export function getEnvDefault<K extends UserConfigKey>(key: K) {
+	const envDefaults = getCurrentEnvDefaults();
+	
+	// envName default
+	if (key === 'envName') return DEFAULT_ENV;
+	
+	// All other keys come from merged defaults
+	if (key in envDefaults) {
+		return envDefaults[key as keyof DefaultsConfig];
+	}
+	
+	// Fallback (should not reach here)
+	throw new Error(`Unknown config key: ${key}`);
 }
 
 // Initialize store (call this on app load if needed)

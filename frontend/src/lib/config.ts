@@ -2,16 +2,16 @@
  * Application configuration
  *
  * This module provides configuration values that can be:
- * 1. Set at build time via environment variables (PUBLIC_* vars)
+ * 1. Hardcoded per environment (dev/test/prod) in config.svelte.ts
  * 2. Overridden by users at runtime via localStorage (Settings page)
  *
- * All getter functions return the merged config (user overrides > env defaults)
+ * All getter functions return the merged config (user overrides > environment defaults)
  * appName and appVersion are NOT user-overridable
  */
 import {
 	getConfig,
 	defaults,
-	envDefaults,
+	ENVIRONMENT_DEFAULTS,
 	envName,
 	getUserConfig,
 	setConfigValue,
@@ -30,7 +30,8 @@ import {
 	getEnvNameVersion,
 	type UserConfig,
 	type UserConfigKey,
-	type ConfigFieldMeta
+	type ConfigFieldMeta,
+	type EnvironmentConfig
 } from '$lib/stores/config.svelte';
 
 // Re-export store functions for settings page
@@ -52,9 +53,11 @@ export {
 	PYTH_PRICE_FEED_IDS,
 	CHAIN_NATIVE_TOKEN,
 	getEnvNameVersion,
+	ENVIRONMENT_DEFAULTS,
 	type UserConfig,
 	type UserConfigKey,
-	type ConfigFieldMeta
+	type ConfigFieldMeta,
+	type EnvironmentConfig
 };
 
 // Helper functions - now read from reactive store
@@ -129,4 +132,3 @@ export function getFallbackEthPriceUsd(): number {
 
 // Legacy exports for backward compatibility
 export { defaults as defaultConfig };
-export { envDefaults };

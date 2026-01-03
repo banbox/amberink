@@ -20,7 +20,10 @@
 	let showResetConfirm = $state(false);
 	let saveMessage = $state('');
 	let errorMessage = $state('');
-	let errorField = $state<string | null>(null);
+	
+	// Toast visibility with animation
+	let showSuccessToast = $state(false);
+	let showErrorToast = $state(false);
 	
 	// Get chain options for dropdown - reactive to envName changes
 	let chainOptions = $derived.by(() => {
@@ -97,18 +100,11 @@
 		// Validate
 		const validationError = validateField(key, parsedValue);
 		if (validationError) {
-			errorMessage = validationError;
-			errorField = key;
-			setTimeout(() => {
-				errorMessage = '';
-				errorField = null;
-			}, 3000);
+			showErrorMessage(validationError);
 			return;
 		}
 		
 		setConfigValue(key, parsedValue as never);
-		errorMessage = '';
-		errorField = null;
 		showSaveMessage();
 	}
 
@@ -131,9 +127,19 @@
 	// Show save message briefly
 	function showSaveMessage() {
 		saveMessage = getLabel('settings_saved');
+		showSuccessToast = true;
 		setTimeout(() => {
-			saveMessage = '';
+			showSuccessToast = false;
 		}, 2000);
+	}
+
+	// Show error message briefly
+	function showErrorMessage(message: string) {
+		errorMessage = message;
+		showErrorToast = true;
+		setTimeout(() => {
+			showErrorToast = false;
+		}, 3000);
 	}
 
 	// Handle array field (gateways)
@@ -158,26 +164,32 @@
 	<title>{getLabel('settings')} - AmberInk</title>
 </svelte:head>
 
+<!-- Fixed Toast Messages at top of viewport -->
+<div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+	{#if showSuccessToast}
+		<div 
+			class="rounded-lg bg-green-600 px-4 py-3 text-sm text-white shadow-lg pointer-events-auto animate-fade-in"
+			role="status"
+		>
+			{saveMessage}
+		</div>
+	{/if}
+	{#if showErrorToast}
+		<div 
+			class="rounded-lg bg-red-600 px-4 py-3 text-sm text-white shadow-lg pointer-events-auto animate-fade-in"
+			role="alert"
+		>
+			{errorMessage}
+		</div>
+	{/if}
+</div>
+
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<!-- Header -->
 	<div class="mb-8">
 		<h1 class="text-2xl font-bold text-gray-900">{getLabel('settings')}</h1>
 		<p class="mt-2 text-gray-600">{getLabel('settings_desc')}</p>
 	</div>
-
-	<!-- Save Message -->
-	{#if saveMessage}
-		<div class="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
-			{saveMessage}
-		</div>
-	{/if}
-
-	<!-- Error Message -->
-	{#if errorMessage}
-		<div class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-			{errorMessage}
-		</div>
-	{/if}
 
 	<!-- Settings Form -->
 	<div class="space-y-6">
