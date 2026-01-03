@@ -56,8 +56,8 @@ export const defaults = {
 	irysFreeUploadLimit: 102400,
 	minActionValue: '20000000000000', // Store as string for JSON serialization
 	// USD pricing defaults
-	defaultTipAmountUsd: '1.00',
-	defaultDislikeAmountUsd: '1.00',
+	defaultTipAmountUsd: '0.50',
+	defaultDislikeAmountUsd: '0.50',
 	defaultCollectPriceUsd: '5.00',
 	minActionValueUsd: '0.05',
 	// Price cache duration in seconds (5 minutes)
@@ -186,13 +186,13 @@ export const configFields: ConfigFieldMeta[] = [
 		key: 'defaultTipAmountUsd',
 		labelKey: 'default_tip_usd',
 		type: 'text',
-		placeholder: '1.00'
+		placeholder: '0.50'
 	},
 	{
 		key: 'defaultDislikeAmountUsd',
 		labelKey: 'default_dislike_usd',
 		type: 'text',
-		placeholder: '1.00'
+		placeholder: '0.50'
 	},
 	{
 		key: 'defaultCollectPriceUsd',

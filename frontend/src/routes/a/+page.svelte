@@ -1366,7 +1366,7 @@
 
 					<!-- Quick USD amounts -->
 					<div class="mb-6 flex gap-2">
-						{#each ['0.50', '1.00', '2.00', '5.00'] as amount}
+						{#each ['0.10', '0.50', '2.00', '5.00'] as amount}
 							<button
 								type="button"
 								onclick={() => config.onValueChange(amount)}
