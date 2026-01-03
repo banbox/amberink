@@ -491,7 +491,7 @@ async function uploadContentImageFile(
 const PLACEHOLDER_CACHE_KEY_PREFIX = 'amberink_placeholder_txid';
 
 function getPlaceholderCacheKey(): string {
-	return `${PLACEHOLDER_CACHE_KEY_PREFIX}_${envName}`;
+	return `${PLACEHOLDER_CACHE_KEY_PREFIX}_${envName()}`;
 }
 
 function getCachedPlaceholderTxId(): string | null {
@@ -507,7 +507,7 @@ function cachePlaceholderTxId(txId: string): void {
 	if (typeof window === 'undefined') return;
 	try {
 		localStorage.setItem(getPlaceholderCacheKey(), txId);
-		console.log(`Placeholder txId cached for env '${envName}': ${txId}`);
+		console.log(`Placeholder txId cached for env '${envName()}': ${txId}`);
 	} catch (e) {
 		console.warn('Failed to cache placeholder txId:', e);
 	}
@@ -531,12 +531,12 @@ async function getOrCreatePlaceholderTxId(
 	// 尝试从缓存获取
 	const cachedTxId = getCachedPlaceholderTxId();
 	if (cachedTxId) {
-		console.log(`Using cached placeholder txId for env '${envName}': ${cachedTxId}`);
+		console.log(`Using cached placeholder txId for env '${envName()}': ${cachedTxId}`);
 		return cachedTxId;
 	}
 
 	// 缓存不存在，创建新的 placeholder
-	console.log(`No cached placeholder for env '${envName}', creating new one...`);
+	console.log(`No cached placeholder for env '${envName()}', creating new one...`);
 	const placeholderContent = 'empty text';
 	const placeholderTxId = await uploadMarkdownContent(uploader, placeholderContent, title, articleTags, paidBy);
 

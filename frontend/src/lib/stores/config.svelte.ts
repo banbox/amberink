@@ -17,14 +17,38 @@ const PUBLIC_MIN_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUB
 const PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER = (publicEnv as Record<string, string>)['PUBLIC_DEFAULT_GAS_FEE_MULTIPLIER'] || '';
 const PUBLIC_ENV_NAME = (publicEnv as Record<string, string>)['PUBLIC_ENV_NAME'] || 'dev';
 
-// Environment name for localStorage key isolation (dev, test, prod)
-export const envName = PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod';
-
 // Dynamic localStorage key based on environment to avoid conflicts when switching environments
 const CONFIG_STORAGE_KEY_PREFIX = 'amberink_user_config';
 function getConfigStorageKey(): string {
-	return `${CONFIG_STORAGE_KEY_PREFIX}_${envName}`;
+	const currentEnvName = getEnvName();
+	return `${CONFIG_STORAGE_KEY_PREFIX}_${currentEnvName}`;
 }
+
+/**
+ * Get current environment name (supports user override)
+ */
+function getEnvName(): 'dev' | 'test' | 'prod' {
+	if (!browser) return PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod';
+	try {
+		// Try to read from localStorage with a fixed key (not environment-dependent)
+		const stored = localStorage.getItem('amberink_env_override');
+		if (stored) {
+			const parsed = JSON.parse(stored);
+			if (parsed.envName && ['dev', 'test', 'prod'].includes(parsed.envName)) {
+				return parsed.envName as 'dev' | 'test' | 'prod';
+			}
+		}
+	} catch (e) {
+		// Ignore errors
+	}
+	return PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod';
+}
+
+/**
+ * Get and export current environment name (supports user override)
+ * This is a function that should be called to get the current envName
+ */
+export { getEnvName as envName };
 
 // Import chain configuration from centralized file (for local use and re-export)
 import {
@@ -88,7 +112,8 @@ export const envDefaults = {
 	defaultCollectPriceUsd: defaults.defaultCollectPriceUsd,
 	minActionValueUsd: defaults.minActionValueUsd,
 	priceCacheDuration: defaults.priceCacheDuration,
-	fallbackEthPriceUsd: defaults.fallbackEthPriceUsd
+	fallbackEthPriceUsd: defaults.fallbackEthPriceUsd,
+	envName: PUBLIC_ENV_NAME as 'dev' | 'test' | 'prod'
 };
 
 // User-overridable config keys
@@ -102,7 +127,8 @@ export type UserConfigKey =
 	| 'defaultTipAmountUsd'
 	| 'defaultDislikeAmountUsd'
 	| 'defaultCollectPriceUsd'
-	| 'minActionValueUsd';
+	| 'minActionValueUsd'
+	| 'envName';
 
 export interface UserConfig {
 	rpcUrl?: string;
@@ -114,6 +140,7 @@ export interface UserConfig {
 	defaultDislikeAmountUsd?: string;
 	defaultCollectPriceUsd?: string;
 	minActionValueUsd?: string;
+	envName?: 'dev' | 'test' | 'prod';
 }
 
 // Config field metadata for settings UI
@@ -133,7 +160,7 @@ export const MIN_DEFAULT_GAS_FEE_MULTIPLIER = 10;
  * Get allowed chain IDs for current environment
  */
 export function getAllowedChainIds(): number[] {
-	return ALLOWED_CHAINS_BY_ENV[envName] || [];
+	return ALLOWED_CHAINS_BY_ENV[getEnvName()] || [];
 }
 
 /**
@@ -151,6 +178,17 @@ export function getChainOptions(): { value: string; label: string }[] {
 }
 
 export const configFields: ConfigFieldMeta[] = [
+	{
+		key: 'envName',
+		labelKey: 'env_name',
+		type: 'select',
+		options: [
+			{ value: 'dev', labelKey: 'env_dev' },
+			{ value: 'test', labelKey: 'env_test' },
+			{ value: 'prod', labelKey: 'env_prod' }
+		],
+		description: 'Select deployment environment'
+	},
 	{
 		key: 'chainId',
 		labelKey: 'chain_id',
@@ -235,6 +273,17 @@ function saveUserConfig(config: UserConfig): void {
 }
 
 // Reactive state using Svelte 5 runes
+// Version counter to notify when envName changes (for reactive chain options)
+let envNameVersion = $state(0);
+
+/**
+ * Get the current envName version (for reactive dependencies)
+ * This is incremented when envName changes
+ */
+export function getEnvNameVersion(): number {
+	return envNameVersion;
+}
+
 let userConfig = $state<UserConfig>(loadUserConfig());
 
 // Merged config (user overrides + env defaults)
@@ -247,7 +296,7 @@ export function getConfig() {
 	const sessionKeyManagerAddress = chainContracts?.sessionKeyManagerAddress || defaults.sessionKeyManagerAddress as `0x${string}`;
 
 	// Auto-determine Irys network: prod -> mainnet, otherwise -> devnet
-	const irysNetwork: 'mainnet' | 'devnet' = envName === 'prod' ? 'mainnet' : 'devnet';
+	const irysNetwork: 'mainnet' | 'devnet' = getEnvName() === 'prod' ? 'mainnet' : 'devnet';
 
 	return {
 		appName: defaults.appName,
@@ -292,11 +341,33 @@ export function getPythPriceFeedId(): `0x${string}` {
 
 // Get current user overrides
 export function getUserConfig(): UserConfig {
-	return { ...userConfig };
+	const config = { ...userConfig };
+	// Include envName from separate storage
+	const currentEnvName = getEnvName();
+	if (currentEnvName !== PUBLIC_ENV_NAME) {
+		config.envName = currentEnvName as 'dev' | 'test' | 'prod';
+	}
+	return config;
 }
 
 // Update a single config value
 export function setConfigValue<K extends UserConfigKey>(key: K, value: UserConfig[K]): void {
+	// Special handling for envName - save to separate storage key and reload config
+	if (key === 'envName') {
+		if (browser) {
+			try {
+				localStorage.setItem('amberink_env_override', JSON.stringify({ envName: value }));
+				// Reload userConfig from the new environment's storage key
+				// This ensures all dependent configs update to reflect the new environment
+				userConfig = loadUserConfig();
+				// Notify listeners that envName has changed
+				envNameVersion++;
+			} catch (e) {
+				console.warn('Failed to save envName override:', e);
+			}
+		}
+		return;
+	}
 	userConfig = { ...userConfig, [key]: value };
 	saveUserConfig(userConfig);
 }
@@ -309,6 +380,17 @@ export function updateConfig(updates: Partial<UserConfig>): void {
 
 // Reset a single config value to env default
 export function resetConfigValue(key: UserConfigKey): void {
+	// Special handling for envName - remove from separate storage
+	if (key === 'envName') {
+		if (browser) {
+			try {
+				localStorage.removeItem('amberink_env_override');
+			} catch (e) {
+				console.warn('Failed to remove envName override:', e);
+			}
+		}
+		return;
+	}
 	const { [key]: _, ...rest } = userConfig;
 	userConfig = rest;
 	saveUserConfig(userConfig);
@@ -318,10 +400,28 @@ export function resetConfigValue(key: UserConfigKey): void {
 export function resetAllConfig(): void {
 	userConfig = {};
 	saveUserConfig(userConfig);
+	// Also reset envName override
+	if (browser) {
+		try {
+			localStorage.removeItem('amberink_env_override');
+		} catch (e) {
+			console.warn('Failed to remove envName override:', e);
+		}
+	}
 }
 
 // Check if a config value is overridden by user
 export function isConfigOverridden(key: UserConfigKey): boolean {
+	// Special handling for envName
+	if (key === 'envName') {
+		if (!browser) return false;
+		try {
+			const stored = localStorage.getItem('amberink_env_override');
+			return !!stored;
+		} catch (e) {
+			return false;
+		}
+	}
 	return key in userConfig && userConfig[key] !== undefined;
 }
 

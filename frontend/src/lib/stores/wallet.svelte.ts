@@ -7,7 +7,7 @@ import { envName } from '$lib/stores/config.svelte';
 
 /** Get the storage key for wallet disconnected state based on current environment */
 function getDisconnectedKey(): string {
-	return `wallet_disconnected_${envName}`;
+	return `wallet_disconnected_${envName()}`;
 }
 
 // Wallet state - using module-level state with getter functions

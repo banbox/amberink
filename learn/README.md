@@ -1533,3 +1533,10 @@ Cannot access url.searchParams on a page with prerendering enabled
 @help.md 当前我在编译前端时遇到上面错误，请帮我查找相关代码并解决。一般此问题是在onMount的外部使用了url.searchParams导致的，应该务必改为在onMount内部使用  
 Claude：已解决
 
+### 2026-01-03 18:27  环境名支持用户配置
+@help.md frontend/src/lib/config.ts  frontend/src/lib/stores/config.svelte.ts 目前前端配置中支持从环节变量和默认配置、用户自定义三种媒介生成运行时配置。当前的envName只从环境变量中读取，请帮我改为也允许从用户设置中读取，并且在 frontend/src/routes/settings/+page.svelte 中增加envName的设置项，以及多语言支持等。  
+Claude：修改完成  
+开发者：[项目下搜索envName在编辑器中打开复制所有]当前envName是函数，之前它是变量，前端中很多地方依然是按变量使用，上面是所有出现过的地方，请帮我判断哪些地方是使用的这个函数，改为函数使用。  
+Claude：修改完成  
+开发者：@help.md 当前 frontend/src/lib/stores/config.svelte.ts 允许用户在设置页面修改envName，不过很多其他配置都受这个envName的影响，所以当用户修改envName后，应该立刻反映到其他配置项的当前值和可选值上。目前修改envName后其他项没有变化，请帮我查看相关逻辑，帮我按要求实现联动。  
+Claude：修改完成

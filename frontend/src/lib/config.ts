@@ -27,6 +27,7 @@ import {
 	PYTH_CONTRACT_ADDRESSES,
 	PYTH_PRICE_FEED_IDS,
 	CHAIN_NATIVE_TOKEN,
+	getEnvNameVersion,
 	type UserConfig,
 	type UserConfigKey,
 	type ConfigFieldMeta
@@ -50,6 +51,7 @@ export {
 	PYTH_CONTRACT_ADDRESSES,
 	PYTH_PRICE_FEED_IDS,
 	CHAIN_NATIVE_TOKEN,
+	getEnvNameVersion,
 	type UserConfig,
 	type UserConfigKey,
 	type ConfigFieldMeta

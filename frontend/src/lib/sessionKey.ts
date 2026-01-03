@@ -20,7 +20,7 @@ import {
 
 /** Get the storage key for session key based on current environment */
 function getSessionKeyStorageKey(): string {
-	return `amberink_session_key_${envName}`;
+	return `amberink_session_key_${envName()}`;
 }
 
 /**

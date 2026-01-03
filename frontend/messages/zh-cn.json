@@ -399,5 +399,12 @@
 	"non_public": "不公开",
 	"encrypted": "加密",
 	"encrypted_warning": "将使用您的钱包签名特征加密正文，钱包丢失将导致永远无法解密，钱包泄露则文章内容可能被公开。",
-	"non_public_warning": "不加密，默认不会被其他用户看到或搜索到，但任何拥有文章链接的人都可阅读。"
+	"non_public_warning": "不加密，默认不会被其他用户看到或搜索到，但任何拥有文章链接的人都可阅读。",
+	"env_name": "环境",
+	"env_dev": "开发环境",
+	"env_test": "测试环境",
+	"env_prod": "生产环境",
+	"fixed_configuration": "固定配置(只读)",
+	"gas_multiplier_min_error": "Gas 费用倍数最小为 {min}",
+	"reset_default": "重置为默认值"
 }

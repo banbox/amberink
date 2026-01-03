@@ -12,7 +12,7 @@
 		type UserConfigKey,
 		getConfig
 	} from '$lib/config';
-	import { getChainOptions, envName } from '$lib/stores/config.svelte';
+	import { getChainOptions, envName, getEnvNameVersion } from '$lib/stores/config.svelte';
 	import { CloseIcon, PlusIcon, ResetIcon } from '$lib/components/icons';
 
 	// Local form state
@@ -22,8 +22,12 @@
 	let errorMessage = $state('');
 	let errorField = $state<string | null>(null);
 	
-	// Get chain options for dropdown
-	const chainOptions = getChainOptions();
+	// Get chain options for dropdown - reactive to envName changes
+	let chainOptions = $derived.by(() => {
+		// Depend on envNameVersion to trigger re-computation when envName changes
+		void getEnvNameVersion();
+		return getChainOptions();
+	});
 	
 	// Get current config for read-only display
 	let currentConfig = $derived(getConfig());
@@ -48,7 +52,10 @@
 	}
 
 	// Initialize on mount
+	// Initialize form values on mount and when envName changes
 	$effect(() => {
+		// Depend on envNameVersion to reinitialize when envName changes
+		void getEnvNameVersion();
 		initFormValues();
 	});
 
@@ -203,6 +210,21 @@
 									<option value={option.value}>{option.label}</option>
 								{/each}
 							</select>
+						{:else if field.type === 'select' && field.options}
+							<!-- Generic select dropdown (e.g., envName) -->
+							<select
+								id={field.key}
+								value={String(formValues[field.key] || '')}
+								onchange={(e) => {
+									handleChange(field.key, e.currentTarget.value);
+									saveField(field.key);
+								}}
+								class="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+							>
+								{#each field.options as option}
+									<option value={option.value}>{getLabel(option.labelKey)}</option>
+								{/each}
+							</select>
 						{:else if field.type === 'text'}
 							<input
 								type="text"
@@ -261,9 +283,10 @@
 
 						<!-- Env default hint -->
 						<p class="mt-1 text-xs text-gray-500">
-							{getLabel('default_value')}: 
+							{getLabel('default_value')}:
 							{#if field.key === 'chainId'}
-								{chainOptions.find(opt => opt.value === String(getEnvDefault(field.key)))?.label || getEnvDefault(field.key)}
+								{chainOptions.find((opt) => opt.value === String(getEnvDefault(field.key)))
+									?.label || getEnvDefault(field.key)}
 							{:else if field.type === 'array'}
 								{(getEnvDefault(field.key) as string[]).join(', ')}
 							{:else}
@@ -294,7 +317,7 @@
 		<div class="space-y-2 text-sm text-gray-600">
 			<div class="flex justify-between">
 				<span class="font-medium">{getLabel('current_environment')}:</span>
-				<span class="text-gray-900">{envName}</span>
+				<span class="text-gray-900">{envName()}</span>
 			</div>
 			<div class="flex justify-between">
 				<span class="font-medium">{getLabel('blog_hub_address')}:</span>

@@ -399,5 +399,12 @@
 	"non_public": "Non-Public",
 	"encrypted": "Encrypted",
 	"encrypted_warning": "Your wallet signature will be used to encrypt the content. Losing your wallet will make decryption impossible forever. If your wallet is compromised, the article content may be exposed.",
-	"non_public_warning": "Not encrypted. By default, it won't be visible or searchable by other users, but anyone with the article link can read it."
+	"non_public_warning": "Not encrypted. By default, it won't be visible or searchable by other users, but anyone with the article link can read it.",
+	"env_name": "Environment",
+	"env_dev": "Development",
+	"env_test": "Test",
+	"env_prod": "Production",
+	"fixed_configuration": "Fixed Configuration (Read-Only)",
+	"gas_multiplier_min_error": "Gas fee multiplier must be at least {min}",
+	"reset_default": "Reset to Default"
 }
