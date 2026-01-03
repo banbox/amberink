@@ -20,11 +20,12 @@
 	let hasMore = $state(true);
 	let offset = $state(0);
 	let error = $state<string | null>(null);
+	let selectedCategory = $state<number | null>(null);
 
-	// Get category from URL
-	let selectedCategory = $derived.by(() => {
+	// Initialize category from URL in browser only
+	onMount(() => {
 		const cat = page.url.searchParams.get('category');
-		return cat ? parseInt(cat) : null;
+		selectedCategory = cat ? parseInt(cat) : null;
 	});
 
 	// Fetch articles from SubSquid
@@ -79,6 +80,7 @@
 		} else {
 			url.searchParams.delete('category');
 		}
+		selectedCategory = categoryId;
 		goto(url.toString(), { replaceState: true, keepFocus: true });
 	}
 

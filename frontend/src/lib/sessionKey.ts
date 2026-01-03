@@ -5,7 +5,7 @@
 
 import { formatEther, createWalletClient, http } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getRpcUrl } from '$lib/config';
+import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getRpcUrl, envName } from '$lib/config';
 import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
 import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
@@ -18,7 +18,10 @@ import {
 	STANDARD_TRANSFER_GAS_LIMIT
 } from './constants';
 
-const SESSION_KEY_STORAGE = 'amberink_session_key';
+/** Get the storage key for session key based on current environment */
+function getSessionKeyStorageKey(): string {
+	return `amberink_session_key_${envName}`;
+}
 
 /**
  * Stored session key data structure
@@ -191,14 +194,14 @@ export async function ensureSessionKeyBalance(sessionKeyAddress: string): Promis
 export function getStoredSessionKey(): StoredSessionKey | null {
 	if (!browser) return null;
 
-	const stored = localStorage.getItem(SESSION_KEY_STORAGE);
+	const stored = localStorage.getItem(getSessionKeyStorageKey());
 	if (!stored) return null;
 
 	try {
 		const data: StoredSessionKey = JSON.parse(stored);
 		return data;
 	} catch {
-		localStorage.removeItem(SESSION_KEY_STORAGE);
+		localStorage.removeItem(getSessionKeyStorageKey());
 		return null;
 	}
 }
@@ -314,7 +317,7 @@ export async function createSessionKey(options?: {
 		owner: account,
 		validUntil
 	};
-	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(sessionKeyData));
+	localStorage.setItem(getSessionKeyStorageKey(), JSON.stringify(sessionKeyData));
 	console.log(`Session key created and registered: ${sessionKeyAccount.address}`);
 
 	// 5. Optionally create Irys Balance Approval (lazy by default)
@@ -386,7 +389,7 @@ export async function reauthorizeSessionKey(
 		...existingSessionKey,
 		validUntil
 	};
-	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(updatedSessionKey));
+	localStorage.setItem(getSessionKeyStorageKey(), JSON.stringify(updatedSessionKey));
 	console.log(`Session key reauthorized: ${existingSessionKey.address}`);
 
 	return updatedSessionKey;
@@ -463,7 +466,7 @@ export async function extendSessionKey(
 		...existingSessionKey,
 		validUntil
 	};
-	localStorage.setItem(SESSION_KEY_STORAGE, JSON.stringify(updatedSessionKey));
+	localStorage.setItem(getSessionKeyStorageKey(), JSON.stringify(updatedSessionKey));
 	console.log(`Session key extended: ${existingSessionKey.address}`);
 
 	return updatedSessionKey;
@@ -486,7 +489,7 @@ export async function revokeSessionKey(): Promise<void> {
 		args: [sessionKey.address as `0x${string}`]
 	});
 
-	localStorage.removeItem(SESSION_KEY_STORAGE);
+	localStorage.removeItem(getSessionKeyStorageKey());
 }
 
 /**
@@ -495,7 +498,7 @@ export async function revokeSessionKey(): Promise<void> {
  */
 export function clearLocalSessionKey(): void {
 	if (browser) {
-		localStorage.removeItem(SESSION_KEY_STORAGE);
+		localStorage.removeItem(getSessionKeyStorageKey());
 	}
 }
 

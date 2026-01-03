@@ -13,7 +13,7 @@ import {
 	type IrysUploader
 } from './irys';
 import type { ArticleMetadata, IrysTag, IrysNetwork, ArticleFolderUploadParams, ArticleFolderUploadResult, ContentImageInfo } from './types';
-import { getConfig } from '$lib/config';
+import { getConfig, envName } from '$lib/config';
 import type { StoredSessionKey } from '$lib/sessionKey';
 import {
 	generateArticleFolderManifest,
@@ -483,6 +483,69 @@ async function uploadContentImageFile(
 	}
 }
 
+// ============================================================
+//                  Placeholder 缓存功能（加密文章两阶段上传）
+// ============================================================
+
+/** Placeholder 缓存存储键前缀 */
+const PLACEHOLDER_CACHE_KEY_PREFIX = 'amberink_placeholder_txid';
+
+function getPlaceholderCacheKey(): string {
+	return `${PLACEHOLDER_CACHE_KEY_PREFIX}_${envName}`;
+}
+
+function getCachedPlaceholderTxId(): string | null {
+	if (typeof window === 'undefined') return null;
+	try {
+		return localStorage.getItem(getPlaceholderCacheKey());
+	} catch {
+		return null;
+	}
+}
+
+function cachePlaceholderTxId(txId: string): void {
+	if (typeof window === 'undefined') return;
+	try {
+		localStorage.setItem(getPlaceholderCacheKey(), txId);
+		console.log(`Placeholder txId cached for env '${envName}': ${txId}`);
+	} catch (e) {
+		console.warn('Failed to cache placeholder txId:', e);
+	}
+}
+
+/**
+ * 获取或创建 placeholder txId
+ * 如果缓存中存在，则直接返回；否则创建新的并缓存
+ * 
+ * @param uploader - Irys uploader 实例
+ * @param title - 文章标题（用于标签）
+ * @param articleTags - 文章标签
+ * @param paidBy - 可选，付费账户地址
+ */
+async function getOrCreatePlaceholderTxId(
+	uploader: IrysUploader,
+	title: string,
+	articleTags: string[],
+	paidBy?: string
+): Promise<string> {
+	// 尝试从缓存获取
+	const cachedTxId = getCachedPlaceholderTxId();
+	if (cachedTxId) {
+		console.log(`Using cached placeholder txId for env '${envName}': ${cachedTxId}`);
+		return cachedTxId;
+	}
+
+	// 缓存不存在，创建新的 placeholder
+	console.log(`No cached placeholder for env '${envName}', creating new one...`);
+	const placeholderContent = 'empty text';
+	const placeholderTxId = await uploadMarkdownContent(uploader, placeholderContent, title, articleTags, paidBy);
+
+	// 缓存新创建的 txId
+	cachePlaceholderTxId(placeholderTxId);
+
+	return placeholderTxId;
+}
+
 /**
  * 使用指定 uploader 上传文章文件夹
  * 将文章内容和封面图片打包为一个链上文件夹
@@ -533,13 +596,26 @@ export async function uploadArticleFolderWithUploader(
 	if (isEncrypted) {
 		console.log('Step 3: Creating initial manifest for encrypted article...');
 
-		// Step 3a: 上传空占位文件作为初始 index.md
-		const placeholderContent = 'empty text';
-		const placeholderTxId = await uploadMarkdownContent(uploader, placeholderContent, title, articleTags, paidBy);
+		// 检查是否有任何文件内容（封面图或正文图片）
+		const hasAnyFileContent = !!coverImageTxId || Object.keys(contentImageTxIds).length > 0;
+
+		// Step 3a: 获取 index.md 的初始 txId
+		let initialIndexTxId: string;
+
+		if (hasAnyFileContent) {
+			// 有文件内容时，使用第一个可用的文件 txId 作为 index 占位
+			// 这样可以复用已上传的内容，避免重复上传 placeholder
+			initialIndexTxId = coverImageTxId || Object.values(contentImageTxIds)[0];
+			console.log(`  Using existing file as initial index placeholder: ${initialIndexTxId}`);
+		} else {
+			// 没有任何文件内容时，需要使用 placeholder
+			initialIndexTxId = await getOrCreatePlaceholderTxId(uploader, title, articleTags, paidBy);
+			console.log(`  Using placeholder as initial index: ${initialIndexTxId}`);
+		}
 
 		// Step 3b: 创建初始 manifest（包含占位内容和其他文件）
 		const initialFiles = new Map<string, string>();
-		initialFiles.set(ARTICLE_INDEX_FILE, placeholderTxId);
+		initialFiles.set(ARTICLE_INDEX_FILE, initialIndexTxId);
 		if (coverImageTxId) {
 			initialFiles.set(ARTICLE_COVER_IMAGE_FILE, coverImageTxId);
 		}
@@ -803,8 +879,6 @@ export async function updateArticleFolderWithUploader(
 		}
 	}
 
-	// 使用 uploadUpdatedManifest 添加 Root-TX 标签
-	const { uploadUpdatedManifest } = await import('./folder');
 	const newManifestTxId = await uploadUpdatedManifestWithPayer(
 		uploader,
 		manifest,

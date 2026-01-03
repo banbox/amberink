@@ -3,8 +3,12 @@
  */
 
 import { switchToTargetChain } from '$lib/wallet';
+import { envName } from '$lib/stores/config.svelte';
 
-const DISCONNECTED_KEY = 'wallet_disconnected';
+/** Get the storage key for wallet disconnected state based on current environment */
+function getDisconnectedKey(): string {
+	return `wallet_disconnected_${envName}`;
+}
 
 // Wallet state - using module-level state with getter functions
 let _address = $state<string | undefined>(undefined);
@@ -39,7 +43,7 @@ export function setWalletLoading(loading: boolean) {
 export async function checkWalletConnection() {
 	if (typeof window === 'undefined' || !window.ethereum) return;
 
-	if (localStorage.getItem(DISCONNECTED_KEY) === 'true') {
+	if (localStorage.getItem(getDisconnectedKey()) === 'true') {
 		return;
 	}
 
@@ -98,7 +102,7 @@ export async function connectWallet(): Promise<{ success: boolean; error?: strin
 			_address = newAddress;
 			_lastAddress = newAddress;
 			_isConnected = true;
-			localStorage.removeItem(DISCONNECTED_KEY);
+			localStorage.removeItem(getDisconnectedKey());
 
 			await switchToTargetChain();
 
@@ -121,7 +125,7 @@ export async function connectWallet(): Promise<{ success: boolean; error?: strin
 }
 
 export function disconnectWallet() {
-	localStorage.setItem(DISCONNECTED_KEY, 'true');
+	localStorage.setItem(getDisconnectedKey(), 'true');
 	_address = undefined;
 	_isConnected = false;
 }

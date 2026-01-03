@@ -1498,6 +1498,17 @@ Gemini：修改完成
 
 ### 2026-01-03 13:00  代码优化
 @doc/help.md 当前frontend是集中进行配置管理的，主要在frontend/src/lib/stores/config.svelte.ts 和 frontend/src/lib/config.ts 中。不过前端很多地方的代码依然使用了硬编码，比如域名、数值、devnet/mainnet、固定字符串等；有些是确实可以硬编码，但大部分应该通过配置维护管理。请你根据其前后逻辑，确定其使用形式，对于固定常量，在某个地方集中维护导入使用，对于可变变量使用配置等维护。另外有些地方不应该固定传入硬编码参数，而是需要根据配置判断。核心原则是提取冗余的多处配置在一处集中管理方便维护。请你阅读相关前端代码，查找可优化的内容，根据其属性进行优化重构。忽略gitignore中屏蔽的文件。  
+Claude：修改完成
+
+### 2026-01-03 14:20  代码优化
+@help.md 帮我对frontend/src 下的所有前端代码进行审查和优化，关注ts和svelte文件；忽略gitignore中的文件。
+发现冗余代码时，提取为子函数，确保遵循DRY原则，减少重复或相似的代码片段；
+* 核心原则是尽量减少冗余或相似代码逻辑，方便维护。
+* 保持业务逻辑不变。保持样式整体不变可细微调整。
+* 当某些部分可能和其他文件中的某些重合时，考虑提取公共部分复用；
+* 如果某函数body只有一行且参数不超过3个，则应该删除，在引用地方直接改为简短代码。
+* 针对html冗余的，提取为snippet片段。
+* 对于大部分相似但细微不同的，提取为带参数的可复用函数、组件或片段
 Claude：分别对ts和svelte文件执行完成
 
 ### 2026-01-03 15:56  更新 help.md
@@ -1505,3 +1516,20 @@ Claude：分别对ts和svelte文件执行完成
 
 ### 2026-01-03 16:20  更新 README.md
 @help.md README.md 这是项目介绍文件，目前项目已经发生了较大变化，请根据help.md 了解当前的概况，对README进行更新，要求修改后内容长度不超过当前长度的150%；兼顾原理介绍和核心技术名词。确保普通用户也能了解大概。
+
+### 2026-01-03 17:40  加密占位符交易优化
+@help.md frontend/src/lib/arweave/upload.ts 538行部分，这里如果需要加密上传时，会分为两阶段，第一阶段先上传非空的不加密内容得到manifestID，然后计算签名得到加密秘钥，再加密正文上传更新irys；目前在538部分，是每次都上传placeholderContent为一个新的交易，这其实没必要，帮我改为，当有封面或者任何正文图片（也就是有任意文件内容）时，使用已有内容创建初始manifestID即可。如果没有任何内容，确实需要placeholderContent，则先检查是否有已缓存的placeholderContent对应的交易ID，有则直接使用此交易ID；否则创建新交易并缓存再使用。
+注意缓存时需要对不同环境分开处理（dev/test/prod）  
+Claude：修改完成
+
+### 2026-01-03 17:48  重要key区分环境
+@help.md frontend/src/lib/sessionKey.ts 中对于SESSION_KEY_STORAGE的读取和保存应该结合envName，不应该固定使用相同的key；  
+Claude：修改完成  
+开发者：frontend/src/lib/stores/wallet.svelte.ts 中的 DISCONNECTED_KEY 也需要区分环境  
+Claude：修改完成
+
+### 2026-01-03 18:00  编译错误解决
+Cannot access url.searchParams on a page with prerendering enabled 
+@help.md 当前我在编译前端时遇到上面错误，请帮我查找相关代码并解决。一般此问题是在onMount的外部使用了url.searchParams导致的，应该务必改为在onMount内部使用  
+Claude：已解决
+
