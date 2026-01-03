@@ -223,7 +223,7 @@
 				GitHub
 			</a>
 			<span class="text-gray-300">·</span>
-			<a href={localizeHref('/about')} class="transition-colors">
+			<a href={localizeHref('/')} class="transition-colors">
 				{m.about()}
 			</a>
 		</div>
