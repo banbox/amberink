@@ -13,6 +13,11 @@ import type { IrysUploader, SessionKeyIrysUploader } from './irys';
 import { isWithinIrysFreeLimit } from './irys';
 import type { IrysTag, ArticleFolderManifest } from './types';
 import { getConfig, getArweaveGateways, getIrysNetwork } from '$lib/config';
+import {
+	IRYS_GATEWAY_URL,
+	IRYS_DEVNET_GRAPHQL,
+	IRYS_MAINNET_GRAPHQL
+} from '$lib/constants';
 
 // 文章文件夹中的固定文件名
 export const ARTICLE_INDEX_FILE = 'index.md';
@@ -260,7 +265,7 @@ export async function uploadUpdatedManifest(
 export function getMutableFolderUrl(manifestId: string, fileName?: string): string {
 	// 始终使用 gateway.irys.xyz/mutable/ 路径，这对 devnet 和 mainnet 都有效
 	// devnet.irys.xyz 不支持 /mutable/ 路径，会返回 404
-	const baseUrl = `https://gateway.irys.xyz/mutable/${manifestId}`;
+	const baseUrl = `${IRYS_GATEWAY_URL}/mutable/${manifestId}`;
 	return fileName ? `${baseUrl}/${fileName}` : baseUrl;
 }
 
@@ -357,8 +362,8 @@ export async function queryArticleVersions(originalManifestId: string): Promise<
 	// devnet 和 mainnet 使用不同的数据库
 	const network = getIrysNetwork();
 	const graphqlEndpoint = network === 'devnet'
-		? 'https://devnet.irys.xyz/graphql'
-		: 'https://uploader.irys.xyz/graphql';
+		? IRYS_DEVNET_GRAPHQL
+		: IRYS_MAINNET_GRAPHQL;
 	console.log('[queryArticleVersions] Using network:', network, 'endpoint:', graphqlEndpoint);
 	console.log('[queryArticleVersions] Querying versions for manifest:', originalManifestId);
 
@@ -531,8 +536,8 @@ export async function queryLatestIrysTxId(originalManifestId: string): Promise<s
 	// 根据 Irys 网络选择正确的 GraphQL 端点
 	const network = getIrysNetwork();
 	const graphqlEndpoint = network === 'devnet'
-		? 'https://devnet.irys.xyz/graphql'
-		: 'https://uploader.irys.xyz/graphql';
+		? IRYS_DEVNET_GRAPHQL
+		: IRYS_MAINNET_GRAPHQL;
 
 	// 查询带有 Root-TX = originalManifestId 标签的最新交易
 	const query = `

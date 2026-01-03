@@ -5,6 +5,7 @@
 
 import { getChainId, getRpcUrl } from '$lib/config';
 import { BLOCK_EXPLORER_URLS, getViemChain } from './chains';
+import { VIEWBLOCK_ARWEAVE_URL, IRYS_DEVNET_URL } from './constants';
 
 /**
  * Get block explorer URL for a transaction hash
@@ -16,13 +17,11 @@ export function getBlockExplorerTxUrl(txHash: string): string {
 	return `${baseUrl}/tx/${txHash}`;
 }
 
-const VIEWBLOCK_ARWEAVE_BASE_URL = 'https://viewblock.io/arweave';
-
 export function getViewblockArweaveUrl(arweaveId: string, network: 'mainnet' | 'devnet'): string {
 	if (!arweaveId) return '';
 	// Viewblock only supports Arweave mainnet
-	if (network !== 'mainnet') return `https://devnet.irys.xyz/tx/${arweaveId}`;
-	return `${VIEWBLOCK_ARWEAVE_BASE_URL}/tx/${arweaveId}`;
+	if (network !== 'mainnet') return `${IRYS_DEVNET_URL}/tx/${arweaveId}`;
+	return `${VIEWBLOCK_ARWEAVE_URL}/tx/${arweaveId}`;
 }
 
 /**

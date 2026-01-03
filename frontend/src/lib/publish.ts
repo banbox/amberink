@@ -14,6 +14,7 @@ import {
 import { getWalletClient, getEthereumAccount } from '$lib/wallet';
 import { getSignMessageForArticle } from '$lib/arweave/crypto';
 import { cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
+import { getIrysNetwork } from '$lib/config';
 
 export interface PublishArticleParams {
 	title: string;
@@ -135,7 +136,7 @@ async function publishArticleWithSessionKeyInternal(
 		signatureProvider
 	};
 
-	const folderResult = await uploadArticleFolderWithSessionKey(sessionKey, folderParams, 'devnet');
+	const folderResult = await uploadArticleFolderWithSessionKey(sessionKey, folderParams, getIrysNetwork());
 	const arweaveId = folderResult.manifestId;
 	console.log(`Article folder uploaded: ${arweaveId}`);
 

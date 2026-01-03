@@ -2,7 +2,7 @@
 	import type { ArticleData, UserData } from '$lib/graphql';
 	import { client, USER_BY_ID_QUERY } from '$lib/graphql';
 	import { CATEGORY_KEYS } from '$lib/data';
-	import { shortAddress, formatDate, formatTips } from '$lib/utils';
+	import { shortAddress, formatDate, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages';
 	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
 	import { onMount } from 'svelte';
@@ -56,7 +56,7 @@
 	// Fetch author data separately (SubSquid relation resolution has issues)
 	onMount(async () => {
 		const targetAuthorId = articleAuthorId;
-		if (!targetAuthorId || targetAuthorId === '0x0000000000000000000000000000000000000000') return;
+		if (!targetAuthorId || targetAuthorId === ZERO_ADDRESS) return;
 		
 		try {
 			const result = await client

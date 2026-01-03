@@ -5,6 +5,7 @@ import type { ArticleMetadata } from './types';
 import { getArweaveGateways } from '$lib/config';
 import { getMutableFolderUrl, getStaticFolderUrl, ARTICLE_INDEX_FILE } from './folder';
 import { decryptContent, isEncryptedContent } from './crypto';
+import { IRYS_DEVNET_GRAPHQL, IRYS_MAINNET_GRAPHQL } from '$lib/constants';
 
 /**
  * 通用网关请求函数，遍历所有网关直到成功
@@ -153,8 +154,8 @@ export function getFolderFileUrl(manifestId: string, fileName: string, useMutabl
 async function fetchManifestTags(manifestId: string): Promise<Array<{ name: string; value: string }>> {
 	// 根据环境选择 GraphQL 端点
 	const graphqlEndpoints = [
-		'https://devnet.irys.xyz/graphql',
-		'https://uploader.irys.xyz/graphql'
+		IRYS_DEVNET_GRAPHQL,
+		IRYS_MAINNET_GRAPHQL
 	];
 
 	// 先查询带有 Root-TX = manifestId 的最新 manifest（更新版本）

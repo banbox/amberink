@@ -6,6 +6,7 @@
 	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMarkdown, fetchArticleSummaryFromTags } from '$lib/arweave';
 	import { editArticleWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 	import { getCoverImageUrl } from '$lib/arweave/folder';
+	import { getIrysNetwork } from '$lib/config';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { localizeHref } from '$lib/paraglide/runtime';
@@ -264,7 +265,7 @@
 				sessionKey,
 				article.id,
 				updateParams,
-				'devnet'
+				getIrysNetwork()
 			);
 
 			// Update on-chain metadata (title, author, category)

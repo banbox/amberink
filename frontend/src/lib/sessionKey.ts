@@ -11,6 +11,12 @@ import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
 import { getIrysUploaderDevnet, getIrysUploader, type IrysUploader } from '$lib/arweave/irys';
 import { getIrysNetwork } from '$lib/config';
+import {
+	SESSION_KEY_DEFAULT_SPENDING_LIMIT,
+	SESSION_KEY_DURATION_SECONDS,
+	ESTIMATED_GAS_UNITS,
+	STANDARD_TRANSFER_GAS_LIMIT
+} from './constants';
 
 const SESSION_KEY_STORAGE = 'amberink_session_key';
 
@@ -88,14 +94,7 @@ const ALLOWED_SELECTORS: `0x${string}`[] = [
 	'0x461e2378'  // editArticle((uint256,string,string,string,uint16)) - EditArticleParams struct
 ];
 
-// Default spending limit (10 ETH)
-const DEFAULT_SPENDING_LIMIT = BigInt('10000000000000000000');
 
-// Session key validity duration (7 days in seconds)
-const SESSION_KEY_DURATION = 7 * 24 * 60 * 60;
-
-// Estimated gas for a typical transaction (used for calculating minimum balance)
-const ESTIMATED_GAS_UNITS = 200000n;
 
 
 /** Calculate gas-based amount: gasPrice * estimatedGas * multiplier */
@@ -240,7 +239,7 @@ export async function isSessionKeyValidForCurrentWallet(): Promise<boolean> {
 async function createIrysBalanceApproval(
 	uploader: IrysUploader,
 	sessionKeyAddress: string,
-	expiresInSeconds: number = SESSION_KEY_DURATION
+	expiresInSeconds: number = SESSION_KEY_DURATION_SECONDS
 ): Promise<void> {
 	try {
 		// Create a large approval amount (1 ETH worth in atomic units)
@@ -288,7 +287,7 @@ export async function createSessionKey(options?: {
 	const publicClient = getPublicClient();
 	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
 	const validAfter = Number(latestBlock.timestamp);
-	const validUntil = validAfter + SESSION_KEY_DURATION;
+	const validUntil = validAfter + SESSION_KEY_DURATION_SECONDS;
 
 	// 3. Get wallet client and register session key on blockchain (ONE MetaMask popup)
 	const walletClient = await getWalletClient();
@@ -303,7 +302,7 @@ export async function createSessionKey(options?: {
 			validUntil,
 			blogHub,
 			ALLOWED_SELECTORS,
-			DEFAULT_SPENDING_LIMIT
+			SESSION_KEY_DEFAULT_SPENDING_LIMIT
 		]
 	});
 	await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -357,7 +356,7 @@ export async function reauthorizeSessionKey(
 	const publicClient = getPublicClient();
 	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
 	const validAfter = Number(latestBlock.timestamp);
-	const validUntil = validAfter + SESSION_KEY_DURATION;
+	const validUntil = validAfter + SESSION_KEY_DURATION_SECONDS;
 
 	// Re-register session key on blockchain (ONE MetaMask popup)
 	const walletClient = await getWalletClient();
@@ -372,7 +371,7 @@ export async function reauthorizeSessionKey(
 			validUntil,
 			blogHub,
 			ALLOWED_SELECTORS,
-			DEFAULT_SPENDING_LIMIT
+			SESSION_KEY_DEFAULT_SPENDING_LIMIT
 		]
 	});
 	const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -436,7 +435,7 @@ export async function extendSessionKey(
 	// Step 2: Set new validity period (use chain timestamp to avoid local/chain time drift)
 	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
 	const validAfter = Number(latestBlock.timestamp);
-	const validUntil = validAfter + SESSION_KEY_DURATION;
+	const validUntil = validAfter + SESSION_KEY_DURATION_SECONDS;
 
 	// Step 3: Re-register the same session key with new validity period
 	console.log(`Re-registering session key: ${existingSessionKey.address}`);
@@ -450,7 +449,7 @@ export async function extendSessionKey(
 			validUntil,
 			blogHub,
 			ALLOWED_SELECTORS,
-			DEFAULT_SPENDING_LIMIT
+			SESSION_KEY_DEFAULT_SPENDING_LIMIT
 		]
 	});
 	const registerReceipt = await publicClient.waitForTransactionReceipt({ hash: registerTxHash });
@@ -707,7 +706,7 @@ async function getIrysUploaderByNetwork(): Promise<IrysUploader> {
 export async function ensureIrysApproval(sessionKey: StoredSessionKey): Promise<void> {
 	try {
 		const uploader = await getIrysUploaderByNetwork();
-		await createIrysBalanceApproval(uploader, sessionKey.address, SESSION_KEY_DURATION);
+		await createIrysBalanceApproval(uploader, sessionKey.address, SESSION_KEY_DURATION_SECONDS);
 	} catch (error) {
 		console.warn('Failed to create Irys Balance Approval:', error);
 	}
@@ -735,7 +734,7 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 
 	// Estimate gas for the transfer
 	const gasPrice = await publicClient.getGasPrice();
-	const gasLimit = 21000n; // Standard ETH transfer gas
+	const gasLimit = STANDARD_TRANSFER_GAS_LIMIT;
 	const gasCost = gasPrice * gasLimit;
 
 	if (balance <= gasCost) {

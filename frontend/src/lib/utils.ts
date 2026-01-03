@@ -64,10 +64,9 @@ export function formatEth(wei: string): string {
 	return ethValue.toFixed(3);
 }
 
-/**
- * Zero address constant
- */
-export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+// Re-export ZERO_ADDRESS from centralized constants for backward compatibility
+import { ZERO_ADDRESS } from './constants';
+export { ZERO_ADDRESS };
 
 /**
  * Check if address is zero address

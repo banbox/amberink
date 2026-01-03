@@ -8,6 +8,7 @@ import { createPublicClient, http, parseUnits, formatUnits } from 'viem';
 import { getChainConfig } from '$lib/chain';
 import { getRpcUrl, getChainId } from '$lib/config';
 import { getConfig, getPythContractAddress, getPythPriceFeedId, CHAIN_NATIVE_TOKEN } from '$lib/stores/config.svelte';
+import { PRICE_STALE_THRESHOLD_SECONDS, MAX_REASONABLE_PRICE_USD } from './constants';
 
 // Pyth price data structure
 interface PythPriceData {
@@ -59,15 +60,15 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 	const fallbackPrice = config.fallbackEthPriceUsd;
 
 	// Check cache
-	if (priceCache && 
-		priceCache.chainId === chainId && 
+	if (priceCache &&
+		priceCache.chainId === chainId &&
 		Date.now() - priceCache.timestamp < cacheDuration) {
 		return priceCache.price;
 	}
 
 	const pythContractAddress = getPythContractAddress();
 	const priceFeedId = getPythPriceFeedId();
-	
+
 	// If no Pyth contract available (local dev), use fallback
 	if (pythContractAddress === '0x0000000000000000000000000000000000000000') {
 		console.log('No Pyth contract available, using fallback price:', fallbackPrice, ', chainId:', config.chainId);
@@ -95,12 +96,12 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 		});
 
 		const { price: rawPrice, expo, publishTime } = priceData;
-		
+
 		// Check if price is stale (more than 1 hour old)
 		const now = Math.floor(Date.now() / 1000);
 		const priceAge = now - Number(publishTime);
-		if (priceAge > 3600) {
-			console.warn('Pyth price is stale (>1 hour old), using fallback');
+		if (priceAge > PRICE_STALE_THRESHOLD_SECONDS) {
+			console.warn(`Pyth price is stale (>${PRICE_STALE_THRESHOLD_SECONDS}s old), using fallback`);
 			priceCache = {
 				price: fallbackPrice,
 				timestamp: Date.now(),
@@ -111,9 +112,9 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 
 		// Convert price: Price = price * 10^expo
 		const price = Number(rawPrice) * Math.pow(10, Number(expo));
-		
+
 		// Sanity check
-		if (price <= 0 || price > 1000000) {
+		if (price <= 0 || price > MAX_REASONABLE_PRICE_USD) {
 			console.warn('Invalid price from Pyth, using fallback:', price);
 			priceCache = {
 				price: fallbackPrice,
@@ -154,14 +155,14 @@ export async function usdToWei(usdAmount: string | number): Promise<bigint> {
 	if (isNaN(usd) || usd < 0) {
 		throw new Error('Invalid USD amount');
 	}
-	
+
 	if (usd === 0) {
 		return 0n;
 	}
 
 	const tokenPrice = await getNativeTokenPriceUsd();
 	const tokenAmount = usd / tokenPrice;
-	
+
 	// Convert to wei (18 decimals) with precision
 	// Use string manipulation to avoid floating point issues
 	const tokenAmountStr = tokenAmount.toFixed(18);
@@ -178,7 +179,7 @@ export async function weiToUsd(weiAmount: bigint | string): Promise<number> {
 	if (wei < 0n) {
 		throw new Error('Invalid wei amount');
 	}
-	
+
 	if (wei === 0n) {
 		return 0;
 	}

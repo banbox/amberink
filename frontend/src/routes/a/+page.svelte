@@ -544,7 +544,7 @@
 	async function fetchAuthorData() {
 		if (!article) return;
 		const targetAuthorId = articleAuthorId;
-		if (!targetAuthorId || targetAuthorId === '0x0000000000000000000000000000000000000000') return;
+		if (!targetAuthorId || targetAuthorId === ZERO_ADDRESS) return;
 		
 		try {
 			const result = await client
