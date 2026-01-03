@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS, type CategoryKey } from '$lib/data';
+	import { getCategoryLabel } from '$lib/categoryUtils';
+	import { formatDateShort } from '$lib/formatUtils';
 	import { formatEth } from '$lib/utils';
 	import { client } from '$lib/graphql';
 	import { gql } from '@urql/svelte';
@@ -66,10 +68,7 @@
 		}
 	`;
 
-	// Helper function to get category label
-	function getCategoryLabel(key: string): string {
-		return (m as unknown as Record<string, () => string>)[key]?.() || key;
-	}
+	// getCategoryLabel is imported from $lib/categoryUtils
 
 	// Perform search
 	async function performSearch() {
@@ -180,10 +179,8 @@
 	// Computed values
 	let totalPages = $derived(Math.ceil(totalResults / pageSize));
 
-	// Format date (simple version for search results)
-	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString();
-	}
+	// formatDate is imported from $lib/formatUtils as formatDateShort
+	const formatDate = formatDateShort;
 
 	// Focus input when modal opens
 	$effect(() => {

@@ -2,6 +2,8 @@
  * Shared wallet state store using Svelte 5 runes
  */
 
+import { switchToTargetChain } from '$lib/wallet';
+
 const DISCONNECTED_KEY = 'wallet_disconnected';
 
 // Wallet state - using module-level state with getter functions
@@ -98,7 +100,7 @@ export async function connectWallet(): Promise<{ success: boolean; error?: strin
 			_isConnected = true;
 			localStorage.removeItem(DISCONNECTED_KEY);
 
-			await ensureCorrectChain();
+			await switchToTargetChain();
 
 			if (usedCachedAccount) {
 				return { success: true, cached: true };
@@ -107,7 +109,7 @@ export async function connectWallet(): Promise<{ success: boolean; error?: strin
 			}
 		}
 
-		await ensureCorrectChain();
+		await switchToTargetChain();
 		return { success: true };
 	} catch (error) {
 		console.error('Failed to connect:', error);
@@ -132,47 +134,5 @@ export function handleAccountsChanged(accounts: unknown) {
 	} else if (_isConnected) {
 		_address = accts[0];
 		_lastAddress = accts[0];
-	}
-}
-
-async function ensureCorrectChain() {
-	if (typeof window === 'undefined' || !window.ethereum) return;
-
-	const { getChainConfig } = await import('$lib/chain');
-	const chain = getChainConfig();
-	const targetChainId = chain.id;
-	const targetChainIdHex = `0x${targetChainId.toString(16)}`;
-
-	try {
-		const currentChainIdHex = (await window.ethereum.request({
-			method: 'eth_chainId'
-		})) as string;
-		const currentChainId = parseInt(currentChainIdHex, 16);
-
-		if (currentChainId !== targetChainId) {
-			try {
-				await window.ethereum.request({
-					method: 'wallet_switchEthereumChain',
-					params: [{ chainId: targetChainIdHex }]
-				});
-			} catch (switchError: unknown) {
-				if ((switchError as { code?: number })?.code === 4902) {
-					await window.ethereum.request({
-						method: 'wallet_addEthereumChain',
-						params: [
-							{
-								chainId: targetChainIdHex,
-								chainName: chain.name,
-								nativeCurrency: chain.nativeCurrency,
-								rpcUrls: [chain.rpcUrls.default.http[0]],
-								blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined
-							}
-						]
-					});
-				}
-			}
-		}
-	} catch (error) {
-		console.error('Failed to switch chain:', error);
 	}
 }

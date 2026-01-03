@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
+	import { getCategoryLabel } from '$lib/categoryUtils';
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
 	import EditorSkeleton from '$lib/components/EditorSkeleton.svelte';
 	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMarkdown, fetchArticleSummaryFromTags } from '$lib/arweave';
@@ -21,53 +22,7 @@
 
 	let article = $state<ArticleDetailData | null>(null);
 
-	// Helper function to get category label
-	function getCategoryLabel(key: string): string {
-		const labels: Record<string, () => string> = {
-			unselected: m.unselected,
-			other: m.other,
-			technology: m.technology,
-			finance: m.finance,
-			entertainment: m.entertainment,
-			sports: m.sports,
-			health: m.health,
-			education: m.education,
-			travel: m.travel,
-			food: m.food,
-			fashion: m.fashion,
-			automotive: m.automotive,
-			real_estate: m.real_estate,
-			culture: m.culture,
-			art: m.art,
-			music: m.music,
-			film: m.film,
-			gaming: m.gaming,
-			science: m.science,
-			history: m.history,
-			politics: m.politics,
-			military: m.military,
-			law: m.law,
-			society: m.society,
-			environment: m.environment,
-			parenting: m.parenting,
-			pets: m.pets,
-			photography: m.photography,
-			design: m.design,
-			programming: m.programming,
-			blockchain: m.blockchain,
-			ai: m.ai,
-			startup: m.startup,
-			career: m.career,
-			psychology: m.psychology,
-			philosophy: m.philosophy,
-			literature: m.literature,
-			comics: m.comics,
-			digital_life: m.digital_life,
-			home: m.home,
-			agriculture: m.agriculture
-		};
-		return labels[key]?.() ?? key;
-	}
+	// getCategoryLabel is imported from $lib/categoryUtils
 
 	// Form state - will be initialized once article is loaded
 	let formData = $state<ArticleFormData>({
@@ -81,7 +36,8 @@
 		royaltyBps: 500n,
 		collectPriceUsd: '0',
 		maxCollectSupply: '0',
-		originality: '0'
+		originality: '0',
+		visibility: '0'
 	});
 
 	let keepExistingCover = $state(true);

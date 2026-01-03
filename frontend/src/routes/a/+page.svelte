@@ -1,7 +1,9 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
+	import { getCategoryName } from '$lib/categoryUtils';
+	import { formatDateMedium, formatTimestamp, getApproxNativeAmount } from '$lib/formatUtils';
+	import { getContractErrorMessage } from '$lib/contractErrors';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
 	import { requestEncryptionKeyFromWallet, getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
 	import { getCachedEncryptionKey, cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
@@ -37,6 +39,7 @@
 	import { getMinActionValue } from '$lib/config';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { ClockIcon, ThumbsUpIcon, ThumbsDownIcon, CommentIcon, BookmarkIcon, CloseIcon, BackIcon, EditIcon, ShareIcon, SpinnerIcon } from '$lib/components/icons';
+	import OriginalityTag from '$lib/components/OriginalityTag.svelte';
 
 	// Native token price state
 	let nativeTokenPrice = $state<number | null>(null);
@@ -132,15 +135,8 @@
 		}
 	}
 
-	// Format date - Medium style (e.g., "Dec 9, 2025")
-	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
-		return date.toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
-		});
-	}
+	// Format date - using centralized utility
+	const formatDate = formatDateMedium;
 
 	// Calculate reading time (words per minute)
 	// Handles both space-separated languages and character-based languages
@@ -202,13 +198,7 @@
 		return Math.max(1, Math.ceil(totalMinutes));
 	}
 
-	// Get category name
-	function getCategoryName(categoryId: string): string {
-		const id = parseInt(categoryId);
-		const key = CATEGORY_KEYS[id];
-		if (!key || key === 'unselected') return '';
-		return (m as unknown as Record<string, () => string>)[key]?.() || key;
-	}
+	// getCategoryName is imported from $lib/categoryUtils
 
 	// Get cover image URL from Irys mutable folder
 	function getCoverUrl(arweaveId: string): string {
@@ -288,26 +278,8 @@
 		}
 	}
 
-	// Get error message from ContractError
-	function getErrorMessage(error: unknown): string {
-		if (error instanceof ContractError) {
-			const errorMessages: Record<string, string> = {
-				user_rejected: m.user_rejected(),
-				insufficient_funds: m.insufficient_funds(),
-				network_error: m.network_error(),
-				contract_reverted: m.contract_reverted(),
-				gas_estimation_failed: m.gas_estimation_failed(),
-				nonce_too_low: m.nonce_too_low(),
-				replacement_underpriced: m.replacement_underpriced(),
-				wallet_not_connected: m.wallet_not_connected(),
-				wrong_network: m.wrong_network(),
-				timeout: m.timeout(),
-				unknown_error: m.unknown_error()
-			};
-			return errorMessages[error.code] || error.message;
-		}
-		return error instanceof Error ? error.message : String(error);
-	}
+	// getErrorMessage is now imported as getContractErrorMessage from $lib/contractErrors
+	const getErrorMessage = getContractErrorMessage;
 
 	// Check wallet connection
 	async function checkWalletConnection() {
@@ -469,14 +441,8 @@
 		}
 	}
 
-	// Calculate approximate native token amount from USD
-	function getApproxNativeAmount(usdAmount: string): string {
-		if (!nativeTokenPrice || nativeTokenPrice <= 0) return '...';
-		const usd = parseFloat(usdAmount);
-		if (isNaN(usd) || usd <= 0) return '0';
-		const nativeAmount = usd / nativeTokenPrice;
-		return nativeAmount.toFixed(6);
-	}
+	// getApproxNativeAmount wrapper using imported function
+	const calcApproxNativeAmount = (usdAmount: string) => getApproxNativeAmount(usdAmount, nativeTokenPrice);
 
 	// Get author ID from article data
 	const articleAuthorId = $derived(
@@ -578,17 +544,7 @@
 		}
 	}
 
-	// Format timestamp to date string
-	function formatTimestamp(ts: number): string {
-		const date = new Date(ts);
-		return date.toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
+	// formatTimestamp is imported from $lib/formatUtils
 
 	// Get word count from content
 	function getWordCount(content: string): number {
@@ -987,21 +943,8 @@
 							{formatDate(article.createdAt)}
 						</time>
 						<span>·</span>
-						<!-- Originality Tag with different background colors -->
-						{#if article.originality === 0}
-							<span
-								class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
-								>{m.original()}</span
-							>
-						{:else if article.originality === 1}
-							<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
-								>{m.semi_original()}</span
-							>
-						{:else}
-							<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-								>{m.reprint()}</span
-							>
-						{/if}
+						<!-- Originality Tag -->
+						<OriginalityTag originality={article.originality} />
 					</div>
 				</div>
 			</div>
@@ -1359,7 +1302,7 @@
 							{#if priceLoading}
 								{m.price_loading({})}
 							{:else if nativeTokenPrice}
-								≈ {getApproxNativeAmount(config.value)} {nativeSymbol}
+								≈ {calcApproxNativeAmount(config.value)} {nativeSymbol}
 							{/if}
 						</div>
 					</div>

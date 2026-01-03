@@ -2,12 +2,12 @@
 	import { page } from '$app/state';
 	import * as m from '$lib/paraglide/messages';
 	import { client, USER_FOLLOWING_QUERY, type FollowData } from '$lib/graphql';
-	import { getAvatarUrl } from '$lib/arweave';
 	import { shortAddress } from '$lib/utils';
 	import { untrack } from 'svelte';
 	import SearchButton from './SearchButton.svelte';
 	import ArticleSearch from './ArticleSearch.svelte';
 	import { HomeIcon, BookmarkIcon, UserIcon, PencilIcon, SpinnerIcon } from './icons';
+	import UserAvatar from './UserAvatar.svelte';
 	import { getConfig, envName } from '$lib/config';
 	import { SUPPORTED_CHAINS } from '$lib/chains';
 	import { localizeHref } from '$lib/paraglide/runtime';
@@ -185,19 +185,7 @@
 									href={localizeHref(`/u?id=${user.id}`)}
 									class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-gray-50"
 								>
-									{#if getAvatarUrl(user.avatar)}
-										<img
-											src={getAvatarUrl(user.avatar)}
-											alt=""
-											class="h-6 w-6 rounded-full object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
-										>
-											{user.id.slice(2, 4).toUpperCase()}
-										</div>
-									{/if}
+									<UserAvatar {user} size="xs" />
 									<span class="truncate text-gray-700"
 										>{user.nickname || shortAddress(user.id)}</span
 									>

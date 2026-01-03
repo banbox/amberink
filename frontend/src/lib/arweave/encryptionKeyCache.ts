@@ -17,13 +17,6 @@ interface CachedSignature {
 }
 
 /**
- * 获取缓存键名
- */
-function getCacheKey(arweaveId: string): string {
-    return `${CACHE_KEY_PREFIX}${arweaveId}`;
-}
-
-/**
  * 缓存加密签名
  * @param arweaveId - 文章的 Arweave ID (manifest ID)
  * @param signature - 钱包签名（hex string）
@@ -38,7 +31,7 @@ export function cacheEncryptionSignature(
         const entry: CachedSignature = {
             signature
         };
-        localStorage.setItem(getCacheKey(arweaveId), JSON.stringify(entry));
+        localStorage.setItem(`${CACHE_KEY_PREFIX}${arweaveId}`, JSON.stringify(entry));
         console.log(`Encryption signature cached for article: ${arweaveId}`);
     } catch (e) {
         console.warn('Failed to cache encryption signature:', e);
@@ -54,8 +47,7 @@ function getCachedEncryptionSignature(arweaveId: string): string | null {
     if (typeof window === 'undefined') return null;
 
     try {
-        const cacheKey = getCacheKey(arweaveId);
-        const cachedData = localStorage.getItem(cacheKey);
+        const cachedData = localStorage.getItem(`${CACHE_KEY_PREFIX}${arweaveId}`);
 
         if (!cachedData) {
             return null;
@@ -90,7 +82,7 @@ export async function getCachedEncryptionKey(arweaveId: string): Promise<CryptoK
     } catch (e) {
         console.warn('Failed to derive key from cached signature:', e);
         // 缓存的签名无效，清除它
-        localStorage.removeItem(getCacheKey(arweaveId));
+        localStorage.removeItem(`${CACHE_KEY_PREFIX}${arweaveId}`);
         return null;
     }
 }

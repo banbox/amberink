@@ -15,8 +15,11 @@
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
+	import LoadingState from '$lib/components/LoadingState.svelte';
+	import EndOfList from '$lib/components/EndOfList.svelte';
 	import { getConfig } from '$lib/config';
-	import { LockIcon, BookmarkIcon, SpinnerIcon } from '$lib/components/icons';
+	import { infiniteScroll } from '$lib/utils';
+	import { LockIcon, BookmarkIcon } from '$lib/components/icons';
 
 	type TabType = 'published' | 'liked' | 'disliked' | 'collected' | 'commented';
 
@@ -133,21 +136,10 @@
 		});
 	});
 
-	onMount(() => {
-		const handleScroll = () => {
-			if (loading || !hasMore) return;
-
-			const scrollTop = window.scrollY;
-			const scrollHeight = document.documentElement.scrollHeight;
-			const clientHeight = window.innerHeight;
-
-			if (scrollHeight - scrollTop - clientHeight < 200) {
-				fetchArticles();
-			}
-		};
-
-		window.addEventListener('scroll', handleScroll);
-		return () => window.removeEventListener('scroll', handleScroll);
+	// Scroll options for infinite scroll
+	const scrollOptions = $derived({
+		onLoadMore: () => fetchArticles(),
+		canLoad: () => !loading && hasMore
 	});
 </script>
 
@@ -155,7 +147,7 @@
 	<title>{m.library()} - {getConfig().appName}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-3xl px-6 py-8">
+<div class="mx-auto max-w-3xl px-6 py-8" use:infiniteScroll={scrollOptions}>
 	<!-- Page Header -->
 	<div class="mb-8">
 		<h1 class="text-2xl font-bold text-gray-900">{m.library()}</h1>
@@ -198,25 +190,18 @@
 		{:else if !loading}
 			<div class="py-16 text-center">
 				<BookmarkIcon size={64} class="mx-auto text-gray-300" />
-				<h3 class="mt-4 text-lg font-medium text-gray-900">{m.no_items({ items: m.articles() })}</h3>
+				<h3 class="mt-4 text-lg font-medium text-gray-900">
+					{m.no_items({ items: m.articles() })}
+				</h3>
 			</div>
 		{/if}
 
 		<!-- Loading -->
 		{#if loading}
-			<div class="flex justify-center py-8">
-				<div class="flex items-center gap-3 text-gray-500">
-					<SpinnerIcon size={24} />
-					<span>{m.loading()}</span>
-				</div>
-			</div>
+			<LoadingState />
 		{/if}
 
 		<!-- End of List -->
-		{#if !hasMore && articles.length > 0 && !loading}
-			<div class="py-8 text-center text-gray-500">
-				<p>{m.no_more({ items: m.articles() })}</p>
-			</div>
-		{/if}
+		<EndOfList show={!hasMore && articles.length > 0 && !loading} />
 	{/if}
 </div>

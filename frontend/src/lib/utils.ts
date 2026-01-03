@@ -44,25 +44,20 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
- * Format wei to ETH display string
+ * Format wei to ETH display string (4 decimal places, with <0.0001 threshold)
  */
 export function formatTips(tips: string): string {
-	const wei = BigInt(tips);
-	const eth = Number(wei) / 1e18;
-	if (eth === 0) return '0';
-	if (eth < 0.0001) return '<0.0001';
-	return eth.toFixed(4);
+	return formatWeiToEth(tips, 4, { minDisplay: 0.0001 });
 }
 
 /**
  * Format wei to ETH with 3 decimal places
  */
 export function formatEth(wei: string): string {
-	const ethValue = Number(wei) / 1e18;
-	if (ethValue === 0) return '0';
-	if (ethValue < 0.001) return '<0.001';
-	return ethValue.toFixed(3);
+	return formatWeiToEth(wei, 3, { minDisplay: 0.001 });
 }
+
+import { formatWeiToEth } from './formatUtils';
 
 // Re-export ZERO_ADDRESS from centralized constants for backward compatibility
 import { ZERO_ADDRESS } from './constants';
@@ -73,4 +68,51 @@ export { ZERO_ADDRESS };
  */
 export function isZeroAddress(address: string): boolean {
 	return !address || address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+}
+
+// ============================================================
+//                  Svelte Actions
+// ============================================================
+
+export interface InfiniteScrollOptions {
+	/** Callback to load more items */
+	onLoadMore: () => void;
+	/** Distance from bottom to trigger load (default: 200) */
+	threshold?: number;
+	/** Function that returns whether loading is allowed */
+	canLoad?: () => boolean;
+}
+
+/**
+ * Svelte action for infinite scroll functionality.
+ * Automatically handles scroll event listeners and cleanup.
+ * 
+ * @example
+ * <div use:infiniteScroll={{ onLoadMore: fetchMore, canLoad: () => !loading && hasMore }}>
+ */
+export function infiniteScroll(_node: HTMLElement, options: InfiniteScrollOptions) {
+	const threshold = options.threshold ?? 200;
+
+	function handleScroll() {
+		if (options.canLoad && !options.canLoad()) return;
+
+		const scrollTop = window.scrollY;
+		const scrollHeight = document.documentElement.scrollHeight;
+		const clientHeight = window.innerHeight;
+
+		if (scrollHeight - scrollTop - clientHeight < threshold) {
+			options.onLoadMore();
+		}
+	}
+
+	window.addEventListener('scroll', handleScroll);
+
+	return {
+		update(newOptions: InfiniteScrollOptions) {
+			options = newOptions;
+		},
+		destroy() {
+			window.removeEventListener('scroll', handleScroll);
+		}
+	};
 }

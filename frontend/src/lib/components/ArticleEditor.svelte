@@ -1,6 +1,8 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS } from '$lib/data';
+	import { getCategoryLabel } from '$lib/categoryUtils';
+	import { getApproxNativeAmount } from '$lib/formatUtils';
 	import SearchSelect, { type SelectOption } from '$lib/components/SearchSelect.svelte';
 	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 	import ContentImageManager from '$lib/components/ContentImageManager.svelte';
@@ -79,14 +81,8 @@
 		}
 	});
 
-	// Calculate approximate native token amount from USD
-	function getApproxNativeAmount(usdAmount: string | number): string {
-		if (!nativeTokenPrice || nativeTokenPrice <= 0) return '...';
-		const usd = typeof usdAmount === 'string' ? parseFloat(usdAmount) : usdAmount;
-		if (isNaN(usd) || usd <= 0) return '0';
-		const nativeAmount = usd / nativeTokenPrice;
-		return nativeAmount.toFixed(6);
-	}
+	// getApproxNativeAmount wrapper using imported function with local nativeTokenPrice
+	const calcApproxNativeAmount = (usdAmount: string | number) => getApproxNativeAmount(usdAmount, nativeTokenPrice);
 
 	let {
 		formData = $bindable({
@@ -132,53 +128,7 @@
 		}
 	});
 
-	// Helper function to get category label
-	function getCategoryLabel(key: string): string {
-		const labels: Record<string, () => string> = {
-			unselected: m.unselected,
-			other: m.other,
-			technology: m.technology,
-			finance: m.finance,
-			entertainment: m.entertainment,
-			sports: m.sports,
-			health: m.health,
-			education: m.education,
-			travel: m.travel,
-			food: m.food,
-			fashion: m.fashion,
-			automotive: m.automotive,
-			real_estate: m.real_estate,
-			culture: m.culture,
-			art: m.art,
-			music: m.music,
-			film: m.film,
-			gaming: m.gaming,
-			science: m.science,
-			history: m.history,
-			politics: m.politics,
-			military: m.military,
-			law: m.law,
-			society: m.society,
-			environment: m.environment,
-			parenting: m.parenting,
-			pets: m.pets,
-			photography: m.photography,
-			design: m.design,
-			programming: m.programming,
-			blockchain: m.blockchain,
-			ai: m.ai,
-			startup: m.startup,
-			career: m.career,
-			psychology: m.psychology,
-			philosophy: m.philosophy,
-			literature: m.literature,
-			comics: m.comics,
-			digital_life: m.digital_life,
-			home: m.home,
-			agriculture: m.agriculture
-		};
-		return labels[key]?.() ?? key;
-	}
+	// getCategoryLabel is imported from $lib/categoryUtils
 
 	// Content textarea reference for cursor position
 	let contentTextarea = $state<HTMLTextAreaElement | null>(null);
@@ -455,7 +405,7 @@
 					{#if priceLoading}
 						{m.price_loading()}
 					{:else if nativeTokenPrice && formData.collectPriceUsd}
-						≈ {getApproxNativeAmount(formData.collectPriceUsd)} {nativeSymbol}
+						≈ {calcApproxNativeAmount(formData.collectPriceUsd)} {nativeSymbol}
 					{/if}
 				</div>
 			</div>

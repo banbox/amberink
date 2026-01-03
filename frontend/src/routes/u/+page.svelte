@@ -12,12 +12,14 @@
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import { followUser } from '$lib/contracts';
-	import { getAvatarUrl } from '$lib/arweave';
-	import { shortAddress, formatDate } from '$lib/utils';
+	import { shortAddress, formatDate, infiniteScroll } from '$lib/utils';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import ProfileSkeleton from '$lib/components/ProfileSkeleton.svelte';
+	import LoadingState from '$lib/components/LoadingState.svelte';
+	import EndOfList from '$lib/components/EndOfList.svelte';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { getConfig } from '$lib/config';
-	import { SpinnerIcon, DocumentIcon } from '$lib/components/icons';
+	import { DocumentIcon } from '$lib/components/icons';
 
 	const PAGE_SIZE = 20;
 
@@ -130,21 +132,15 @@
 	onMount(() => {
 		// Read authorId from URL search params
 		authorId = $page.url.searchParams.get('id')?.toLowerCase() || '';
-		
-		const handleScroll = () => {
-			if (loading || !hasMore) return;
+	});
 
-			const scrollTop = window.scrollY;
-			const scrollHeight = document.documentElement.scrollHeight;
-			const clientHeight = window.innerHeight;
+	// Derived user for avatar component
+	const avatarUser = $derived({ id: authorId, avatar: user?.avatar });
 
-			if (scrollHeight - scrollTop - clientHeight < 200) {
-				fetchArticles();
-			}
-		};
-
-		window.addEventListener('scroll', handleScroll);
-		return () => window.removeEventListener('scroll', handleScroll);
+	// Scroll options for infinite scroll
+	const scrollOptions = $derived({
+		onLoadMore: () => fetchArticles(),
+		canLoad: () => !loading && hasMore
 	});
 </script>
 
@@ -156,24 +152,12 @@
 	<!-- Show skeleton during initial load -->
 	<ProfileSkeleton />
 {:else}
-	<div class="mx-auto max-w-3xl px-6 py-8">
+	<div class="mx-auto max-w-3xl px-6 py-8" use:infiniteScroll={scrollOptions}>
 		<!-- Author Header -->
 		<div class="mb-8">
 			<div class="flex items-start gap-4">
 				<!-- Avatar -->
-				{#if getAvatarUrl(user?.avatar)}
-					<img
-						src={getAvatarUrl(user?.avatar)}
-						alt="Avatar"
-						class="h-20 w-20 rounded-full object-cover"
-					/>
-				{:else}
-					<div
-						class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white"
-					>
-						{authorId.slice(2, 4).toUpperCase()}
-					</div>
-				{/if}
+				<UserAvatar user={avatarUser} size="xl" />
 
 				<div class="flex-1">
 					<div class="flex items-center gap-4">
@@ -249,19 +233,10 @@
 
 		<!-- Loading -->
 		{#if loading}
-			<div class="flex justify-center py-8">
-				<div class="flex items-center gap-3 text-gray-500">
-					<SpinnerIcon size={24} class="text-gray-500" />
-					<span>{m.loading()}</span>
-				</div>
-			</div>
+			<LoadingState />
 		{/if}
 
 		<!-- End of List -->
-		{#if !hasMore && articles.length > 0 && !loading}
-			<div class="py-8 text-center text-gray-500">
-				<p>{m.no_more({ items: m.articles() })}</p>
-			</div>
-		{/if}
+		<EndOfList show={!hasMore && articles.length > 0 && !loading} />
 	</div>
 {/if}

@@ -4,11 +4,12 @@
 	import { CATEGORY_KEYS } from '$lib/data';
 	import { shortAddress, formatDate, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages';
-	import { getCoverImageUrl, getAvatarUrl } from '$lib/arweave';
+	import { getCoverImageUrl } from '$lib/arweave';
 	import { onMount } from 'svelte';
 	import { getNativeTokenSymbol } from '$lib/priceService';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { HeartIcon, CoinIcon, ArticleIcon } from './icons';
+	import UserAvatar from './UserAvatar.svelte';
 
 	interface Props {
 		article: ArticleData;
@@ -48,10 +49,8 @@
 	);
 	// Get author avatar (prefer fetched data)
 	const authorAvatar = $derived(authorData?.avatar || author.avatar);
-	// Get avatar initials safely
-	const authorInitials = $derived(
-		authorId ? authorId.slice(2, 4).toUpperCase() : '??'
-	);
+	// Derived user object for avatar component
+	const avatarUser = $derived({ id: authorId, avatar: authorAvatar });
 
 	// Fetch author data separately (SubSquid relation resolution has issues)
 	onMount(async () => {
@@ -81,15 +80,7 @@
 		<!-- Category & Author -->
 		<div class="mb-2 flex items-center gap-2 text-sm">
 			<!-- Author Avatar -->
-			{#if getAvatarUrl(authorAvatar)}
-				<img src={getAvatarUrl(authorAvatar)} alt="" class="h-6 w-6 rounded-full object-cover" />
-			{:else}
-				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
-				>
-					{authorInitials}
-				</div>
-			{/if}
+			<UserAvatar user={avatarUser} size="xs" />
 			<span class="truncate text-gray-700"
 				>{authorData?.nickname || author.nickname || authorDisplay}</span
 			>

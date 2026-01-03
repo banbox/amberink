@@ -7,7 +7,7 @@ import { createWalletClient, createPublicClient, http, encodeFunctionData } from
 import { privateKeyToAccount } from 'viem/accounts';
 import { getBlogHubContractAddress, getSessionKeyManagerAddress, getRpcUrl, getChainId } from '$lib/config';
 import { getChainConfig } from '$lib/chain';
-import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
+import { getEthereumAccount, getWalletClient, getPublicClient, switchToTargetChain } from '$lib/wallet';
 import { ZERO_ADDRESS } from '$lib/utils';
 import type { StoredSessionKey } from '$lib/sessionKey';
 
@@ -257,6 +257,59 @@ function parseContractError(error: unknown): ContractError {
 		'An unknown error occurred.',
 		error instanceof Error ? error : undefined
 	);
+}
+
+// ============================================================
+//                  Validation Helper Functions
+// ============================================================
+
+/** Assert that a bigint value is non-negative */
+function assertNonNegative(value: bigint, fieldName: string): void {
+	if (value < 0n) {
+		throw new Error(`${fieldName} must be non-negative`);
+	}
+}
+
+/** Assert that a string does not exceed max byte length (when not empty) */
+function assertBytesLimit(value: string, maxBytes: number, fieldName: string): void {
+	if (value && new TextEncoder().encode(value).length > maxBytes) {
+		throw new Error(`${fieldName} is too long (max ${maxBytes} bytes)`);
+	}
+}
+
+/** Assert that an address is valid (non-empty and not zero address unless allowed) */
+function assertValidAddress(
+	address: string | undefined,
+	fieldName: string,
+	allowZero: boolean = false
+): void {
+	if (!address) {
+		throw new Error(`${fieldName} is required`);
+	}
+	if (!allowZero && address === ZERO_ADDRESS) {
+		throw new Error(`Invalid ${fieldName}`);
+	}
+}
+
+/** Validate publish parameters common to both wallet and session key modes */
+function validatePublishParams(
+	arweaveId: string,
+	categoryId: bigint,
+	royaltyBps: bigint,
+	originalAuthor: string,
+	title: string,
+	summary: string
+): void {
+	if (!arweaveId) {
+		throw new Error('Arweave ID is required');
+	}
+	assertNonNegative(categoryId, 'Category ID');
+	if (royaltyBps > 10000n) {
+		throw new Error('Royalty percentage cannot exceed 100% (10000 basis points)');
+	}
+	assertBytesLimit(originalAuthor, 64, 'Original author name');
+	assertBytesLimit(title, 128, 'Title');
+	assertBytesLimit(summary, 512, 'Summary');
 }
 
 // BlogHub contract ABI (includes SessionKeyManager errors for proper decoding)
@@ -549,81 +602,10 @@ const BLOGHUB_ABI = [
 
 
 /**
- * Ensure wallet is connected to the correct chain, switch if necessary
- */
-async function ensureCorrectChain(): Promise<void> {
-	if (typeof window === 'undefined' || !window.ethereum) {
-		throw new Error('Ethereum provider not found. Please install MetaMask or another wallet.');
-	}
-
-	const chain = getChainConfig();
-	const targetChainId = chain.id;
-	const targetChainIdHex = `0x${targetChainId.toString(16)}`;
-
-	// Get current chain ID
-	const currentChainIdHex = (await window.ethereum.request({ method: 'eth_chainId' })) as string;
-	const currentChainId = parseInt(currentChainIdHex, 16);
-
-	if (currentChainId === targetChainId) {
-		return; // Already on correct chain
-	}
-
-	console.log(`Switching from chain ${currentChainId} to ${targetChainId} (${chain.name})`);
-
-	// Try to switch to the target chain
-	try {
-		await window.ethereum.request({
-			method: 'wallet_switchEthereumChain',
-			params: [{ chainId: targetChainIdHex }]
-		});
-	} catch (switchError: unknown) {
-		const errorCode = (switchError as { code?: number })?.code;
-
-		// Chain not added to wallet (4902), try to add it
-		if (errorCode === 4902) {
-			try {
-				await window.ethereum.request({
-					method: 'wallet_addEthereumChain',
-					params: [
-						{
-							chainId: targetChainIdHex,
-							chainName: chain.name,
-							nativeCurrency: chain.nativeCurrency,
-							rpcUrls: [chain.rpcUrls.default.http[0]],
-							blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined
-						}
-					]
-				});
-			} catch (addError: unknown) {
-				// If adding fails (e.g., RPC URL conflict), provide helpful message
-				const addErrorCode = (addError as { code?: number })?.code;
-				if (addErrorCode === -32603) {
-					// Internal error - likely RPC URL conflict with existing network
-					throw new Error(
-						`Cannot add ${chain.name} (chainId: ${targetChainId}). ` +
-						`Please manually add or switch to the network in MetaMask:\n` +
-						`- Network Name: ${chain.name}\n` +
-						`- RPC URL: ${chain.rpcUrls.default.http[0]}\n` +
-						`- Chain ID: ${targetChainId}\n` +
-						`- Currency: ${chain.nativeCurrency.symbol}`
-					);
-				}
-				throw addError;
-			}
-		} else if (errorCode === 4001) {
-			// User rejected the request
-			throw new Error('User rejected the network switch request.');
-		} else {
-			throw switchError;
-		}
-	}
-}
-
-/**
  * Get wallet client with chain validation
  */
 async function getWalletClientWithChainCheck() {
-	await ensureCorrectChain();
+	await switchToTargetChain();
 	return getWalletClient();
 }
 
@@ -644,35 +626,13 @@ export async function publishToContract(
 	originalAuthor: string = '',
 	title: string = '',
 	summary: string = '',
-	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	trueAuthor: `0x${string}` = ZERO_ADDRESS,
 	collectPrice: bigint = 0n,
 	maxCollectSupply: bigint = 0n,
 	originality: number = 0,
 	visibility: number = 0  // 0:Public, 1:Private, 2:Encrypted
 ): Promise<string> {
-	if (!arweaveId) {
-		throw new Error('Arweave ID is required');
-	}
-
-	if (categoryId < 0n) {
-		throw new Error('Category ID must be non-negative');
-	}
-
-	if (royaltyBps > 10000n) {
-		throw new Error('Royalty percentage cannot exceed 100% (10000 basis points)');
-	}
-
-	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) {
-		throw new Error('Original author name is too long (max 64 bytes)');
-	}
-
-	if (title && new TextEncoder().encode(title).length > 128) {
-		throw new Error('Title is too long (max 128 bytes)');
-	}
-
-	if (summary && new TextEncoder().encode(summary).length > 512) {
-		throw new Error('Summary is too long (max 512 bytes)');
-	}
+	validatePublishParams(arweaveId, categoryId, royaltyBps, originalAuthor, title, summary);
 
 	try {
 		const walletClient = await getWalletClientWithChainCheck();
@@ -709,12 +669,10 @@ export async function publishToContract(
 
 export async function collectArticle(
 	articleId: bigint,
-	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
+	assertNonNegative(articleId, 'Article ID');
 
 	try {
 		const walletClient = await getWalletClientWithChainCheck();
@@ -737,18 +695,12 @@ export async function likeComment(
 	articleId: bigint,
 	commentId: bigint,
 	commenter: `0x${string}`,
-	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
-	if (commentId < 0n) {
-		throw new Error('Comment ID must be non-negative');
-	}
-	if (!commenter || commenter === '0x0000000000000000000000000000000000000000') {
-		throw new Error('Invalid commenter address');
-	}
+	assertNonNegative(articleId, 'Article ID');
+	assertNonNegative(commentId, 'Comment ID');
+	assertValidAddress(commenter, 'commenter address');
 	if (amount <= 0n) {
 		throw new Error('Like amount must be greater than 0');
 	}
@@ -793,13 +745,11 @@ export async function evaluateArticle(
 	articleId: bigint,
 	score: EvaluationScore,
 	comment: string,
-	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	referrer: `0x${string}` = ZERO_ADDRESS,
 	parentCommentId: bigint = 0n,
 	tipAmount: bigint = 0n
 ): Promise<string> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
+	assertNonNegative(articleId, 'Article ID');
 
 	if (score < 0 || score > 2) {
 		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
@@ -831,7 +781,7 @@ export async function evaluateArticle(
  * @returns Transaction hash
  */
 export async function followUser(targetAddress: `0x${string}`, isFollow: boolean): Promise<string> {
-	if (!targetAddress || targetAddress === '0x0000000000000000000000000000000000000000') {
+	if (!targetAddress || targetAddress === ZERO_ADDRESS) {
 		throw new Error('Invalid target address');
 	}
 
@@ -965,7 +915,7 @@ async function assertSessionKeyActive(
 
 	const now = Number(latestBlock.timestamp);
 
-	if ((data.sessionKey as string).toLowerCase() === '0x0000000000000000000000000000000000000000') {
+	if ((data.sessionKey as string).toLowerCase() === ZERO_ADDRESS) {
 		throw new Error('Session key is not registered on-chain. Please create a new session key and wait for confirmation.');
 	}
 
@@ -1111,35 +1061,13 @@ export async function publishToContractWithSessionKey(
 	originalAuthor: string = '',
 	title: string = '',
 	summary: string = '',
-	trueAuthor: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	trueAuthor: `0x${string}` = ZERO_ADDRESS,
 	collectPrice: bigint = 0n,
 	maxCollectSupply: bigint = 0n,
 	originality: number = 0,
 	visibility: number = 0  // 0:Public, 1:Private, 2:Encrypted
 ): Promise<string> {
-	if (!arweaveId) {
-		throw new Error('Arweave ID is required');
-	}
-
-	if (categoryId < 0n) {
-		throw new Error('Category ID must be non-negative');
-	}
-
-	if (royaltyBps > 10000n) {
-		throw new Error('Royalty percentage cannot exceed 100% (10000 basis points)');
-	}
-
-	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) {
-		throw new Error('Original author name is too long (max 64 bytes)');
-	}
-
-	if (title && new TextEncoder().encode(title).length > 128) {
-		throw new Error('Title is too long (max 128 bytes)');
-	}
-
-	if (summary && new TextEncoder().encode(summary).length > 512) {
-		throw new Error('Summary is too long (max 512 bytes)');
-	}
+	validatePublishParams(arweaveId, categoryId, royaltyBps, originalAuthor, title, summary);
 
 	// Check session key validity
 	if (Date.now() / 1000 > sessionKey.validUntil) {
@@ -1282,7 +1210,7 @@ export async function evaluateArticleWithSessionKey(
 	articleId: bigint,
 	score: EvaluationScore,
 	comment: string,
-	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	referrer: `0x${string}` = ZERO_ADDRESS,
 	parentCommentId: bigint = 0n,
 	tipAmount: bigint = 0n
 ): Promise<string> {
@@ -1319,7 +1247,7 @@ export async function followUserWithSessionKey(
 	targetAddress: `0x${string}`,
 	isFollow: boolean
 ): Promise<string> {
-	if (!targetAddress || targetAddress === '0x0000000000000000000000000000000000000000') {
+	if (!targetAddress || targetAddress === ZERO_ADDRESS) {
 		throw new Error('Invalid target address');
 	}
 
@@ -1346,7 +1274,7 @@ export async function followUserWithSessionKey(
 export async function collectArticleWithSessionKey(
 	sessionKey: StoredSessionKey,
 	articleId: bigint,
-	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
 	if (articleId < 0n) throw new Error('Article ID must be non-negative');
@@ -1377,12 +1305,12 @@ export async function likeCommentWithSessionKey(
 	articleId: bigint,
 	commentId: bigint,
 	commenter: `0x${string}`,
-	referrer: `0x${string}` = '0x0000000000000000000000000000000000000000',
+	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
 	if (articleId < 0n) throw new Error('Article ID must be non-negative');
 	if (commentId < 0n) throw new Error('Comment ID must be non-negative');
-	if (!commenter || commenter === '0x0000000000000000000000000000000000000000') throw new Error('Invalid commenter address');
+	if (!commenter || commenter === ZERO_ADDRESS) throw new Error('Invalid commenter address');
 	if (amount <= 0n) throw new Error('Like amount must be greater than 0');
 
 	try {

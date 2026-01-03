@@ -6,8 +6,11 @@
 	import { client, ARTICLES_QUERY, ALL_ARTICLES_QUERY, type ArticleData } from '$lib/graphql';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import CategoryFilter from '$lib/components/CategoryFilter.svelte';
+	import LoadingState from '$lib/components/LoadingState.svelte';
+	import EndOfList from '$lib/components/EndOfList.svelte';
 	import { getConfig } from '$lib/config';
-	import { ArticleIcon, SpinnerIcon } from '$lib/components/icons';
+	import { infiniteScroll } from '$lib/utils';
+	import { ArticleIcon } from '$lib/components/icons';
 
 	const PAGE_SIZE = 20;
 
@@ -93,24 +96,10 @@
 		});
 	});
 
-	// Use window scroll for infinite scroll
-	onMount(() => {
-		const handleWindowScroll = () => {
-			// Only trigger scroll loading after initial fetch is done
-			if (!initialFetchDone || loading || !hasMore) return;
-
-			const scrollTop = window.scrollY;
-			const scrollHeight = document.documentElement.scrollHeight;
-			const clientHeight = window.innerHeight;
-
-			// Load more when user scrolls to bottom (with 200px threshold)
-			if (scrollHeight - scrollTop - clientHeight < 200) {
-				fetchArticles();
-			}
-		};
-
-		window.addEventListener('scroll', handleWindowScroll);
-		return () => window.removeEventListener('scroll', handleWindowScroll);
+	// Use window scroll for infinite scroll - enabled only after initial fetch
+	const scrollOptions = $derived({
+		onLoadMore: () => fetchArticles(),
+		canLoad: () => initialFetchDone && !loading && hasMore
 	});
 </script>
 
@@ -118,7 +107,7 @@
 	<title>{getConfig().appName}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-3xl px-6 py-8">
+<div class="mx-auto max-w-3xl px-6 py-8" use:infiniteScroll={scrollOptions}>
 	<!-- Page Header -->
 	<div class="mb-8">
 		<h1 class="text-2xl font-bold text-gray-900">{m.home()}</h1>
@@ -159,18 +148,9 @@
 
 	<!-- Loading State -->
 	{#if loading}
-		<div class="flex justify-center py-8">
-			<div class="flex items-center gap-3 text-gray-500">
-				<SpinnerIcon size={24} />
-				<span>{m.loading()}</span>
-			</div>
-		</div>
+		<LoadingState />
 	{/if}
 
 	<!-- End of List -->
-	{#if !hasMore && articles.length > 0 && !loading}
-		<div class="py-8 text-center text-gray-500">
-			<p>{m.no_more({ items: m.articles() })}</p>
-		</div>
-	{/if}
+	<EndOfList show={!hasMore && articles.length > 0 && !loading} />
 </div>
