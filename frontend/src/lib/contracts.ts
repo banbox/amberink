@@ -57,92 +57,52 @@ function parseContractError(error: unknown): ContractError {
 	const errorMessage = error instanceof Error ? error.message : String(error);
 	const lowerMessage = errorMessage.toLowerCase();
 
-	// Session key not authorized for specific operation (selector missing)
-	// Keep original message so caller can detect and auto-recreate session key
+	// Session key specific errors
 	if (lowerMessage.includes('not authorized for this operation')) {
-		return new ContractError(
-			'contract_reverted',
-			errorMessage, // Preserve original message for caller to detect
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('contract_reverted', errorMessage, error instanceof Error ? error : undefined);
 	}
-
-	// Session key specific errors (general)
 	if (
 		lowerMessage.includes('sessionkeynotactive') ||
 		lowerMessage.includes('0x62db3e42') ||
 		lowerMessage.includes('session key is not') ||
 		lowerMessage.includes('session key has expired') ||
-		lowerMessage.includes('session key spending limit exceeded')
+		lowerMessage.includes('session key spending limit exceeded') ||
+		lowerMessage.includes('spendinglimitexceeded')
 	) {
 		return new ContractError(
-			'contract_reverted',
-			'Session key is not active or has expired. Please create a new session key.',
+			'session_key_expired',
+			'Session key is not active, expired, or limit exceeded. Please create a new session key.',
 			error instanceof Error ? error : undefined
 		);
 	}
-
-	// InvalidSignature error from SessionKeyManager
 	if (lowerMessage.includes('invalidsignature') || lowerMessage.includes('0x8baa579f')) {
 		return new ContractError(
-			'contract_reverted',
-			'Invalid signature. The session key signature verification failed. This may be due to callData mismatch.',
+			'session_key_unauthorized',
+			'Invalid signature. Session verification failed.',
 			error instanceof Error ? error : undefined
 		);
 	}
-
-	// SignatureExpired error
 	if (lowerMessage.includes('signatureexpired') || lowerMessage.includes('0x0819bdcd')) {
-		return new ContractError(
-			'contract_reverted',
-			'Signature has expired. Please try again.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('session_key_expired', 'Signature has expired. Please try again.', error instanceof Error ? error : undefined);
 	}
-
-	// SessionKeyValidationFailed error
 	if (lowerMessage.includes('sessionkeyvalidationfailed')) {
 		return new ContractError(
-			'contract_reverted',
-			'Session key validation failed. The session key may not be authorized for this operation.',
+			'session_key_unauthorized',
+			'Session key validation failed.',
 			error instanceof Error ? error : undefined
 		);
 	}
 
-	// Security errors - self-actions (use specific codes for i18n)
-	if (lowerMessage.includes('cannotselfevaluate')) {
-		return new ContractError(
-			'cannot_self_evaluate',
-			'You cannot like or dislike your own article.',
-			error instanceof Error ? error : undefined
-		);
-	}
+	// Security/Logic errors
+	if (lowerMessage.includes('cannotselfevaluate')) return new ContractError('cannot_self_evaluate', 'You cannot like or dislike your own article.', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('cannotselffollow')) return new ContractError('cannot_self_follow', 'You cannot follow yourself.', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('cannotselfcollect')) return new ContractError('cannot_self_collect', 'You cannot collect your own article.', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('cannotlikeowncomment')) return new ContractError('cannot_like_own_comment', 'You cannot like your own comment.', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('articlenotfound')) return new ContractError('article_not_found', 'Article not found', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('spamprotection')) return new ContractError('contract_reverted', 'Transaction value too low (anti-spam protection)', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('invalidnonce')) return new ContractError('contract_reverted', 'Invalid nonce (possible race condition)', error instanceof Error ? error : undefined);
 
-	if (lowerMessage.includes('cannotselffollow')) {
-		return new ContractError(
-			'cannot_self_follow',
-			'You cannot follow yourself.',
-			error instanceof Error ? error : undefined
-		);
-	}
-
-	if (lowerMessage.includes('cannotselfcollect')) {
-		return new ContractError(
-			'cannot_self_collect',
-			'You cannot collect your own article.',
-			error instanceof Error ? error : undefined
-		);
-	}
-
-	if (lowerMessage.includes('cannotlikeowncomment')) {
-		return new ContractError(
-			'cannot_like_own_comment',
-			'You cannot like your own comment.',
-			error instanceof Error ? error : undefined
-		);
-	}
-
-	// User rejected transaction
+	// User/Network errors
 	if (
 		lowerMessage.includes('user rejected') ||
 		lowerMessage.includes('user denied') ||
@@ -150,75 +110,48 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('user cancelled') ||
 		lowerMessage.includes('user canceled')
 	) {
-		return new ContractError(
-			'user_rejected',
-			'User rejected the transaction.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('user_rejected', 'User rejected the transaction.', error instanceof Error ? error : undefined);
 	}
 
-	// Insufficient funds
 	if (
 		lowerMessage.includes('insufficient funds') ||
 		lowerMessage.includes('insufficient balance') ||
 		lowerMessage.includes('not enough balance')
 	) {
-		return new ContractError(
-			'insufficient_funds',
-			'Insufficient funds to complete the transaction.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('insufficient_funds', 'Insufficient funds to complete the transaction.', error instanceof Error ? error : undefined);
 	}
 
-	// Gas estimation failed
 	if (
 		lowerMessage.includes('gas required exceeds') ||
 		lowerMessage.includes('gas estimation') ||
 		lowerMessage.includes('out of gas') ||
 		lowerMessage.includes('intrinsic gas too low')
 	) {
-		return new ContractError(
-			'gas_estimation_failed',
-			'Failed to estimate gas for the transaction.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('gas_estimation_failed', 'Failed to estimate gas for the transaction.', error instanceof Error ? error : undefined);
 	}
 
-	// Contract reverted
 	if (
 		lowerMessage.includes('revert') ||
 		lowerMessage.includes('execution reverted') ||
 		lowerMessage.includes('transaction failed')
 	) {
-		return new ContractError(
-			'contract_reverted',
-			'The contract reverted the transaction.',
-			error instanceof Error ? error : undefined
-		);
+		// Try to extract reason
+		const match = errorMessage.match(/reason="?([^"]+)"?/i) || errorMessage.match(/error=([^,]+)/i);
+		const reason = match ? match[1] : 'The contract reverted the transaction.';
+		return new ContractError('contract_reverted', reason, error instanceof Error ? error : undefined);
 	}
 
-	// Nonce issues
 	if (lowerMessage.includes('nonce too low') || lowerMessage.includes('nonce has already been used')) {
-		return new ContractError(
-			'nonce_too_low',
-			'Nonce is too low or has already been used.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('nonce_too_low', 'Nonce is too low or has already been used.', error instanceof Error ? error : undefined);
 	}
 
-	// Replacement transaction underpriced
 	if (
 		lowerMessage.includes('replacement transaction underpriced') ||
 		lowerMessage.includes('transaction underpriced')
 	) {
-		return new ContractError(
-			'replacement_underpriced',
-			'Replacement transaction is underpriced.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('replacement_underpriced', 'Replacement transaction is underpriced.', error instanceof Error ? error : undefined);
 	}
 
-	// Network errors
 	if (
 		lowerMessage.includes('network') ||
 		lowerMessage.includes('disconnected') ||
@@ -226,45 +159,26 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('timeout') ||
 		lowerMessage.includes('econnrefused')
 	) {
-		return new ContractError(
-			'network_error',
-			'Network error occurred.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('network_error', 'Network error occurred.', error instanceof Error ? error : undefined);
 	}
 
-	// Wallet not connected
 	if (
 		lowerMessage.includes('no accounts') ||
 		lowerMessage.includes('wallet not connected') ||
 		lowerMessage.includes('not connected')
 	) {
-		return new ContractError(
-			'wallet_not_connected',
-			'Wallet is not connected.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('wallet_not_connected', 'Wallet is not connected.', error instanceof Error ? error : undefined);
 	}
 
-	// Wrong network
 	if (
 		lowerMessage.includes('wrong network') ||
 		lowerMessage.includes('chain mismatch') ||
 		(lowerMessage.includes('switch') && lowerMessage.includes('chain'))
 	) {
-		return new ContractError(
-			'wrong_network',
-			'Wrong network selected.',
-			error instanceof Error ? error : undefined
-		);
+		return new ContractError('wrong_network', 'Wrong network selected.', error instanceof Error ? error : undefined);
 	}
 
-	// Unknown error
-	return new ContractError(
-		'unknown_error',
-		'An unknown error occurred.',
-		error instanceof Error ? error : undefined
-	);
+	return new ContractError('unknown_error', 'An unknown error occurred.', error instanceof Error ? error : undefined);
 }
 
 // ============================================================
@@ -357,62 +271,8 @@ async function estimateGasWithBuffer(request: {
 		// Add 15% buffer to prevent state drift failures
 		return (estimatedGas * 115n) / 100n;
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		const lowerMessage = errorMessage.toLowerCase();
-
-		// Log full error for debugging
-		console.error('=== Gas Estimation Error Details ===');
-		console.error('Full error:', error);
-		console.error('Error message:', errorMessage);
-
-		// Parse specific contract revert reasons for user-friendly messages
-		if (lowerMessage.includes('insufficient funds') || lowerMessage.includes('insufficient balance')) {
-			throw new ContractError('insufficient_funds', 'Insufficient balance for this transaction');
-		}
-		if (lowerMessage.includes('spamprotection')) {
-			throw new ContractError('contract_reverted', 'Transaction value too low (anti-spam protection)');
-		}
-		if (lowerMessage.includes('cannotselfevaluate')) {
-			throw new ContractError('cannot_self_evaluate', 'You cannot like or dislike your own article');
-		}
-		if (lowerMessage.includes('cannotselffollow')) {
-			throw new ContractError('cannot_self_follow', 'You cannot follow yourself');
-		}
-		if (lowerMessage.includes('cannotselfcollect')) {
-			throw new ContractError('cannot_self_collect', 'You cannot collect your own article');
-		}
-		if (lowerMessage.includes('cannotlikeowncomment')) {
-			throw new ContractError('cannot_like_own_comment', 'You cannot like your own comment');
-		}
-		if (lowerMessage.includes('articlenotfound')) {
-			throw new ContractError('article_not_found', 'Article not found');
-		}
-		// SessionKeyManager specific errors
-		if (lowerMessage.includes('invalidsignature')) {
-			throw new ContractError('session_key_unauthorized', 'Session key signature verification failed');
-		}
-		if (lowerMessage.includes('sessionkeynotactive')) {
-			throw new ContractError('session_key_expired', 'Session key is not active');
-		}
-		if (lowerMessage.includes('signatureexpired')) {
-			throw new ContractError('session_key_expired', 'Signature has expired');
-		}
-		if (lowerMessage.includes('invalidnonce')) {
-			throw new ContractError('contract_reverted', 'Invalid nonce (possible race condition)');
-		}
-		if (lowerMessage.includes('spendinglimitexceeded')) {
-			throw new ContractError('session_key_unauthorized', 'Session key spending limit exceeded');
-		}
-		if (lowerMessage.includes('revert') || lowerMessage.includes('execution reverted')) {
-			// Generic revert - extract reason if possible
-			const match = errorMessage.match(/reason="?([^"]+)"?/i) || errorMessage.match(/error=([^,]+)/i);
-			const reason = match ? match[1] : 'Contract execution failed';
-			throw new ContractError('contract_reverted', reason);
-		}
-
-		// Log for debugging but throw user-friendly error
 		console.error('Gas estimation failed:', error);
-		throw new ContractError('gas_estimation_failed', `Gas estimation failed: ${errorMessage.slice(0, 100)}`);
+		throw parseContractError(error);
 	}
 }
 
@@ -820,6 +680,36 @@ async function getWalletClientWithChainCheck() {
 }
 
 /**
+ * Execute a contract action with standard error handling and logging
+ */
+async function executeContractAction(
+	context: {
+		actionName: string;
+		abi: typeof BLOGHUB_ABI;
+		functionName: string;
+		args: readonly unknown[];
+		value?: bigint;
+		successMessage?: string;
+	}
+) {
+	try {
+		const walletClient = await getWalletClientWithChainCheck();
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: context.abi,
+			functionName: context.functionName as any,
+			args: context.args as any,
+			value: context.value
+		});
+		console.log(`${context.successMessage || context.functionName + ' executed'}. Tx: ${txHash}`);
+		return txHash;
+	} catch (error) {
+		console.error(`Error in ${context.functionName}:`, error);
+		throw parseContractError(error);
+	}
+}
+
+/**
  * Publish article to BlogHub contract
  * @param arweaveId - Irys mutable folder manifest ID (content at index.md, cover at coverImage)
  * @param categoryId - Category ID (0-based)
@@ -844,37 +734,25 @@ export async function publishToContract(
 ): Promise<string> {
 	validatePublishParams(arweaveId, categoryId, royaltyBps, originalAuthor, title, summary);
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-
-		// Call publish function with PublishParams struct
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'publish',
-			args: [
-				{
-					arweaveId,
-					categoryId: Number(categoryId),
-					royaltyBps: BigInt(royaltyBps),
-					originalAuthor,
-					title,
-					summary,
-					trueAuthor,
-					collectPrice: BigInt(collectPrice),
-					maxCollectSupply: Number(maxCollectSupply),
-					originality: Number(originality),
-					visibility: Number(visibility)
-				}
-			]
-		});
-
-		console.log(`Article published to contract. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error publishing to contract:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'publish',
+		abi: BLOGHUB_ABI,
+		functionName: 'publish',
+		args: [{
+			arweaveId,
+			categoryId: Number(categoryId),
+			royaltyBps: BigInt(royaltyBps),
+			originalAuthor,
+			title,
+			summary,
+			trueAuthor,
+			collectPrice: BigInt(collectPrice),
+			maxCollectSupply: Number(maxCollectSupply),
+			originality: Number(originality),
+			visibility: Number(visibility)
+		}],
+		successMessage: 'Article published to contract'
+	});
 }
 
 export async function collectArticle(
@@ -884,21 +762,14 @@ export async function collectArticle(
 ): Promise<string> {
 	assertNonNegative(articleId, 'Article ID');
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'collect',
-			args: [articleId, referrer],
-			value: amount
-		});
-		console.log(`Article collected. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error collecting article:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'collect',
+		abi: BLOGHUB_ABI,
+		functionName: 'collect',
+		args: [articleId, referrer],
+		value: amount,
+		successMessage: 'Article collected'
+	});
 }
 
 export async function likeComment(
@@ -915,21 +786,14 @@ export async function likeComment(
 		throw new Error('Like amount must be greater than 0');
 	}
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'likeComment',
-			args: [articleId, commentId, commenter, referrer],
-			value: amount
-		});
-		console.log(`Comment liked. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error liking comment:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'likeComment',
+		abi: BLOGHUB_ABI,
+		functionName: 'likeComment',
+		args: [articleId, commentId, commenter, referrer],
+		value: amount,
+		successMessage: 'Comment liked'
+	});
 }
 
 /**
@@ -965,23 +829,14 @@ export async function evaluateArticle(
 		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
 	}
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'evaluate',
-			args: [articleId, score, comment, referrer, parentCommentId],
-			value: tipAmount
-		});
-
-		console.log(`Article evaluated. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error evaluating article:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'evaluate',
+		abi: BLOGHUB_ABI,
+		functionName: 'evaluate',
+		args: [articleId, score, comment, referrer, parentCommentId],
+		value: tipAmount,
+		successMessage: 'Article evaluated'
+	});
 }
 
 /**
@@ -995,22 +850,13 @@ export async function followUser(targetAddress: `0x${string}`, isFollow: boolean
 		throw new Error('Invalid target address');
 	}
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'follow',
-			args: [targetAddress, isFollow]
-		});
-
-		console.log(`Follow status updated. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error updating follow status:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'follow',
+		abi: BLOGHUB_ABI,
+		functionName: 'follow',
+		args: [targetAddress, isFollow],
+		successMessage: 'Follow status updated'
+	});
 }
 
 /**
@@ -1253,15 +1099,93 @@ async function createSessionKeySignature(
 }
 
 /**
+ * Execute made contract action using Session Key authentication
+ */
+async function executeSessionKeyAction<TArgs extends ReadonlyArray<unknown>>(
+	sessionKey: StoredSessionKey,
+	context: {
+		actionName: string;      // e.g. 'publish'
+		contractFunctionName: string; // e.g. 'publishWithSessionKey'
+		selector: `0x${string}`;
+		abi: typeof BLOGHUB_ABI;
+		args: TArgs;             // The inner function arguments
+		value?: bigint;
+	}
+) {
+	// Check session key expiry (client side check)
+	if (Date.now() / 1000 > sessionKey.validUntil) {
+		throw new Error('Session key has expired');
+	}
+
+	try {
+		const walletClient = createSessionKeyWalletClient(sessionKey);
+		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
+
+		// Validate session key is active and authorized
+		await assertSessionKeyActive(
+			sessionKey.owner as `0x${string}`,
+			sessionKey.address as `0x${string}`,
+			context.selector,
+			context.value || 0n
+		);
+
+		// Encode inner function call data
+		const callData = encodeFunctionData({
+			abi: context.abi,
+			functionName: context.actionName as any,
+			args: context.args as any
+		});
+
+		// Create EIP-712 signature
+		const signature = await createSessionKeySignature(
+			sessionKey,
+			context.selector,
+			callData,
+			context.value || 0n,
+			deadline,
+			nonce
+		);
+
+		// Construct tx args: [owner, key, ...innerArgs, deadline, signature]
+		const txArgs = [
+			sessionKey.owner,
+			sessionKey.address,
+			...context.args,
+			deadline,
+			signature
+		] as const;
+
+		// Estimate gas
+		const gas = await estimateGasWithBuffer({
+			address: getBlogHubContractAddress(),
+			abi: context.abi,
+			functionName: context.contractFunctionName as any,
+			args: txArgs as any,
+			value: context.value,
+			account: sessionKey.address as `0x${string}`,
+		});
+
+		// Execute transaction
+		const txHash = await walletClient.writeContract({
+			address: getBlogHubContractAddress(),
+			abi: context.abi,
+			functionName: context.contractFunctionName as any,
+			args: txArgs as any,
+			gas,
+			value: context.value
+		});
+
+		console.log(`${context.actionName} with session key. Tx: ${txHash}`);
+		return txHash;
+
+	} catch (error) {
+		console.error(`Error ${context.actionName} with session key:`, error);
+		throw parseContractError(error);
+	}
+}
+
+/**
  * Publish article to contract using Session Key (no MetaMask interaction needed)
- * @param sessionKey - Stored session key data
- * @param arweaveId - Irys mutable folder manifest ID (content at index.md, cover at coverImage)
- * @param categoryId - Category ID (0-based)
- * @param royaltyBps - Royalty basis points (0-10000, where 100 = 1%)
- * @param originalAuthor - Original author name (optional)
- * @param title - Article title (max 128 bytes)
- * @param summary - Article summary (max 512 bytes)
- * @returns Transaction hash
  */
 export async function publishToContractWithSessionKey(
 	sessionKey: StoredSessionKey,
@@ -1279,129 +1203,25 @@ export async function publishToContractWithSessionKey(
 ): Promise<string> {
 	validatePublishParams(arweaveId, categoryId, royaltyBps, originalAuthor, title, summary);
 
-	// Check session key validity
-	if (Date.now() / 1000 > sessionKey.validUntil) {
-		throw new Error('Session key has expired');
-	}
-
-	try {
-		const chain = getChainConfig();
-		const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
-
-		// Create wallet client with session key
-		const walletClient = createWalletClient({
-			account: sessionKeyAccount,
-			chain,
-			transport: http(getRpcUrl())
-		});
-
-		// Set deadline to 5 minutes from now
-		const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-
-		// Encode the publish function call data (this is what gets hashed in the signature)
-		const callData = encodeFunctionData({
-			abi: BLOGHUB_ABI,
-			functionName: 'publish',
-			args: [
-				{
-					arweaveId,
-					categoryId: Number(categoryId),
-					royaltyBps: BigInt(royaltyBps),
-					originalAuthor,
-					title,
-					summary,
-					trueAuthor,
-					collectPrice: BigInt(collectPrice),
-					maxCollectSupply: Number(maxCollectSupply),
-					originality: Number(originality),
-					visibility: Number(visibility)
-				}
-			]
-		});
-
-		// Get current nonce from SessionKeyManager
-		const nonce = await getSessionKeyNonce(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`
-		);
-
-		await assertSessionKeyActive(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			FUNCTION_SELECTORS.publish,
-			0n
-		);
-
-		// Debug: Log signature parameters
-		console.log('=== publishWithSessionKey Debug ===');
-		console.log('owner:', sessionKey.owner);
-		console.log('sessionKey:', sessionKey.address);
-		console.log('selector:', FUNCTION_SELECTORS.publish);
-		console.log('callData:', callData);
-		console.log('callData first 10 bytes:', callData.slice(0, 22));
-		console.log('nonce:', nonce.toString());
-		console.log('deadline:', deadline.toString());
-		console.log('target (BlogHub):', getBlogHubContractAddress());
-		console.log('SessionKeyManager:', getSessionKeyManagerAddress());
-		console.log('chainId:', getChainId());
-
-		// Create EIP-712 signature
-		const signature = await createSessionKeySignature(
-			sessionKey,
-			FUNCTION_SELECTORS.publish,
-			callData,
-			0n,
-			deadline,
-			nonce
-		);
-
-		console.log('signature:', signature);
-
-		// Call publishWithSessionKey
-		// IMPORTANT: params must match exactly with what was encoded in callData
-		const txArgs = [
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			{
-				arweaveId,
-				categoryId: Number(categoryId),
-				royaltyBps: BigInt(royaltyBps),
-				originalAuthor,
-				title,
-				summary,
-				trueAuthor: trueAuthor,
-				collectPrice: BigInt(collectPrice),
-				maxCollectSupply: Number(maxCollectSupply),
-				originality: Number(originality),
-				visibility: Number(visibility)
-			},
-			deadline,
-			signature
-		] as const;
-
-		// Estimate gas dynamically with buffer
-		const gas = await estimateGasWithBuffer({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'publishWithSessionKey',
-			args: txArgs,
-			account: sessionKey.address as `0x${string}`,
-		});
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'publishWithSessionKey',
-			args: txArgs,
-			gas,
-		});
-
-		console.log(`Article published with session key. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error publishing with session key:', error);
-		throw parseContractError(error);
-	}
+	return executeSessionKeyAction(sessionKey, {
+		actionName: 'publish',
+		contractFunctionName: 'publishWithSessionKey',
+		selector: FUNCTION_SELECTORS.publish,
+		abi: BLOGHUB_ABI,
+		args: [{
+			arweaveId,
+			categoryId: Number(categoryId),
+			royaltyBps: BigInt(royaltyBps),
+			originalAuthor,
+			title,
+			summary,
+			trueAuthor,
+			collectPrice: BigInt(collectPrice),
+			maxCollectSupply: Number(maxCollectSupply),
+			originality: Number(originality),
+			visibility: Number(visibility)
+		}]
+	});
 }
 
 /** 创建 Session Key 钱包客户端 */
@@ -1439,50 +1259,14 @@ export async function evaluateArticleWithSessionKey(
 	if (articleId < 0n) throw new Error('Article ID must be non-negative');
 	if (score < 0 || score > 2) throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
 
-	try {
-		const walletClient = createSessionKeyWalletClient(sessionKey);
-		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
-
-		// Validate session key is active and authorized for evaluate function
-		await assertSessionKeyActive(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			FUNCTION_SELECTORS.evaluate,
-			tipAmount
-		);
-
-		const callData = encodeFunctionData({
-			abi: BLOGHUB_ABI,
-			functionName: 'evaluate',
-			args: [articleId, score, comment, referrer, parentCommentId]
-		});
-		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.evaluate, callData, tipAmount, deadline, nonce);
-
-		// Estimate gas dynamically with buffer
-		const txArgs = [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, score, comment, referrer, parentCommentId, deadline, signature] as const;
-		const gas = await estimateGasWithBuffer({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'evaluateWithSessionKey',
-			args: txArgs,
-			value: tipAmount,
-			account: sessionKey.address as `0x${string}`,
-		});
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'evaluateWithSessionKey',
-			args: txArgs,
-			value: tipAmount,
-			gas,
-		});
-		console.log(`Article evaluated with session key. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error evaluating with session key:', error);
-		throw parseContractError(error);
-	}
+	return executeSessionKeyAction(sessionKey, {
+		actionName: 'evaluate',
+		contractFunctionName: 'evaluateWithSessionKey',
+		selector: FUNCTION_SELECTORS.evaluate,
+		abi: BLOGHUB_ABI,
+		args: [articleId, score, comment, referrer, parentCommentId],
+		value: tipAmount
+	});
 }
 
 export async function followUserWithSessionKey(
@@ -1494,44 +1278,13 @@ export async function followUserWithSessionKey(
 		throw new Error('Invalid target address');
 	}
 
-	try {
-		const walletClient = createSessionKeyWalletClient(sessionKey);
-		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
-
-		// Validate session key is active and authorized for follow function
-		await assertSessionKeyActive(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			FUNCTION_SELECTORS.follow,
-			0n
-		);
-
-		const callData = encodeFunctionData({ abi: BLOGHUB_ABI, functionName: 'follow', args: [targetAddress, isFollow] });
-		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.follow, callData, 0n, deadline, nonce);
-
-		// Estimate gas dynamically with buffer
-		const txArgs = [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, targetAddress, isFollow, deadline, signature] as const;
-		const gas = await estimateGasWithBuffer({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'followWithSessionKey',
-			args: txArgs,
-			account: sessionKey.address as `0x${string}`,
-		});
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'followWithSessionKey',
-			args: txArgs,
-			gas,
-		});
-		console.log(`Follow status updated with session key. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error following with session key:', error);
-		throw parseContractError(error);
-	}
+	return executeSessionKeyAction(sessionKey, {
+		actionName: 'follow',
+		contractFunctionName: 'followWithSessionKey',
+		selector: FUNCTION_SELECTORS.follow,
+		abi: BLOGHUB_ABI,
+		args: [targetAddress, isFollow]
+	});
 }
 
 export async function collectArticleWithSessionKey(
@@ -1542,46 +1295,14 @@ export async function collectArticleWithSessionKey(
 ): Promise<string> {
 	if (articleId < 0n) throw new Error('Article ID must be non-negative');
 
-	try {
-		const walletClient = createSessionKeyWalletClient(sessionKey);
-		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
-
-		// Validate session key is active and authorized for collect function
-		await assertSessionKeyActive(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			FUNCTION_SELECTORS.collect,
-			amount
-		);
-
-		const callData = encodeFunctionData({ abi: BLOGHUB_ABI, functionName: 'collect', args: [articleId, referrer] });
-		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.collect, callData, amount, deadline, nonce);
-
-		// Estimate gas dynamically with buffer
-		const txArgs = [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, referrer, deadline, signature] as const;
-		const gas = await estimateGasWithBuffer({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'collectWithSessionKey',
-			args: txArgs,
-			value: amount,
-			account: sessionKey.address as `0x${string}`,
-		});
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'collectWithSessionKey',
-			args: txArgs,
-			value: amount,
-			gas,
-		});
-		console.log(`Article collected with session key. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error collecting with session key:', error);
-		throw parseContractError(error);
-	}
+	return executeSessionKeyAction(sessionKey, {
+		actionName: 'collect',
+		contractFunctionName: 'collectWithSessionKey',
+		selector: FUNCTION_SELECTORS.collect,
+		abi: BLOGHUB_ABI,
+		args: [articleId, referrer],
+		value: amount
+	});
 }
 
 export async function likeCommentWithSessionKey(
@@ -1597,46 +1318,14 @@ export async function likeCommentWithSessionKey(
 	if (!commenter || commenter === ZERO_ADDRESS) throw new Error('Invalid commenter address');
 	if (amount <= 0n) throw new Error('Like amount must be greater than 0');
 
-	try {
-		const walletClient = createSessionKeyWalletClient(sessionKey);
-		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
-
-		// Validate session key is active and authorized for likeComment function
-		await assertSessionKeyActive(
-			sessionKey.owner as `0x${string}`,
-			sessionKey.address as `0x${string}`,
-			FUNCTION_SELECTORS.likeComment,
-			amount
-		);
-
-		const callData = encodeFunctionData({ abi: BLOGHUB_ABI, functionName: 'likeComment', args: [articleId, commentId, commenter, referrer] });
-		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.likeComment, callData, amount, deadline, nonce);
-
-		// Estimate gas dynamically with buffer
-		const txArgs = [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, articleId, commentId, commenter, referrer, deadline, signature] as const;
-		const gas = await estimateGasWithBuffer({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'likeCommentWithSessionKey',
-			args: txArgs,
-			value: amount,
-			account: sessionKey.address as `0x${string}`,
-		});
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'likeCommentWithSessionKey',
-			args: txArgs,
-			value: amount,
-			gas,
-		});
-		console.log(`Comment liked with session key. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error liking comment with session key:', error);
-		throw parseContractError(error);
-	}
+	return executeSessionKeyAction(sessionKey, {
+		actionName: 'likeComment',
+		contractFunctionName: 'likeCommentWithSessionKey',
+		selector: FUNCTION_SELECTORS.likeComment,
+		abi: BLOGHUB_ABI,
+		args: [articleId, commentId, commenter, referrer],
+		value: amount
+	});
 }
 
 // ============================================================
@@ -1667,22 +1356,13 @@ export async function updateProfile(
 		throw new Error('Bio is too long (max 256 bytes)');
 	}
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'updateProfile',
-			args: [nickname, avatar, bio]
-		});
-
-		console.log(`Profile updated. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error updating profile:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'updateProfile',
+		abi: BLOGHUB_ABI,
+		functionName: 'updateProfile',
+		args: [nickname, avatar, bio],
+		successMessage: 'Profile updated'
+	});
 }
 
 /** 验证文章编辑参数 */
@@ -1702,26 +1382,19 @@ export async function editArticle(
 ): Promise<string> {
 	validateEditArticleParams(articleId, originalAuthor, title, summary);
 
-	try {
-		const walletClient = await getWalletClientWithChainCheck();
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'editArticle',
-			args: [{
-				articleId,
-				originalAuthor,
-				title,
-				summary,
-				categoryId: Number(categoryId)
-			}]
-		});
-		console.log(`Article edited. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error editing article:', error);
-		throw parseContractError(error);
-	}
+	return executeContractAction({
+		actionName: 'editArticle',
+		abi: BLOGHUB_ABI,
+		functionName: 'editArticle',
+		args: [{
+			articleId,
+			originalAuthor,
+			title,
+			summary,
+			categoryId: Number(categoryId)
+		}],
+		successMessage: 'Article edited'
+	});
 }
 
 export async function editArticleWithSessionKey(
@@ -1734,46 +1407,17 @@ export async function editArticleWithSessionKey(
 ): Promise<string> {
 	validateEditArticleParams(articleId, originalAuthor, title, summary);
 
-	try {
-		const walletClient = createSessionKeyWalletClient(sessionKey);
-		const { deadline, nonce } = await getSessionKeySignParams(sessionKey);
-		const params = {
+	return executeSessionKeyAction(sessionKey, {
+		actionName: 'editArticle',
+		contractFunctionName: 'editArticleWithSessionKey',
+		selector: FUNCTION_SELECTORS.editArticle,
+		abi: BLOGHUB_ABI,
+		args: [{
 			articleId,
 			originalAuthor,
 			title,
 			summary,
 			categoryId: Number(categoryId)
-		};
-		const callData = encodeFunctionData({
-			abi: BLOGHUB_ABI,
-			functionName: 'editArticle',
-			args: [params]
-		});
-
-		await assertSessionKeyActive(sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, FUNCTION_SELECTORS.editArticle, 0n);
-		const signature = await createSessionKeySignature(sessionKey, FUNCTION_SELECTORS.editArticle, callData, 0n, deadline, nonce);
-
-		// Estimate gas dynamically with buffer
-		const txArgs = [sessionKey.owner as `0x${string}`, sessionKey.address as `0x${string}`, params, deadline, signature] as const;
-		const gas = await estimateGasWithBuffer({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'editArticleWithSessionKey',
-			args: txArgs,
-			account: sessionKey.address as `0x${string}`,
-		});
-
-		const txHash = await walletClient.writeContract({
-			address: getBlogHubContractAddress(),
-			abi: BLOGHUB_ABI,
-			functionName: 'editArticleWithSessionKey',
-			args: txArgs,
-			gas,
-		});
-		console.log(`Article edited with session key. Tx: ${txHash}`);
-		return txHash;
-	} catch (error) {
-		console.error('Error editing article with session key:', error);
-		throw parseContractError(error);
-	}
+		}]
+	});
 }

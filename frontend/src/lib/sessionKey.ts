@@ -17,9 +17,49 @@ import {
 	ESTIMATED_GAS_UNITS
 } from './constants';
 
-/** Get the storage key for session key based on current environment */
-function getSessionKeyStorageKey(): string {
-	return `amberink_session_key_${envName()}`;
+// Internal helpers
+const getStorageKey = () => `amberink_session_key_${envName()}`;
+
+function saveSessionKey(data: StoredSessionKey): void {
+	if (browser) {
+		localStorage.setItem(getStorageKey(), JSON.stringify(data));
+	}
+}
+
+async function getValidityPeriod(publicClient: any) {
+	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
+	const validAfter = Number(latestBlock.timestamp);
+	return { validAfter, validUntil: validAfter + SESSION_KEY_DURATION_SECONDS };
+}
+
+function verifySessionKeyOwner(account: string, sessionKey: StoredSessionKey) {
+	if (account.toLowerCase() !== sessionKey.owner.toLowerCase()) {
+		throw new Error('Cannot operate on session key: owner mismatch');
+	}
+}
+
+async function executeRegisterSessionKey(
+	walletClient: any,
+	sessionKeyAddress: string,
+	validAfter: number,
+	validUntil: number
+) {
+	const sessionKeyManager = getSessionKeyManagerAddress();
+	const blogHub = getBlogHubContractAddress();
+
+	return await walletClient.writeContract({
+		address: sessionKeyManager,
+		abi: SESSION_KEY_MANAGER_ABI,
+		functionName: 'registerSessionKey',
+		args: [
+			sessionKeyAddress as `0x${string}`,
+			validAfter,
+			validUntil,
+			blogHub,
+			ALLOWED_SELECTORS,
+			SESSION_KEY_DEFAULT_SPENDING_LIMIT
+		]
+	});
 }
 
 /**
@@ -124,30 +164,16 @@ async function calculateGasAmount(multiplier: number): Promise<bigint> {
  * @returns Balance in wei
  */
 export async function getSessionKeyBalance(address: string): Promise<bigint> {
-	const publicClient = getPublicClient();
-	return await publicClient.getBalance({ address: address as `0x${string}` });
+	return await getPublicClient().getBalance({ address: address as `0x${string}` });
 }
 
 /**
- * Check if session key has sufficient balance for gas fees
+ * Check if session key has sufficient balance for gas fees and optional value
  * @param address - Session key address
- * @returns true if balance is sufficient for basic gas
+ * @param txValue - Optional transaction value in wei (default 0)
+ * @returns true if balance is sufficient
  */
-export async function hasSessionKeySufficientBalance(address: string): Promise<boolean> {
-	const [balance, minBalance] = await Promise.all([
-		getSessionKeyBalance(address),
-		calculateGasAmount(getMinGasFeeMultiplier())
-	]);
-	return balance >= minBalance;
-}
-
-/**
- * Check if session key has sufficient balance for a specific transaction
- * @param address - Session key address
- * @param txValue - Transaction value in wei (e.g., tip amount)
- * @returns true if balance is sufficient for gas + value
- */
-export async function hasSessionKeySufficientBalanceForTx(
+export async function hasSessionKeySufficientBalance(
 	address: string,
 	txValue: bigint = 0n
 ): Promise<boolean> {
@@ -248,14 +274,14 @@ export async function ensureSessionKeyBalance(
 export function getStoredSessionKey(): StoredSessionKey | null {
 	if (!browser) return null;
 
-	const stored = localStorage.getItem(getSessionKeyStorageKey());
+	const stored = localStorage.getItem(getStorageKey());
 	if (!stored) return null;
 
 	try {
 		const data: StoredSessionKey = JSON.parse(stored);
 		return data;
 	} catch {
-		localStorage.removeItem(getSessionKeyStorageKey());
+		localStorage.removeItem(getStorageKey());
 		return null;
 	}
 }
@@ -333,56 +359,38 @@ export async function createSessionKey(options?: {
 	const { skipFunding = true, skipIrysApproval = true } = options ?? {};
 
 	const account = await getEthereumAccount();
-	const sessionKeyManager = getSessionKeyManagerAddress();
-	const blogHub = getBlogHubContractAddress();
 
-	// 1. Generate temporary key pair using viem
+	// 1. Generate temporary key pair
 	const privateKey = generatePrivateKey();
 	const sessionKeyAccount = privateKeyToAccount(privateKey);
 
-	// 2. Set validity period (use chain timestamp to avoid local/chain time drift)
+	// 2. Get validity period & Register on blockchain
 	const publicClient = getPublicClient();
-	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
-	const validAfter = Number(latestBlock.timestamp);
-	const validUntil = validAfter + SESSION_KEY_DURATION_SECONDS;
-
-	// 3. Get wallet client and register session key on blockchain (ONE MetaMask popup)
 	const walletClient = await getWalletClient();
 
-	const txHash = await walletClient.writeContract({
-		address: sessionKeyManager,
-		abi: SESSION_KEY_MANAGER_ABI,
-		functionName: 'registerSessionKey',
-		args: [
-			sessionKeyAccount.address,
-			validAfter,
-			validUntil,
-			blogHub,
-			ALLOWED_SELECTORS,
-			SESSION_KEY_DEFAULT_SPENDING_LIMIT
-		]
-	});
+	const { validAfter, validUntil } = await getValidityPeriod(publicClient);
+
+	const txHash = await executeRegisterSessionKey(
+		walletClient,
+		sessionKeyAccount.address,
+		validAfter,
+		validUntil
+	);
 	await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-	// 4. Save to localStorage immediately after registration
+	// 3. Save to localStorage
 	const sessionKeyData: StoredSessionKey = {
 		address: sessionKeyAccount.address,
 		privateKey: privateKey,
 		owner: account,
 		validUntil
 	};
-	localStorage.setItem(getSessionKeyStorageKey(), JSON.stringify(sessionKeyData));
+	saveSessionKey(sessionKeyData);
 	console.log(`Session key created and registered: ${sessionKeyAccount.address}`);
 
-	// 5. Optionally create Irys Balance Approval (lazy by default)
-	if (!skipIrysApproval) {
-		await ensureIrysApproval(sessionKeyData);
-	}
-
-	// 6. Optionally fund session key (lazy by default)
-	if (!skipFunding) {
-		await ensureSessionKeyBalance(sessionKeyAccount.address, 0n);
-	}
+	// 4. Lazy setup
+	if (!skipIrysApproval) await ensureIrysApproval(sessionKeyData);
+	if (!skipFunding) await ensureSessionKeyBalance(sessionKeyAccount.address, 0n);
 
 	return sessionKeyData;
 }
@@ -401,49 +409,29 @@ export async function reauthorizeSessionKey(
 	existingSessionKey: StoredSessionKey
 ): Promise<StoredSessionKey> {
 	const account = await getEthereumAccount();
-	const sessionKeyManager = getSessionKeyManagerAddress();
-	const blogHub = getBlogHubContractAddress();
+	verifySessionKeyOwner(account, existingSessionKey);
 
-	// Verify ownership
-	if (account.toLowerCase() !== existingSessionKey.owner.toLowerCase()) {
-		throw new Error('Cannot reauthorize session key: owner mismatch');
-	}
-
-	// Set new validity period (use chain timestamp to avoid local/chain time drift)
 	const publicClient = getPublicClient();
-	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
-	const validAfter = Number(latestBlock.timestamp);
-	const validUntil = validAfter + SESSION_KEY_DURATION_SECONDS;
-
-	// Re-register session key on blockchain (ONE MetaMask popup)
 	const walletClient = await getWalletClient();
 
-	const txHash = await walletClient.writeContract({
-		address: sessionKeyManager,
-		abi: SESSION_KEY_MANAGER_ABI,
-		functionName: 'registerSessionKey',
-		args: [
-			existingSessionKey.address as `0x${string}`,
-			validAfter,
-			validUntil,
-			blogHub,
-			ALLOWED_SELECTORS,
-			SESSION_KEY_DEFAULT_SPENDING_LIMIT
-		]
-	});
+	// Get new validity & Register
+	const { validAfter, validUntil } = await getValidityPeriod(publicClient);
+
+	const txHash = await executeRegisterSessionKey(
+		walletClient,
+		existingSessionKey.address,
+		validAfter,
+		validUntil
+	);
 	const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-	// Check if transaction was successful
 	if (receipt.status === 'reverted') {
 		throw new Error('Transaction reverted: session key may still be active. Use extend instead.');
 	}
 
-	// Update localStorage with new validity period
-	const updatedSessionKey: StoredSessionKey = {
-		...existingSessionKey,
-		validUntil
-	};
-	localStorage.setItem(getSessionKeyStorageKey(), JSON.stringify(updatedSessionKey));
+	// Update localStorage
+	const updatedSessionKey: StoredSessionKey = { ...existingSessionKey, validUntil };
+	saveSessionKey(updatedSessionKey);
 	console.log(`Session key reauthorized: ${existingSessionKey.address}`);
 
 	return updatedSessionKey;
@@ -463,19 +451,14 @@ export async function extendSessionKey(
 	existingSessionKey: StoredSessionKey
 ): Promise<StoredSessionKey> {
 	const account = await getEthereumAccount();
-	const sessionKeyManager = getSessionKeyManagerAddress();
-	const blogHub = getBlogHubContractAddress();
-
-	// Verify ownership
-	if (account.toLowerCase() !== existingSessionKey.owner.toLowerCase()) {
-		throw new Error('Cannot extend session key: owner mismatch');
-	}
+	verifySessionKeyOwner(account, existingSessionKey);
 
 	const publicClient = getPublicClient();
 	const walletClient = await getWalletClient();
 
-	// Step 1: Revoke the existing session key on-chain
+	// Step 1: Revoke
 	console.log(`Revoking existing session key: ${existingSessionKey.address}`);
+	const sessionKeyManager = getSessionKeyManagerAddress();
 	const revokeTxHash = await walletClient.writeContract({
 		address: sessionKeyManager,
 		abi: SESSION_KEY_MANAGER_ABI,
@@ -489,38 +472,25 @@ export async function extendSessionKey(
 	}
 	console.log(`Session key revoked: ${existingSessionKey.address}`);
 
-	// Step 2: Set new validity period (use chain timestamp to avoid local/chain time drift)
-	const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
-	const validAfter = Number(latestBlock.timestamp);
-	const validUntil = validAfter + SESSION_KEY_DURATION_SECONDS;
+	// Step 2 & 3: Re-register with new validity
+	const { validAfter, validUntil } = await getValidityPeriod(publicClient);
 
-	// Step 3: Re-register the same session key with new validity period
 	console.log(`Re-registering session key: ${existingSessionKey.address}`);
-	const registerTxHash = await walletClient.writeContract({
-		address: sessionKeyManager,
-		abi: SESSION_KEY_MANAGER_ABI,
-		functionName: 'registerSessionKey',
-		args: [
-			existingSessionKey.address as `0x${string}`,
-			validAfter,
-			validUntil,
-			blogHub,
-			ALLOWED_SELECTORS,
-			SESSION_KEY_DEFAULT_SPENDING_LIMIT
-		]
-	});
+	const registerTxHash = await executeRegisterSessionKey(
+		walletClient,
+		existingSessionKey.address,
+		validAfter,
+		validUntil
+	);
 	const registerReceipt = await publicClient.waitForTransactionReceipt({ hash: registerTxHash });
 
 	if (registerReceipt.status === 'reverted') {
 		throw new Error('Failed to re-register session key after revocation');
 	}
 
-	// Update localStorage with new validity period
-	const updatedSessionKey: StoredSessionKey = {
-		...existingSessionKey,
-		validUntil
-	};
-	localStorage.setItem(getSessionKeyStorageKey(), JSON.stringify(updatedSessionKey));
+	// Update localStorage
+	const updatedSessionKey: StoredSessionKey = { ...existingSessionKey, validUntil };
+	saveSessionKey(updatedSessionKey);
 	console.log(`Session key extended: ${existingSessionKey.address}`);
 
 	return updatedSessionKey;
@@ -543,7 +513,7 @@ export async function revokeSessionKey(): Promise<void> {
 		args: [sessionKey.address as `0x${string}`]
 	});
 
-	localStorage.removeItem(getSessionKeyStorageKey());
+	localStorage.removeItem(getStorageKey());
 }
 
 /**
@@ -552,7 +522,7 @@ export async function revokeSessionKey(): Promise<void> {
  */
 export function clearLocalSessionKey(): void {
 	if (browser) {
-		localStorage.removeItem(getSessionKeyStorageKey());
+		localStorage.removeItem(getStorageKey());
 	}
 }
 
@@ -754,18 +724,13 @@ export async function ensureSessionKeyReady(options?: {
 	}
 }
 
-/** Get Irys uploader based on network config */
-async function getIrysUploaderByNetwork(): Promise<IrysUploader> {
-	return getIrysNetwork() === 'mainnet' ? getIrysUploader() : getIrysUploaderDevnet();
-}
-
 /**
  * Ensure Irys balance approval exists for session key.
  * Call this lazily before Arweave uploads.
  */
 export async function ensureIrysApproval(sessionKey: StoredSessionKey): Promise<void> {
 	try {
-		const uploader = await getIrysUploaderByNetwork();
+		const uploader = await (getIrysNetwork() === 'mainnet' ? getIrysUploader() : getIrysUploaderDevnet());
 		await createIrysBalanceApproval(uploader, sessionKey.address, SESSION_KEY_DURATION_SECONDS);
 	} catch (error) {
 		console.warn('Failed to create Irys Balance Approval:', error);
