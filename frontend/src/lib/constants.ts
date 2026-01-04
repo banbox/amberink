@@ -33,10 +33,7 @@ export const SESSION_KEY_DEFAULT_SPENDING_LIMIT = BigInt('10000000000000000000')
 export const SESSION_KEY_DURATION_SECONDS = 7 * 24 * 60 * 60;
 
 /** 典型交易的 Gas 估算值（用于计算最低余额） */
-export const ESTIMATED_GAS_UNITS = 200000n;
-
-/** 标准 ETH 转账 Gas 限制 */
-export const STANDARD_TRANSFER_GAS_LIMIT = 21000n;
+export const ESTIMATED_GAS_UNITS = 500000n;
 
 // ============================================
 // 价格服务相关常量

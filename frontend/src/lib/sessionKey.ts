@@ -14,8 +14,7 @@ import { getIrysNetwork } from '$lib/config';
 import {
 	SESSION_KEY_DEFAULT_SPENDING_LIMIT,
 	SESSION_KEY_DURATION_SECONDS,
-	ESTIMATED_GAS_UNITS,
-	STANDARD_TRANSFER_GAS_LIMIT
+	ESTIMATED_GAS_UNITS
 } from './constants';
 
 /** Get the storage key for session key based on current environment */
@@ -100,10 +99,23 @@ const ALLOWED_SELECTORS: `0x${string}`[] = [
 
 
 
-/** Calculate gas-based amount: gasPrice * estimatedGas * multiplier */
+/** Calculate gas-based amount: maxFeePerGas * estimatedGas * multiplier 
+ * Uses EIP-1559 fee estimation for more accurate gas cost calculation
+ */
 async function calculateGasAmount(multiplier: number): Promise<bigint> {
-	const gasPrice = await getPublicClient().getGasPrice();
-	return gasPrice * ESTIMATED_GAS_UNITS * BigInt(multiplier);
+	const publicClient = getPublicClient();
+
+	// Try to get EIP-1559 fee data first
+	try {
+		const feeData = await publicClient.estimateFeesPerGas();
+		// Use maxFeePerGas for worst-case estimation
+		const maxFeePerGas = feeData.maxFeePerGas ?? await publicClient.getGasPrice();
+		return maxFeePerGas * ESTIMATED_GAS_UNITS * BigInt(multiplier);
+	} catch {
+		// Fallback to legacy gas price
+		const gasPrice = await publicClient.getGasPrice();
+		return gasPrice * ESTIMATED_GAS_UNITS * BigInt(multiplier);
+	}
 }
 
 /**
@@ -117,9 +129,9 @@ export async function getSessionKeyBalance(address: string): Promise<bigint> {
 }
 
 /**
- * Check if session key has sufficient balance
+ * Check if session key has sufficient balance for gas fees
  * @param address - Session key address
- * @returns true if balance is sufficient
+ * @returns true if balance is sufficient for basic gas
  */
 export async function hasSessionKeySufficientBalance(address: string): Promise<boolean> {
 	const [balance, minBalance] = await Promise.all([
@@ -127,6 +139,24 @@ export async function hasSessionKeySufficientBalance(address: string): Promise<b
 		calculateGasAmount(getMinGasFeeMultiplier())
 	]);
 	return balance >= minBalance;
+}
+
+/**
+ * Check if session key has sufficient balance for a specific transaction
+ * @param address - Session key address
+ * @param txValue - Transaction value in wei (e.g., tip amount)
+ * @returns true if balance is sufficient for gas + value
+ */
+export async function hasSessionKeySufficientBalanceForTx(
+	address: string,
+	txValue: bigint = 0n
+): Promise<boolean> {
+	const [balance, gasAmount] = await Promise.all([
+		getSessionKeyBalance(address),
+		calculateGasAmount(getMinGasFeeMultiplier())
+	]);
+	const requiredBalance = gasAmount + txValue;
+	return balance >= requiredBalance;
 }
 
 /**
@@ -162,23 +192,47 @@ export async function fundSessionKey(
 /**
  * Ensure session key has sufficient balance, fund if necessary
  * @param sessionKeyAddress - Session key address
+ * @param txValue - Optional transaction value in wei (e.g., tip amount) to include in balance check
  * @returns true if balance is now sufficient
  */
-export async function ensureSessionKeyBalance(sessionKeyAddress: string): Promise<boolean> {
-	const [balance, minBalance] = await Promise.all([
-		getSessionKeyBalance(sessionKeyAddress),
-		calculateGasAmount(getMinGasFeeMultiplier())
-	]);
+export async function ensureSessionKeyBalance(
+	sessionKeyAddress: string,
+	txValue: bigint = 0n
+): Promise<boolean> {
+	// Calculate required amounts
+	const gasAmount = await calculateGasAmount(getMinGasFeeMultiplier());
+	const minBalance = gasAmount + txValue;
+
+	// Check current balance
+	let balance = await getSessionKeyBalance(sessionKeyAddress);
 
 	if (balance >= minBalance) {
-		console.log(`Session key balance sufficient: ${formatEther(balance)} ETH`);
+		console.log(`Session key balance sufficient: ${formatEther(balance)} ETH (required: ${formatEther(minBalance)} ETH)`);
 		return true;
 	}
 
-	console.log(`Session key balance low (${formatEther(balance)} ETH), funding...`);
+	console.log(`Session key balance low (${formatEther(balance)} ETH), need ${formatEther(minBalance)} ETH, funding...`);
 	try {
-		await fundSessionKey(sessionKeyAddress);
-		return true;
+		// Fund with enough for gas + txValue + buffer
+		// Always include txValue in the fund amount to ensure we have enough for the transaction
+		const gasBuffer = await calculateGasAmount(getDefaultGasFeeMultiplier());
+		const actualFundAmount = gasBuffer + txValue;
+		await fundSessionKey(sessionKeyAddress, actualFundAmount);
+
+		// fundSessionKey already waits for transaction confirmation
+		// Add a small delay to ensure RPC node has updated the balance
+		await new Promise(resolve => setTimeout(resolve, 1500));
+		balance = await getSessionKeyBalance(sessionKeyAddress);
+
+		if (balance < minBalance) {
+			console.warn(`Balance still insufficient after funding: ${formatEther(balance)} ETH (required: ${formatEther(minBalance)} ETH)`);
+			// Try one more time with a longer delay
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			balance = await getSessionKeyBalance(sessionKeyAddress);
+		}
+
+		console.log(`Session key balance after funding: ${formatEther(balance)} ETH`);
+		return balance >= minBalance;
 	} catch (error) {
 		console.error('Failed to fund session key:', error);
 		return false;
@@ -327,7 +381,7 @@ export async function createSessionKey(options?: {
 
 	// 6. Optionally fund session key (lazy by default)
 	if (!skipFunding) {
-		await ensureSessionKeyBalance(sessionKeyAccount.address);
+		await ensureSessionKeyBalance(sessionKeyAccount.address, 0n);
 	}
 
 	return sessionKeyData;
@@ -671,10 +725,12 @@ export async function getOrCreateValidSessionKey(options?: {
  * 
  * @param options - Optional configuration
  * @param options.requiredSelector - Specific function selector that must be authorized
+ * @param options.txValue - Transaction value in wei (e.g., tip amount) to include in balance check
  * @returns Ready session key, or null if user rejected or operation failed
  */
 export async function ensureSessionKeyReady(options?: {
 	requiredSelector?: `0x${string}`;
+	txValue?: bigint;
 }): Promise<StoredSessionKey | null> {
 	try {
 		// 1. Get or create valid session key
@@ -684,7 +740,8 @@ export async function ensureSessionKeyReady(options?: {
 		}
 
 		// 2. Ensure sufficient balance (may trigger MetaMask for funding)
-		const hasBalance = await ensureSessionKeyBalance(sessionKey.address);
+		const txValue = options?.txValue ?? 0n;
+		const hasBalance = await ensureSessionKeyBalance(sessionKey.address, txValue);
 		if (!hasBalance) {
 			console.log('User rejected session key funding');
 			return null;
@@ -735,9 +792,22 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 	const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
 	const mainWallet = await getEthereumAccount();
 
-	// Estimate gas for the transfer
+	// Estimate gas for the transfer dynamically
 	const gasPrice = await publicClient.getGasPrice();
-	const gasLimit = STANDARD_TRANSFER_GAS_LIMIT;
+	// First estimate with a rough amount to get gas limit
+	const roughGasCost = gasPrice * 21000n; // Standard ETH transfer base
+	if (balance <= roughGasCost) {
+		throw new Error('Balance too low to cover gas fees');
+	}
+
+	// Estimate actual gas with the amount we plan to send
+	const estimatedGas = await publicClient.estimateGas({
+		account: sessionKeyAccount.address,
+		to: mainWallet,
+		value: balance - roughGasCost,
+	});
+	// Add 15% buffer for safety
+	const gasLimit = (estimatedGas * 115n) / 100n;
 	const gasCost = gasPrice * gasLimit;
 
 	if (balance <= gasCost) {

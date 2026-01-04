@@ -96,11 +96,11 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 		
 		// In test environment, allow much older prices (30 days)
 		const isTestEnv = envName() != "prod"; // Sepolia or Anvil
-		const staleThreshold = isTestEnv ? 30 * 24 * 3600 : PRICE_STALE_THRESHOLD_SECONDS; // 30 days for test, 1 hour for prod
+		const staleThreshold = isTestEnv ? 90 * 24 * 3600 : PRICE_STALE_THRESHOLD_SECONDS; // 30 days for test, 1 hour for prod
 		
 		if (priceAge > staleThreshold) {
 			// Stale price is expected on low-activity chains, use fallback silently
-			console.debug(`Pyth price is stale (${priceAge}s old, threshold: ${staleThreshold}s), using fallback`);
+			console.warn(`Pyth price is stale (${priceAge}s old, threshold: ${staleThreshold}s), using fallback`);
 			priceCache = {
 				price: fallbackPrice,
 				timestamp: Date.now(),

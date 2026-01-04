@@ -124,7 +124,8 @@
 			const priceWei = BigInt(article.collectPrice);
 			await callWithSessionKey(
 				(sk) => collectArticleWithSessionKey(sk, chainArticleId, ZERO_ADDRESS, priceWei),
-				() => collectArticle(chainArticleId, ZERO_ADDRESS, priceWei)
+				() => collectArticle(chainArticleId, ZERO_ADDRESS, priceWei),
+				{ txValue: priceWei }
 			);
 			localCollectCount = localCollectCount + 1;
 			showFeedback('success', m.success({ action: m.collect() }));
@@ -246,17 +247,21 @@
 	 * 
 	 * @param withSessionKey - Function to call with session key
 	 * @param withoutSessionKey - Fallback function for regular wallet call
-	 * @param autoCreate - If true, auto-create session key if not available (default: true)
+	 * @param options - Optional configuration
+	 * @param options.autoCreate - If true, auto-create session key if not available (default: true)
+	 * @param options.txValue - Transaction value in wei (e.g., tip amount) to include in balance check
 	 */
 	async function callWithSessionKey<T>(
 		withSessionKey: (sk: StoredSessionKey) => Promise<T>,
 		withoutSessionKey: () => Promise<T>,
-		autoCreate: boolean = true
+		options: { autoCreate?: boolean; txValue?: bigint } = {}
 	): Promise<T> {
+		const { autoCreate = true, txValue = 0n } = options;
+		
 		try {
 			// Use unified ensureSessionKeyReady - handles validation, creation, and funding
 			const sk = autoCreate 
-				? await ensureSessionKeyReady()
+				? await ensureSessionKeyReady({ txValue })
 				: (hasValidSessionKey && sessionKey ? sessionKey : null);
 			
 			if (sk) {
@@ -272,9 +277,48 @@
 			console.log('Session key not available, using regular wallet call');
 			return await withoutSessionKey();
 		} catch (error) {
-			// If session key operation fails, try regular wallet as fallback
-			console.error('Session key operation failed, falling back to regular wallet:', error);
-			return await withoutSessionKey();
+			const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+			const errorName = error instanceof ContractError ? error.code : '';
+			
+			// Only fallback to wallet for specific safe-to-retry scenarios:
+			// 1. User rejected the operation (wallet popup dismissed)
+			// 2. RPC connection errors (network issues)
+			// Do NOT fallback for:
+			// - Contract reverts (session key validation failed, nonce mismatch, etc.)
+			// - Insufficient funds (might cause duplicate tx if session key tx is pending)
+			// - Gas estimation failures (contract would revert)
+			
+			const isUserRejection = errorMessage.includes('user rejected') || 
+				errorMessage.includes('user denied') ||
+				errorMessage.includes('rejected by user');
+			
+			const isRpcError = errorMessage.includes('network') ||
+				errorMessage.includes('connection') ||
+				errorMessage.includes('timeout') ||
+				errorMessage.includes('rpc');
+			
+			const isContractError = errorName === 'contract_reverted' ||
+				errorName === 'gas_estimation_failed' ||
+				errorMessage.includes('insufficient funds') ||
+				errorMessage.includes('insufficient balance') ||
+				errorMessage.includes('execution failed') ||
+				errorMessage.includes('execution reverted');
+			
+			if (isContractError) {
+				// Contract-level errors should NOT fallback - re-throw to prevent duplicate tx
+				console.error('Session key contract error, not falling back:', error);
+				throw error;
+			}
+			
+			if (isUserRejection || isRpcError) {
+				// Safe to fallback - no session key tx was sent
+				console.log('Session key operation cancelled/failed, falling back to regular wallet:', error);
+				return await withoutSessionKey();
+			}
+			
+			// For unknown errors, re-throw to be safe (prevent duplicate transactions)
+			console.error('Session key operation failed with unknown error:', error);
+			throw error;
 		}
 	}
 
@@ -335,7 +379,8 @@
 			const dislikeWei = await usdToWei(dislikeAmountUsd);
 			await callWithSessionKey(
 				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
-				() => evaluateArticle(chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei)
+				() => evaluateArticle(chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
+				{ txValue: dislikeWei }
 			);
 			localDislikeAmount = (BigInt(localDislikeAmount) + dislikeWei).toString();
 			showDislikeModal = false;
@@ -361,7 +406,8 @@
 			const targetAddress = (authorId || article.author?.id || '') as `0x${string}`;
 			await callWithSessionKey(
 				(sk) => followUserWithSessionKey(sk, targetAddress, true),
-				() => followUser(targetAddress, true)
+				() => followUser(targetAddress, true),
+				{ txValue: 0n }
 			);
 			showFeedback('success', m.success({ action: m.follow() }));
 		} catch (error) {
@@ -393,7 +439,8 @@
 			const tipWei = await usdToWei(tipAmountUsd);
 			await callWithSessionKey(
 				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
-				() => evaluateArticle(chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei)
+				() => evaluateArticle(chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
+				{ txValue: tipWei }
 			);
 			showTipModal = false;
 			tipAmountUsd = getDefaultTipAmountUsd();
@@ -412,19 +459,40 @@
 		try {
 			// Use articleId for contract interaction (not arweaveId)
 			const chainArticleId = BigInt(article.articleId);
-			// Convert minimum USD value to wei
+			// Convert minimum USD value to wei, but ensure it meets contract's minActionValue
 			const minValueUsd = getMinActionValueUsd();
-			const minValue = await usdToWei(minValueUsd);
+			const minValueFromUsd = await usdToWei(minValueUsd);
+			const contractMinValue = getMinActionValue();
+			// Use the larger of the two to ensure we meet both USD target and contract requirement
+			const minValue = minValueFromUsd > contractMinValue ? minValueFromUsd : contractMinValue;
 			const text = commentText.trim();
 			await callWithSessionKey(
 				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
-				() => evaluateArticle(chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue)
+				() => evaluateArticle(chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
+				{ txValue: minValue }
 			);
+			// Refresh comments after successful submission (wait for indexer)
+			await refreshArticleComments();
 			showFeedback('success', m.comment_success({}));
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
 		} finally {
 			isCommenting = false;
+		}
+	}
+
+	// Refresh article comments from GraphQL (waits for indexer to process)
+	async function refreshArticleComments() {
+		if (!article) return;
+		// Wait briefly for Subsquid indexer to process the event
+		await new Promise(resolve => setTimeout(resolve, 2000));
+		try {
+			const result = await client.query(ARTICLE_BY_ID_QUERY, { id: article.id }, { requestPolicy: 'network-only' }).toPromise();
+			if (result.data?.articleById) {
+				article = result.data.articleById;
+			}
+		} catch (e) {
+			console.error('Failed to refresh comments:', e);
 		}
 	}
 

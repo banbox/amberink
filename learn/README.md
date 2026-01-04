@@ -1561,3 +1561,13 @@ Gemini：推荐Etherna Gateway, Gateway.eth, Firedrive
 #help.md frontend/src/lib/priceService.ts  getNativeTokenPriceUsd返回的是fallbackPrice，请帮我排查原因并解决，当前是test环境测试  
 Claude：测试网返回的价格太旧了，过期11天，针对非生产环境改为30天内有效。  
 
+### 2026-01-04 17:00  评论错误
+#help.md 目前在文章详情页评论时，出现上面错误。在falling back to regular wallet: ContractError: Insufficient funds to complete the transaction.之后，等了约10s，才弹出metamask窗口要求签署交易，但签署后，应用提示评论成功，但metamask提示transaction failed：droppped or replaced；请帮我查阅相关代码，定位原因并解决。注意上面日志中行首的文件名和行号是上一行的。  
+Claude：Session Key 余额检查不完整；回退逻辑不当；已修复。（错误依旧）  
+开发者：@help.md 上面是发表评论时出现的错误，请查阅相关代码，帮我定位原因并解决  
+Claude: 多次打点后定位是金额太少导致SpamProtection错误。已修复  
+开发者：依然有错误[控制台错误信息]  
+Claude：是合约CannotSelfEvaluate错误的签名。已添加错误注册。  
+开发者：@help.md 目前评论时出现上面错误，错误信息比较明确，但是只在控制台输出了，并没有显示给用户友好可读的错误提示，甚至没有任何反馈。请帮我查找相关代码，梳理相关逻辑，已友好的错误信息展示给用户。使用多语言。多语言key注意简洁。  
+Claude: 修改完成
+

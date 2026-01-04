@@ -87,7 +87,7 @@
 			let useSessionKey = hasValidSessionKey && sessionKey;
 			if (useSessionKey && sessionKey) {
 				// Ensure session key has sufficient balance, fund via MetaMask if needed
-				const hasBalance = await ensureSessionKeyBalance(sessionKey.address);
+				const hasBalance = await ensureSessionKeyBalance(sessionKey.address, minValue);
 				if (!hasBalance) {
 					// If user rejected funding, fall back to regular wallet call
 					console.log('Session key funding failed, falling back to regular wallet call');

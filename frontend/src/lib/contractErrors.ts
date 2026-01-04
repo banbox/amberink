@@ -24,7 +24,15 @@ export function getContractErrorMessage(error: unknown): string {
             wallet_not_connected: m.wallet_not_connected(),
             wrong_network: m.wrong_network(),
             timeout: m.timeout(),
-            unknown_error: m.unknown_error()
+            unknown_error: m.unknown_error(),
+            // Specific contract business logic errors
+            cannot_self_evaluate: m.err_self_evaluate(),
+            cannot_self_follow: m.err_self_follow(),
+            cannot_self_collect: m.err_self_collect(),
+            cannot_like_own_comment: m.err_like_own_comment(),
+            article_not_found: m.err_article_not_found(),
+            session_key_expired: m.err_session_expired(),
+            session_key_unauthorized: m.err_session_unauthorized()
         };
         return errorMessages[error.code] || error.message;
     }

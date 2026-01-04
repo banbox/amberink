@@ -397,7 +397,7 @@ contract BlogHub is
         address articleAuthor = article.author;
 
         // --- 安全检查：禁止作者自我评价 ---
-        if (sender == articleAuthor) revert CannotSelfEvaluate();
+        if (contentLength == 0 && sender == articleAuthor) revert CannotSelfEvaluate();
 
         // --- 资金处理 ---
         if (amount > 0) {
@@ -611,8 +611,7 @@ contract BlogHub is
     function uri(uint256 _id) public view override returns (string memory) {
         uint256 articleId = getArticleIdFromTokenId(_id);
         if (articleId == 0 || articleId >= nextArticleId) revert ArticleNotFound();
-        return
-            string(abi.encodePacked("https://amberink.eth.limo/a/?id=", articles[articleId].arweaveHash));
+        return string(abi.encodePacked("https://amberink.eth.limo/a/?id=", articles[articleId].arweaveHash));
     }
 
     // =============================================================
