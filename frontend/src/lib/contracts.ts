@@ -54,6 +54,9 @@ export class ContractError extends Error {
  * Parse error and return a ContractError with appropriate code
  */
 function parseContractError(error: unknown): ContractError {
+	if (error instanceof ContractError) {
+		return error;
+	}
 	const errorMessage = error instanceof Error ? error.message : String(error);
 	const lowerMessage = errorMessage.toLowerCase();
 

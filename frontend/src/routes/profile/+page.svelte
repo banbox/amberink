@@ -204,11 +204,11 @@
 	}
 
 	async function fetchSessionKeyInfo() {
-		if (loadingSessionKey) return;
+		if (loadingSessionKey || !walletAddress) return;
 		loadingSessionKey = true;
 
 		try {
-			const sk = getStoredSessionKey();
+			const sk = getStoredSessionKey(walletAddress);
 			if (sk) {
 				sessionKey = sk;
 				const balance = await getSessionKeyBalance(sk.address);
@@ -817,13 +817,17 @@
 									<div class="space-y-4">
 										<!-- Address -->
 										<div>
-											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{m.address()}</p>
+											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+												{m.address()}
+											</p>
 											<p class="break-all font-mono text-xs text-gray-700">{sessionKey.address}</p>
 										</div>
 
 										<!-- Balance -->
 										<div>
-											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{m.balance()}</p>
+											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+												{m.balance()}
+											</p>
 											<p class="text-2xl font-bold text-gray-900">
 												{formatEthDisplay(sessionKeyBalance)}
 												<span class="ml-1 text-base font-normal text-gray-500">{nativeSymbol}</span>
@@ -837,15 +841,25 @@
 										<div class="flex items-start justify-between gap-4">
 											<!-- Status Badge -->
 											<div>
-												<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{m.status()}</p>
+												<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+													{m.status()}
+												</p>
 												{#if isSessionKeyExpired(sessionKey)}
-													<span class="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800">
-														<svg class="h-2 w-2 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg>
+													<span
+														class="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800"
+													>
+														<svg class="h-2 w-2 fill-current" viewBox="0 0 8 8"
+															><circle cx="4" cy="4" r="4" /></svg
+														>
 														{m.expired()}
 													</span>
 												{:else}
-													<span class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800">
-														<svg class="h-2 w-2 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg>
+													<span
+														class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800"
+													>
+														<svg class="h-2 w-2 fill-current" viewBox="0 0 8 8"
+															><circle cx="4" cy="4" r="4" /></svg
+														>
 														{m.active()}
 													</span>
 												{/if}
@@ -943,16 +957,20 @@
 										<div class="py-3">
 											<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
 												<div class="flex items-center gap-2">
-													<span class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+													<span
+														class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"
+													>
 														{tx.method}
 													</span>
 													<span class="font-semibold text-gray-900">
-														{formatEthDisplay(BigInt(tx.value))} {nativeSymbol}
+														{formatEthDisplay(BigInt(tx.value))}
+														{nativeSymbol}
 													</span>
 												</div>
 												<div class="flex items-center justify-between gap-4 md:justify-end">
 													<span class="text-xs text-gray-500">
-														{m.fee()}: {formatEthDisplay(BigInt(tx.feeAmount))} {nativeSymbol}
+														{m.fee()}: {formatEthDisplay(BigInt(tx.feeAmount))}
+														{nativeSymbol}
 													</span>
 													{#if viewUrl}
 														<a

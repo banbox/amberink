@@ -44,7 +44,13 @@
 	const config = $derived(getConfig());
 	const chainInfo = $derived(SUPPORTED_CHAINS[config.chainId]);
 	const chainName = $derived(chainInfo?.name || `Chain ${config.chainId}`);
-	const rpcUrl = $derived(config.rpcUrl);
+	const rpcHost = $derived.by(() => {
+		try {
+			return new URL(config.rpcUrl).host;
+		} catch {
+			return config.rpcUrl;
+		}
+	});
 
 	// Navigation items
 	const navItems = [
@@ -206,7 +212,7 @@
 				<span class="text-gray-700">{chainName}</span>
 			</div>
 			<div class="flex flex-col gap-0.5">
-				<span class="break-all text-gray-700">{rpcUrl}</span>
+				<span class="break-all text-gray-700">{rpcHost}</span>
 			</div>
 		</div>
 	</div>

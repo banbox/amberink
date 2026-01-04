@@ -1571,3 +1571,20 @@ Claude：是合约CannotSelfEvaluate错误的签名。已添加错误注册。
 开发者：@help.md 目前评论时出现上面错误，错误信息比较明确，但是只在控制台输出了，并没有显示给用户友好可读的错误提示，甚至没有任何反馈。请帮我查找相关代码，梳理相关逻辑，已友好的错误信息展示给用户。使用多语言。多语言key注意简洁。  
 Claude: 修改完成
 
+### 2026-01-04 21:50  评论错误
+frontend/src/lib/components/CommentSection.svelte 点击发表评论时，不应该立刻隐藏输入框改为未输入评论状态。应该禁止编辑评论内容，发表按钮添加loading状态，等待成功或失败时，才切换到未输入评论状态。  
+Gemini：修改完成
+
+### 2026-01-04 22:00  SideBar显示URL问题
+frontend/src/lib/components/Sidebar.svelte 209行的RPC_URL不应该显示全部内容，这里可能附带敏感的secretKey，帮我改为只显示host部分，隐藏path部分  
+Gemini：修改完成
+
+### 2026-01-04 22:20  sessionKey存储问题
+@help.md frontend/src/lib/sessionKey.ts 在21行获取session key的存储key时，应该按当前钱包账户地址特征获取，因为用户可能使用多个账户，每个账户都有对应的session key；如果不用账户地址区分会互相覆盖  
+Gemini：修改完成 
+
+### 2026-01-04 22:35  sessionKey提现问题
+@help.md 上面是 frontend/src/routes/profile/+page.svelte 对session key进行所有余额提现时遇到的错误，请结合相关错误代码，帮我分析定位错误原因，集合最佳实践，帮我修复代码  
+Gemini：没考虑L1 data费用导致，修改完成  
+开发者：但我的dapp后续要兼容其他layer 2链，其他链可能没有l1 data fee；请考虑兼容性，帮我在这里进行更友好更符合最佳实践的改动  
+Gemini：无需修改

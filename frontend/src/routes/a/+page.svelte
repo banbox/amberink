@@ -332,7 +332,7 @@
 			const accounts = (await window.ethereum.request({ method: 'eth_accounts' })) as string[];
 			if (accounts.length > 0) {
 				walletAddress = accounts[0];
-				sessionKey = getStoredSessionKey();
+				sessionKey = getStoredSessionKey(walletAddress);
 				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
 				// Fetch current user data
 				fetchCurrentUserData(accounts[0]);
@@ -453,8 +453,8 @@
 	}
 
 	// Handle Comment
-	async function handleComment(commentText: string) {
-		if (!requireWallet() || !commentText.trim() || !article) return;
+	async function handleComment(commentText: string): Promise<boolean> {
+		if (!requireWallet() || !commentText.trim() || !article) return false;
 		isCommenting = true;
 		try {
 			// Use articleId for contract interaction (not arweaveId)
@@ -474,8 +474,10 @@
 			// Refresh comments after successful submission (wait for indexer)
 			await refreshArticleComments();
 			showFeedback('success', m.comment_success({}));
+			return true;
 		} catch (error) {
 			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
+			return false;
 		} finally {
 			isCommenting = false;
 		}
@@ -771,7 +773,7 @@
 			const accts = accounts as string[];
 			walletAddress = accts.length > 0 ? accts[0] : null;
 			if (walletAddress) {
-				sessionKey = getStoredSessionKey();
+				sessionKey = getStoredSessionKey(walletAddress);
 				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
 				fetchCurrentUserData(walletAddress);
 			} else {

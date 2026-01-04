@@ -18,7 +18,7 @@
 		sessionKey: StoredSessionKey | null;
 		hasValidSessionKey: boolean;
 		isCommenting: boolean;
-		onComment: (text: string) => void;
+		onComment: (text: string) => Promise<boolean> | void;
 	}
 
 	let { articleId, comments, walletAddress, currentUserAvatar = null, currentUserNickname = null, sessionKey, hasValidSessionKey, isCommenting, onComment }: Props = $props();
@@ -41,31 +41,16 @@
 	}
 
 	// Handle submit
-	function handleSubmit() {
+	async function handleSubmit() {
 		if (!commentText.trim() || isCommenting || !walletAddress) return;
-		onComment(commentText.trim());
-		commentText = '';
-		isInputFocused = false;
-	}
-
-	function getErrorMessage(error: unknown): string {
-		if (error instanceof ContractError) {
-			const errorMessages: Record<string, string> = {
-				user_rejected: m.user_rejected({}),
-				insufficient_funds: m.insufficient_funds({}),
-				network_error: m.network_error({}),
-				contract_reverted: m.contract_reverted({}),
-				gas_estimation_failed: m.gas_estimation_failed({}),
-				nonce_too_low: m.nonce_too_low({}),
-				replacement_underpriced: m.replacement_underpriced({}),
-				wallet_not_connected: m.wallet_not_connected({}),
-				wrong_network: m.wrong_network({}),
-				timeout: m.timeout({}),
-				unknown_error: m.unknown_error({})
-			};
-			return errorMessages[error.code] || error.message;
+		
+		const success = await onComment(commentText.trim());
+		
+		// Only clear input if comment was successfully posted (or if return value is void/undefined)
+		if (success !== false) {
+			commentText = '';
+			isInputFocused = false;
 		}
-		return error instanceof Error ? error.message : String(error);
 	}
 
 	async function handleLikeComment(comment: CommentData) {

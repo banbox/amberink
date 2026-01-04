@@ -169,7 +169,12 @@ async function publishArticleWithSessionKeyInternal(
 }
 
 /** Check if gasless publishing is available */
-export function isGaslessPublishingAvailable(): boolean {
-	const sessionKey = getStoredSessionKey();
-	return sessionKey !== null && Date.now() / 1000 < sessionKey.validUntil;
+export async function isGaslessPublishingAvailable(): Promise<boolean> {
+	try {
+		const account = await getEthereumAccount();
+		const sessionKey = getStoredSessionKey(account);
+		return sessionKey !== null && Date.now() / 1000 < sessionKey.validUntil;
+	} catch {
+		return false;
+	}
 }

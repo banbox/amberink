@@ -14,6 +14,8 @@
 	import { getNativeTokenSymbol } from '$lib/priceService';
 	import { CheckIcon } from './icons';
 
+	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
+
 	let hasSessionKey = $state(false);
 	let validUntil = $state<Date | null>(null);
 	let sessionKeyAddress = $state<string | null>(null);
@@ -26,8 +28,17 @@
 	let formattedValidUntil = $derived(validUntil ? validUntil.toLocaleDateString() : '');
 	let formattedBalance = $derived(balance ? formatEthDisplay(balance) : '0');
 
+	// Use store properly
+	let walletAddress = $derived(getWalletAddress());
+
 	async function checkSessionKey() {
-		const sk = getStoredSessionKey();
+		// Wait for wallet address to be available
+		if (!walletAddress) {
+			hasSessionKey = false;
+			return;
+		}
+		
+		const sk = getStoredSessionKey(walletAddress);
 		if (sk) {
 			// Verify it belongs to current wallet
 			const isValid = await isSessionKeyValidForCurrentWallet();
@@ -93,6 +104,17 @@
 			isFunding = false;
 		}
 	}
+
+	// React to wallet address changes
+	$effect(() => {
+		if (walletAddress) {
+			checkSessionKey();
+		} else {
+			hasSessionKey = false;
+			validUntil = null;
+			sessionKeyAddress = null;
+		}
+	});
 
 	onMount(() => {
 		checkSessionKey();

@@ -3,7 +3,7 @@
  * Allows users to perform frequent operations without signing each time
  */
 
-import { formatEther, createWalletClient, http } from 'viem';
+import { formatEther, parseEther, createWalletClient, http } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getRpcUrl, envName } from '$lib/config';
 import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
@@ -18,11 +18,11 @@ import {
 } from './constants';
 
 // Internal helpers
-const getStorageKey = () => `amberink_session_key_${envName()}`;
+const getStorageKey = (account: string) => `amberink_session_key_${envName()}_${account.toLowerCase()}`;
 
 function saveSessionKey(data: StoredSessionKey): void {
 	if (browser) {
-		localStorage.setItem(getStorageKey(), JSON.stringify(data));
+		localStorage.setItem(getStorageKey(data.owner), JSON.stringify(data));
 	}
 }
 
@@ -266,24 +266,43 @@ export async function ensureSessionKeyBalance(
 }
 
 /**
- * Check if there is a stored session key (including expired ones)
+ * Check if there is a stored session key for a specific account (including expired ones)
  * NOTE: This returns expired keys as well. Use isSessionKeyExpired() to check validity.
  * This is important to avoid losing funds in expired Session Keys.
+ * @param account - Account address to get session key for
  * @returns Stored session key data or null if not found
  */
-export function getStoredSessionKey(): StoredSessionKey | null {
-	if (!browser) return null;
+export function getStoredSessionKey(account: string): StoredSessionKey | null {
+	if (!browser || !account) return null;
 
-	const stored = localStorage.getItem(getStorageKey());
-	if (!stored) return null;
+	const keys = [
+		getStorageKey(account),
+		// Fallback to legacy key (without account) for migration
+		`amberink_session_key_${envName()}`
+	];
 
-	try {
-		const data: StoredSessionKey = JSON.parse(stored);
-		return data;
-	} catch {
-		localStorage.removeItem(getStorageKey());
-		return null;
+	for (const key of keys) {
+		const stored = localStorage.getItem(key);
+		if (stored) {
+			try {
+				const data: StoredSessionKey = JSON.parse(stored);
+				// Verify ownership matches requested account (legacy keys might not match)
+				if (data.owner.toLowerCase() === account.toLowerCase()) {
+					// If we found a valid legacy key, migrate it to new format
+					if (key !== keys[0]) {
+						console.log('Migrating legacy session key to new format');
+						saveSessionKey(data);
+						localStorage.removeItem(key);
+					}
+					return data;
+				}
+			} catch {
+				localStorage.removeItem(key);
+			}
+		}
 	}
+
+	return null;
 }
 
 /**
@@ -301,11 +320,11 @@ export function isSessionKeyExpired(sessionKey: StoredSessionKey | null): boolea
  * @returns true if session key is valid for current wallet
  */
 export async function isSessionKeyValidForCurrentWallet(): Promise<boolean> {
-	const sessionKey = getStoredSessionKey();
-	if (!sessionKey) return false;
-
 	try {
 		const account = await getEthereumAccount();
+		const sessionKey = getStoredSessionKey(account);
+		if (!sessionKey) return false;
+
 		return account.toLowerCase() === sessionKey.owner.toLowerCase();
 	} catch {
 		return false;
@@ -500,7 +519,8 @@ export async function extendSessionKey(
  * Revoke the current session key
  */
 export async function revokeSessionKey(): Promise<void> {
-	const sessionKey = getStoredSessionKey();
+	const account = await getEthereumAccount();
+	const sessionKey = getStoredSessionKey(account);
 	if (!sessionKey) return;
 
 	const sessionKeyManager = getSessionKeyManagerAddress();
@@ -513,25 +533,27 @@ export async function revokeSessionKey(): Promise<void> {
 		args: [sessionKey.address as `0x${string}`]
 	});
 
-	localStorage.removeItem(getStorageKey());
+	localStorage.removeItem(getStorageKey(account));
 }
 
 /**
  * Clear session key from local storage without revoking on-chain
  * Use when switching wallets or cleaning up
+ * @param account - Account address to clear session key for
  */
-export function clearLocalSessionKey(): void {
-	if (browser) {
-		localStorage.removeItem(getStorageKey());
+export function clearLocalSessionKey(account: string): void {
+	if (browser && account) {
+		localStorage.removeItem(getStorageKey(account));
 	}
 }
 
 /**
  * Get session key account for signing
+ * @param account - Account address to get session key for
  * @returns Account instance or null if no valid session key
  */
-export function getSessionKeyAccount() {
-	const sessionKey = getStoredSessionKey();
+export function getSessionKeyAccount(account: string) {
+	const sessionKey = getStoredSessionKey(account);
 	if (!sessionKey) return null;
 	return privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
 }
@@ -602,15 +624,18 @@ export async function getOrCreateValidSessionKey(options?: {
 }): Promise<StoredSessionKey | null> {
 	const { requiredSelector, autoCreate = true } = options ?? {};
 
-	// 1. Check if we have a stored session key (including expired ones)
-	let sessionKey = getStoredSessionKey();
+	// 1. Get current account first
+	const account = await getEthereumAccount();
+
+	// 2. Check if we have a stored session key (including expired ones)
+	let sessionKey = getStoredSessionKey(account);
 
 	if (sessionKey) {
-		// 2. Verify it belongs to current wallet
-		const isOwnerValid = await isSessionKeyValidForCurrentWallet();
+		// 3. Verify it belongs to current wallet
+		const isOwnerValid = account.toLowerCase() === sessionKey.owner.toLowerCase();
 		if (!isOwnerValid) {
 			console.log('Stored session key belongs to different wallet, clearing...');
-			clearLocalSessionKey();
+			clearLocalSessionKey(account);
 			sessionKey = null;
 		} else {
 			// 3. Check if expired locally
@@ -638,7 +663,7 @@ export async function getOrCreateValidSessionKey(options?: {
 
 				// No balance, safe to clear and create new
 				console.log('Session key expired and has no balance, clearing...');
-				clearLocalSessionKey();
+				clearLocalSessionKey(account);
 				sessionKey = null;
 			} else {
 				// 4. Verify it's valid on-chain
@@ -664,7 +689,7 @@ export async function getOrCreateValidSessionKey(options?: {
 					}
 
 					console.log('Session key invalid and has no balance, clearing...');
-					clearLocalSessionKey();
+					clearLocalSessionKey(account);
 					sessionKey = null;
 				} else {
 					console.log('Using existing valid session key:', sessionKey.address);
@@ -743,7 +768,8 @@ export async function ensureIrysApproval(sessionKey: StoredSessionKey): Promise<
  * @returns Transaction hash
  */
 export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Promise<string> {
-	const sessionKey = getStoredSessionKey();
+	const account = await getEthereumAccount();
+	const sessionKey = getStoredSessionKey(account);
 	if (!sessionKey || sessionKey.address.toLowerCase() !== sessionKeyAddress.toLowerCase()) {
 		throw new Error('Session Key not found or mismatch');
 	}
@@ -771,8 +797,8 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 		to: mainWallet,
 		value: balance - roughGasCost,
 	});
-	// Add 15% buffer for safety
-	const gasLimit = (estimatedGas * 115n) / 100n;
+	// Add 20% buffer for safety (standard practice)
+	const gasLimit = (estimatedGas * 120n) / 100n;
 	const gasCost = gasPrice * gasLimit;
 
 	if (balance <= gasCost) {
@@ -780,7 +806,14 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 	}
 
 	// Calculate amount to send (balance - gas cost)
-	const amountToSend = balance - gasCost;
+	// Leave a tiny "dust" amount (10000 wei) to cover L1 Data Fees on L2 chains (Optimism, Base, etc.)
+	// This ensures cross-chain compatibility without requiring chain-specific fee oracle logic.
+	const SAFETY_DUST = 10000n;
+	const amountToSend = balance - gasCost - SAFETY_DUST;
+
+	if (amountToSend <= 0n) {
+		throw new Error('Balance too low to cover gas fees and L1 safety buffer');
+	}
 
 	console.log(`Withdrawing ${formatEther(amountToSend)} ETH from Session Key to main wallet...`);
 
@@ -812,7 +845,8 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
  * @returns Created session key data
  */
 export async function createNewSessionKey(forceCreate: boolean = false): Promise<StoredSessionKey> {
-	const existingKey = getStoredSessionKey();
+	const account = await getEthereumAccount();
+	const existingKey = getStoredSessionKey(account);
 
 	if (existingKey && !forceCreate) {
 		// Check if existing key has balance
