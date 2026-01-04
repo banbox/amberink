@@ -11,9 +11,10 @@
 		handleAccountsChanged
 	} from '$lib/stores/wallet.svelte';
 	import { ChevronDownIcon, LogoutIcon } from './icons';
-	import { envName } from '$lib/config';
+	import { getCurrentEnvName } from '$lib/stores/config.svelte';
 
 	let showDropdown = $state(false);
+	let envName = $derived(getCurrentEnvName());
 
 	let address = $derived(getWalletAddress());
 	let isConnected = $derived(isWalletConnected());
@@ -25,18 +26,18 @@
 
 	// Environment-based colors
 	// dev: green, test: yellow/orange, prod: dark blue/gray (default)
-	const buttonColorClasses = $derived(
-		envName() === 'dev'
+	const buttonColorClasses = $derived.by(() =>
+		envName === 'dev'
 			? 'bg-green-600 hover:bg-green-700'
-			: envName() === 'test'
+			: envName === 'test'
 				? 'bg-orange-600 hover:bg-orange-700'
 				: 'bg-gray-800 hover:bg-gray-700'
 	);
 
-	const dropdownColorClasses = $derived(
-		envName() === 'dev'
+	const dropdownColorClasses = $derived.by(() =>
+		envName === 'dev'
 			? 'bg-green-600'
-			: envName() === 'test'
+			: envName === 'test'
 				? 'bg-orange-600'
 				: 'bg-gray-800'
 	);
@@ -110,9 +111,9 @@
 			>
 				<button
 					class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-400 transition-colors"
-					class:hover:bg-green-700={envName() === 'dev'}
-					class:hover:bg-orange-700={envName() === 'test'}
-					class:hover:bg-gray-700={envName() === 'prod'}
+					class:hover:bg-green-700={envName === 'dev'}
+					class:hover:bg-orange-700={envName === 'test'}
+					class:hover:bg-gray-700={envName === 'prod'}
 					onclick={handleDisconnect}
 				>
 					<LogoutIcon size={16} />

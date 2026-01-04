@@ -7,16 +7,8 @@
 import { createPublicClient, http, parseUnits, formatUnits } from 'viem';
 import { getChainConfig } from '$lib/chain';
 import { getRpcUrl, getChainId } from '$lib/config';
-import { getConfig, getPythContractAddress, getPythPriceFeedId, CHAIN_NATIVE_TOKEN } from '$lib/stores/config.svelte';
+import { getConfig, getPythContractAddress, getPythPriceFeedId, CHAIN_NATIVE_TOKEN, envName } from '$lib/stores/config.svelte';
 import { PRICE_STALE_THRESHOLD_SECONDS, MAX_REASONABLE_PRICE_USD } from './constants';
-
-// Pyth price data structure
-interface PythPriceData {
-	price: bigint;
-	conf: bigint;
-	expo: number;
-	publishTime: bigint;
-}
 
 // Pyth Network ABI (minimal - only getPriceUnsafe)
 const PYTH_ABI = [
@@ -94,14 +86,21 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 			functionName: 'getPriceUnsafe',
 			args: [priceFeedId]
 		});
+		console.log('pyth price', pythContractAddress, priceData);
 
 		const { price: rawPrice, expo, publishTime } = priceData;
 
-		// Check if price is stale (more than 1 hour old)
+		// Check if price is stale
 		const now = Math.floor(Date.now() / 1000);
 		const priceAge = now - Number(publishTime);
-		if (priceAge > PRICE_STALE_THRESHOLD_SECONDS) {
-			console.warn(`Pyth price is stale (>${PRICE_STALE_THRESHOLD_SECONDS}s old), using fallback`);
+		
+		// In test environment, allow much older prices (30 days)
+		const isTestEnv = envName() != "prod"; // Sepolia or Anvil
+		const staleThreshold = isTestEnv ? 30 * 24 * 3600 : PRICE_STALE_THRESHOLD_SECONDS; // 30 days for test, 1 hour for prod
+		
+		if (priceAge > staleThreshold) {
+			// Stale price is expected on low-activity chains, use fallback silently
+			console.debug(`Pyth price is stale (${priceAge}s old, threshold: ${staleThreshold}s), using fallback`);
 			priceCache = {
 				price: fallbackPrice,
 				timestamp: Date.now(),
@@ -113,7 +112,7 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 		// Convert price: Price = price * 10^expo
 		const price = Number(rawPrice) * Math.pow(10, Number(expo));
 
-		// Sanity check
+		// Sanity check - only warn if we got data but it's invalid
 		if (price <= 0 || price > MAX_REASONABLE_PRICE_USD) {
 			console.warn('Invalid price from Pyth, using fallback:', price);
 			priceCache = {

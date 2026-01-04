@@ -53,7 +53,7 @@ export const defaults = {
 	// Price cache duration in seconds (5 minutes)
 	priceCacheDuration: 300,
 	// Fallback ETH price in USD (used when price feed unavailable)
-	fallbackEthPriceUsd: 3000
+	fallbackEthPriceUsd: 2000
 };
 
 /**
@@ -82,17 +82,16 @@ export const ENVIRONMENT_DEFAULTS: Record<'dev' | 'test' | 'prod', Partial<Defau
 };
 
 // Default environment when nothing is set
-const DEFAULT_ENV: 'dev' | 'test' | 'prod' = 'dev';
+const DEFAULT_ENV: 'dev' | 'test' | 'prod' = 'prod';
 
 // ============================================
 // Environment name management
 // ============================================
 
 // Dynamic localStorage key based on environment to avoid conflicts when switching environments
-const CONFIG_STORAGE_KEY_PREFIX = 'amberink_user_config';
 function getConfigStorageKey(): string {
 	const currentEnvName = getEnvName();
-	return `${CONFIG_STORAGE_KEY_PREFIX}_${currentEnvName}`;
+	return `amberink_user_config_${currentEnvName}`;
 }
 
 /**
@@ -307,6 +306,17 @@ let envNameVersion = $state(0);
  */
 export function getEnvNameVersion(): number {
 	return envNameVersion;
+}
+
+/**
+ * Get current envName reactively
+ * Use this function in components that need to react to envName changes
+ * The function reads envNameVersion to establish reactive dependency
+ */
+export function getCurrentEnvName(): 'dev' | 'test' | 'prod' {
+	// Read envNameVersion to establish reactive dependency when called in reactive context
+	void envNameVersion;
+	return getEnvName();
 }
 
 let userConfig = $state<UserConfig>(loadUserConfig());

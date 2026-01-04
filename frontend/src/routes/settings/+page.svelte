@@ -328,10 +328,6 @@
 		<h3 class="text-sm font-medium text-gray-900 mb-3">{getLabel('fixed_configuration')}</h3>
 		<div class="space-y-2 text-sm text-gray-600">
 			<div class="flex justify-between">
-				<span class="font-medium">{getLabel('current_environment')}:</span>
-				<span class="text-gray-900">{envName()}</span>
-			</div>
-			<div class="flex justify-between">
 				<span class="font-medium">{getLabel('blog_hub_address')}:</span>
 				<code class="text-xs text-gray-900">{currentConfig.blogHubContractAddress}</code>
 			</div>

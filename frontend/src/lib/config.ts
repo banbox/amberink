@@ -13,6 +13,7 @@ import {
 	defaults,
 	ENVIRONMENT_DEFAULTS,
 	envName,
+	getCurrentEnvName,
 	getUserConfig,
 	setConfigValue,
 	updateConfig,
@@ -30,14 +31,14 @@ import {
 	getEnvNameVersion,
 	type UserConfig,
 	type UserConfigKey,
-	type ConfigFieldMeta,
-	type EnvironmentConfig
+	type ConfigFieldMeta
 } from '$lib/stores/config.svelte';
 
 // Re-export store functions for settings page
 export {
 	getConfig,
 	envName,
+	getCurrentEnvName,
 	getUserConfig,
 	setConfigValue,
 	updateConfig,
@@ -56,8 +57,7 @@ export {
 	ENVIRONMENT_DEFAULTS,
 	type UserConfig,
 	type UserConfigKey,
-	type ConfigFieldMeta,
-	type EnvironmentConfig
+	type ConfigFieldMeta
 };
 
 // Helper functions - now read from reactive store

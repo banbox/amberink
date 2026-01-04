@@ -606,16 +606,13 @@ contract BlogHub is
     }
 
     /**
-     * @dev 重写 uri 函数，使其返回 Irys 可变文件夹的预览 URL
-     * 格式: https://gateway.irys.xyz/mutable/{manifestId}/index.md
-     * 文章内容固定路径: index.md
-     * 封面图片固定路径: coverImage
+     * @dev 重写 uri 函数，使其返回预览 URL
      */
     function uri(uint256 _id) public view override returns (string memory) {
         uint256 articleId = getArticleIdFromTokenId(_id);
         if (articleId == 0 || articleId >= nextArticleId) revert ArticleNotFound();
         return
-            string(abi.encodePacked("https://gateway.irys.xyz/mutable/", articles[articleId].arweaveHash, "/index.md"));
+            string(abi.encodePacked("https://amberink.eth.limo/a/?id=", articles[articleId].arweaveHash));
     }
 
     // =============================================================
