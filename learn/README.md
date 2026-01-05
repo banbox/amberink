@@ -1593,3 +1593,19 @@ Gemini：无需修改
 @help.md 当前前端项目中充值金额是是通过defaultGasFeeMultiplier乘以gas费计算的，这不够直观，帮我改为defaultChargeAmtUsd，允许用户直接配置对应USD金额，然后充值时换算为代币数量。首先修改frontend/src/lib/stores/config.svelte.ts ，然后前端下搜索 defaultGasFeeMultiplier 忽略大小写，找到使用位置，对应进行修改  
 Claude：修改完成
 
+### 2026-01-05 11:00  session key地址优化
+frontend/src/routes/profile/+page.svelte 在session key的地址部分，帮我改为可点击的链接，点击后打开新页签，使用区块explorer打开此地址  
+Claude：修改完成  
+开发者：另外帮我把顶部当前用户的地址也改为类似链接，还有/u/ 页面的用户地址  
+Claude：修改完成
+
+### 2026-01-05 11:40  发布后文章未找到
+发布文章后跳转到详情页，可能等待的时间不够长，显示了article not found、再等待几秒刷新正常了。帮我改的时间更长些  
+Claude：修改完成
+
+### 2026-01-05 12:20  收藏弹窗优化
+@help.md 对于收藏弹窗，顶部目前显示3个：已收藏数量，价格，剩余数量。帮我改为2个：价格、已收藏数/总数；价格除了显示代币价格，还要显示换算为USD的价格。  
+Claude：修改完成  
+开发者：frontend/src/routes/a/+page.svelte 头像旁边的关注文字，应该只在当前文章作者不是当前用户时才显示  
+Claude：修改完成
+

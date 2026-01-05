@@ -19,6 +19,7 @@
 	import EndOfList from '$lib/components/EndOfList.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { getConfig } from '$lib/config';
+	import { getBlockExplorerAddressUrl } from '$lib/chain';
 	import { DocumentIcon } from '$lib/components/icons';
 
 	const PAGE_SIZE = 20;
@@ -152,6 +153,7 @@
 	<!-- Show skeleton during initial load -->
 	<ProfileSkeleton />
 {:else}
+	{@const authorAddressUrl = getBlockExplorerAddressUrl(authorId)}
 	<div class="mx-auto max-w-3xl px-6 py-8" use:infiniteScroll={scrollOptions}>
 		<!-- Author Header -->
 		<div class="mb-8">
@@ -188,7 +190,16 @@
 						{/if}
 					</div>
 
-					{#if user?.nickname}
+					{#if authorAddressUrl}
+						<a
+							href={authorAddressUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+						>
+							{authorId}
+						</a>
+					{:else}
 						<p class="text-sm text-gray-500">{authorId}</p>
 					{/if}
 

@@ -316,6 +316,7 @@
 	"latest": "最新",
 	"price": "价格",
 	"remaining": "剩余",
+	"total": "总数",
 	"collectors": "收藏者",
 	"time": "时间",
 	"collect_for": "以 {price} {symbol} 收藏",

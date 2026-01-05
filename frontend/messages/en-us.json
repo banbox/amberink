@@ -316,6 +316,7 @@
 	"latest": "Latest",
 	"price": "Price",
 	"remaining": "Remaining",
+	"total": "Total",
 	"collectors": "Collectors",
 	"time": "Time",
 	"collect_for": "Collect for {price} {symbol}",

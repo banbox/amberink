@@ -34,7 +34,7 @@
 		type StoredSessionKey
 	} from '$lib/sessionKey';
 	import { formatEthDisplay } from '$lib/data';
-	import { getBlockExplorerTxUrl } from '$lib/chain';
+	import { getBlockExplorerTxUrl, getBlockExplorerAddressUrl } from '$lib/chain';
 	import { getNativeTokenSymbol } from '$lib/priceService';
 	import { localizeHref } from '$lib/paraglide/runtime';
 
@@ -511,7 +511,19 @@
 						{user?.nickname || shortAddress(walletAddress || '')}
 					</h1>
 					{#if user?.nickname}
-						<p class="text-sm text-gray-500">{walletAddress}</p>
+						{@const userAddressUrl = getBlockExplorerAddressUrl(walletAddress || '')}
+						{#if userAddressUrl}
+							<a
+								href={userAddressUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+							>
+								{walletAddress}
+							</a>
+						{:else}
+							<p class="text-sm text-gray-500">{walletAddress}</p>
+						{/if}
 					{/if}
 					{#if user}
 						<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
@@ -651,7 +663,6 @@
 		{:else if activeTab === 'about'}
 			<div class="py-4">
 				<div class="mb-6 flex items-center justify-between">
-					<h3 class="text-lg font-medium text-gray-900">{m.bio()}</h3>
 					{#if !editingProfile}
 						<button
 							type="button"
@@ -797,6 +808,7 @@
 						{/if}
 
 						{#if sessionKey}
+							{@const addressUrl = getBlockExplorerAddressUrl(sessionKey.address)}
 							<!-- Session Key Info -->
 							<div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
 								<div class="mb-6 flex items-center justify-between">
@@ -820,7 +832,20 @@
 											<p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
 												{m.address()}
 											</p>
-											<p class="break-all font-mono text-xs text-gray-700">{sessionKey.address}</p>
+											{#if addressUrl}
+												<a
+													href={addressUrl}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="break-all font-mono text-xs text-blue-600 hover:text-blue-700 hover:underline"
+												>
+													{sessionKey.address}
+												</a>
+											{:else}
+												<p class="break-all font-mono text-xs text-gray-700">
+													{sessionKey.address}
+												</p>
+											{/if}
 										</div>
 
 										<!-- Balance -->

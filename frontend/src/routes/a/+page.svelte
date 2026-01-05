@@ -5,19 +5,17 @@
 	import { formatDateMedium, formatTimestamp, getApproxNativeAmount } from '$lib/formatUtils';
 	import { getContractErrorMessage } from '$lib/contractErrors';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
-	import { requestEncryptionKeyFromWallet, getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
+	import { getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
 	import { getCachedEncryptionKey, cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
 	import { getWalletClient, getEthereumAccount } from '$lib/wallet';
 	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
-	import type { ArticleMetadata } from '$lib/arweave/types';
 	import { onMount } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import CommentSection from '$lib/components/CommentSection.svelte';
-	import { parseEther, formatUnits } from 'viem';
 	import { client, USER_BY_ID_QUERY, ARTICLE_BY_ID_QUERY, type UserData, type ArticleDetailData } from '$lib/graphql';
 	import { page } from '$app/stores';
-	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
+	import { usdToWei, weiToUsd, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
 	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork } from '$lib/config';
 	import { getBlockExplorerTxUrl, getViewblockArweaveUrl } from '$lib/chain';
 	import {
@@ -692,8 +690,8 @@
 
 		// Load article metadata from GraphQL with retry logic
 		// For newly published articles, the indexer may not have processed the event yet
-		const MAX_RETRY_TIME = 5000; // 5 seconds max cumulative wait
-		const RETRY_DELAYS = [500, 1000, 1500, 2000]; // Exponential backoff delays
+		const MAX_RETRY_TIME = 15000; // 15 seconds max cumulative wait
+		const RETRY_DELAYS = [500, 1000, 1500, 2000, 2500, 3000, 3500]; // Exponential backoff delays
 		let totalWaitTime = 0;
 		let retryIndex = 0;
 		let loadedArticle: ArticleDetailData | null = null;
@@ -992,15 +990,17 @@
 						>
 							{displayAuthor}
 						</a>
-						<span class="text-gray-300">·</span>
-						<button
-							type="button"
-							class="text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
-							onclick={handleFollow}
-							disabled={isFollowing}
-						>
-							{isFollowing ? m.processing({}) : m.follow({})}
-						</button>
+						{#if !isAuthor}
+							<span class="text-gray-300">·</span>
+							<button
+								type="button"
+								class="text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+								onclick={handleFollow}
+								disabled={isFollowing}
+							>
+								{isFollowing ? m.processing({}) : m.follow({})}
+							</button>
+						{/if}
 					</div>
 
 					<!-- Read time & Date & Originality Tag -->
@@ -1445,24 +1445,29 @@
 				<h3 class="mb-4 text-lg font-bold text-gray-900">{m.collect_article()}</h3>
 
 				<!-- Collect Stats -->
-				<div class="mb-6 grid grid-cols-3 gap-4">
-					<div class="rounded-lg bg-gray-50 p-3 text-center">
-						<div class="text-2xl font-bold text-gray-900">{localCollectCount}</div>
-						<div class="text-xs text-gray-500">{m.collected_count()}</div>
-					</div>
+				<div class="mb-6 grid grid-cols-2 gap-4">
 					<div class="rounded-lg bg-gray-50 p-3 text-center">
 						<div class="text-2xl font-bold text-emerald-600">
 							{formatTips(article?.collectPrice || '0')}
+							{nativeSymbol}
 						</div>
-						<div class="text-xs text-gray-500">{m.price_label()} ({nativeSymbol})</div>
+						<div class="mt-1 text-xs text-gray-500">
+							{#if nativeTokenPrice}
+								{#await weiToUsd(article?.collectPrice || '0')}
+									≈ {formatUsd(0)}
+								{:then usdPrice}
+									≈ {formatUsd(usdPrice)}
+								{/await}
+							{:else}
+								{m.price_label()}
+							{/if}
+						</div>
 					</div>
 					<div class="rounded-lg bg-gray-50 p-3 text-center">
 						<div class="text-2xl font-bold text-gray-900">
-							{maxCollectSupply > 0n
-								? (maxCollectSupply - BigInt(localCollectCount)).toString()
-								: '∞'}
+							{localCollectCount}/{maxCollectSupply > 0n ? maxCollectSupply.toString() : '∞'}
 						</div>
-						<div class="text-xs text-gray-500">{m.remaining()}</div>
+						<div class="text-xs text-gray-500">{m.collected_count()}/{m.total()}</div>
 					</div>
 				</div>
 

@@ -17,6 +17,16 @@ export function getBlockExplorerTxUrl(txHash: string): string {
 	return `${baseUrl}/tx/${txHash}`;
 }
 
+/**
+ * Get block explorer URL for an address
+ */
+export function getBlockExplorerAddressUrl(address: string): string {
+	const chainId = getChainId();
+	const baseUrl = BLOCK_EXPLORER_URLS[chainId] || '';
+	if (!baseUrl) return '';
+	return `${baseUrl}/address/${address}`;
+}
+
 export function getViewblockArweaveUrl(arweaveId: string, network: 'mainnet' | 'devnet'): string {
 	if (!arweaveId) return '';
 	// Viewblock only supports Arweave mainnet
