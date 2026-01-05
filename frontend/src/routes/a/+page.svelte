@@ -2,7 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import { getCategoryName } from '$lib/categoryUtils';
-	import { formatDateMedium, formatTimestamp, getApproxNativeAmount } from '$lib/formatUtils';
+	import { formatDateMedium, formatTimestamp, getApproxNativeAmount, getReadingTime } from '$lib/formatUtils';
 	import { getContractErrorMessage } from '$lib/contractErrors';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
 	import { getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
@@ -95,11 +95,37 @@
 	let localDislikeAmount = $state('0');
 	let localCollectCount = $state(0);
 
-	async function handleCollect() {
-		if (!requireWallet() || isCollecting || !article) return;
-		// Security check: prevent self-collect
+	// Check if current user can perform action on article (prevent self-action)
+	function canPerformAction(actionName: string): boolean {
+		if (!requireWallet() || !article) return false;
 		if (isAuthor) {
-			showFeedback('error', m.cannot_action_own({ action: m.collect(), item: m.article() }));
+			showFeedback('error', m.cannot_action_own({ action: actionName, item: m.article() }));
+			return false;
+		}
+		return true;
+	}
+
+	// Generic interaction handler to reduce redundancy
+	async function executeInteraction(
+		loadingSetter: (val: boolean) => void,
+		task: () => Promise<void>,
+		successMessage?: string,
+		onSuccess?: () => void
+	) {
+		loadingSetter(true);
+		try {
+			await task();
+			if (successMessage) showFeedback('success', successMessage);
+			if (onSuccess) onSuccess();
+		} catch (error) {
+			showFeedback('error', m.interaction_failed({ error: getContractErrorMessage(error) }));
+		} finally {
+			loadingSetter(false);
+		}
+	}
+
+	async function handleCollect() {
+		if (!canPerformAction(m.collect()) || !article || isCollecting) {
 			showCollectModal = false;
 			return;
 		}
@@ -115,94 +141,29 @@
 			return;
 		}
 
-		isCollecting = true;
-		try {
-			// Use articleId for contract interaction (not arweaveId)
-			const chainArticleId = BigInt(article.articleId);
-			const priceWei = BigInt(article.collectPrice);
-			await callWithSessionKey(
-				(sk) => collectArticleWithSessionKey(sk, chainArticleId, ZERO_ADDRESS, priceWei),
-				() => collectArticle(chainArticleId, ZERO_ADDRESS, priceWei),
-				{ txValue: priceWei }
-			);
-			localCollectCount = localCollectCount + 1;
-			showFeedback('success', m.success({ action: m.collect() }));
-		} catch (error) {
-			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
-		} finally {
-			isCollecting = false;
-		}
+		await executeInteraction(
+			(v) => isCollecting = v,
+			async () => {
+				if(!article) return;
+				// Use articleId for contract interaction (not arweaveId)
+				const chainArticleId = BigInt(article.articleId);
+				const priceWei = BigInt(article.collectPrice);
+				await callWithSessionKey(
+					(sk) => collectArticleWithSessionKey(sk, chainArticleId, ZERO_ADDRESS, priceWei),
+					() => collectArticle(chainArticleId, ZERO_ADDRESS, priceWei),
+					{ txValue: priceWei }
+				);
+				localCollectCount = localCollectCount + 1;
+			},
+			m.success({ action: m.collect() })
+		);
 	}
-
-	// Format date - using centralized utility
-	const formatDate = formatDateMedium;
 
 	// Calculate reading time (words per minute)
 	// Handles both space-separated languages and character-based languages
-	function getReadingTime(content: string): number {
-		const wordsPerMinute = 200; // Reading speed for space-separated languages (English, Arabic, Hebrew, Russian, etc.)
-		const charsPerMinute = 400; // Reading speed for character-based languages (CJK, Thai, etc.)
-		
-		// Strip markdown syntax for more accurate counting
-		const plainText = content
-			.replace(/```[\s\S]*?```/g, '') // Remove code blocks
-			.replace(/`[^`]+`/g, '') // Remove inline code
-			.replace(/!?\[[^\]]*\]\([^)]*\)/g, '') // Remove links and images
-			.replace(/[#*_~`>]/g, '') // Remove markdown formatting chars
-			.trim();
-		
-		// Character-based scripts that don't use spaces between words
-		// These need to be counted by character, not by word
-		const characterBasedRegex = new RegExp([
-			// CJK (Chinese, Japanese, Korean)
-			'[\u4e00-\u9fff]',           // CJK Unified Ideographs
-			'[\u3400-\u4dbf]',           // CJK Unified Ideographs Extension A
-			'[\u{20000}-\u{2a6df}]',     // CJK Unified Ideographs Extension B
-			'[\u{2a700}-\u{2b73f}]',     // CJK Unified Ideographs Extension C
-			'[\u{2b740}-\u{2b81f}]',     // CJK Unified Ideographs Extension D
-			'[\uf900-\ufaff]',           // CJK Compatibility Ideographs
-			'[\u3040-\u309f]',           // Hiragana
-			'[\u30a0-\u30ff]',           // Katakana
-			'[\uac00-\ud7af]',           // Hangul Syllables
-			'[\u1100-\u11ff]',           // Hangul Jamo
-			// Southeast Asian scripts (no spaces between words)
-			'[\u0e00-\u0e7f]',           // Thai
-			'[\u0e80-\u0eff]',           // Lao
-			'[\u1780-\u17ff]',           // Khmer (Cambodian)
-			'[\u1000-\u109f]',           // Myanmar (Burmese)
-			// Tibetan (uses tsheg as word separator, not spaces)
-			'[\u0f00-\u0fff]',           // Tibetan
-		].join('|'), 'gu');
-		
-		const charBasedMatches = plainText.match(characterBasedRegex);
-		const charBasedCount = charBasedMatches ? charBasedMatches.length : 0;
-		
-		// Remove character-based text and count remaining words
-		// This handles all space-separated languages:
-		// - Latin (English, Spanish, French, German, Vietnamese, etc.)
-		// - Cyrillic (Russian, Ukrainian, Bulgarian, etc.)
-		// - Greek
-		// - Arabic, Hebrew (RTL languages)
-		// - Devanagari (Hindi, Sanskrit, etc.)
-		// - Bengali, Tamil, Telugu, and other South Asian scripts
-		const remainingText = plainText.replace(characterBasedRegex, ' ').trim();
-		const words = remainingText.split(/\s+/).filter(w => w.length > 0);
-		const wordCount = words.length;
-		
-		// Calculate total reading time
-		const charMinutes = charBasedCount / charsPerMinute;
-		const wordMinutes = wordCount / wordsPerMinute;
-		const totalMinutes = charMinutes + wordMinutes;
-		
-		return Math.max(1, Math.ceil(totalMinutes));
-	}
+
 
 	// getCategoryName is imported from $lib/categoryUtils
-
-	// Get cover image URL from Irys mutable folder
-	function getCoverUrl(arweaveId: string): string {
-		return getCoverImageUrl(arweaveId, true);
-	}
 
 	// Share article
 	function handleShare() {
@@ -320,8 +281,7 @@
 		}
 	}
 
-	// getErrorMessage is now imported as getContractErrorMessage from $lib/contractErrors
-	const getErrorMessage = getContractErrorMessage;
+
 
 	// Check wallet connection
 	async function checkWalletConnection() {
@@ -357,10 +317,7 @@
 
 	// Handle Dislike
 	async function handleDislike() {
-		if (!requireWallet() || !article) return;
-		// Security check: prevent self-evaluation
-		if (isAuthor) {
-			showFeedback('error', m.cannot_self_evaluate({}));
+		if (!canPerformAction(m.dislike())) {
 			showDislikeModal = false;
 			return;
 		}
@@ -369,58 +326,51 @@
 			showFeedback('error', m.invalid_amount());
 			return;
 		}
-		isDisliking = true;
-		try {
-			// Use articleId for contract interaction (not arweaveId)
-			const chainArticleId = BigInt(article.articleId);
-			// Convert USD to wei using Pyth price
-			const dislikeWei = await usdToWei(dislikeAmountUsd);
-			await callWithSessionKey(
-				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
-				() => evaluateArticle(chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
-				{ txValue: dislikeWei }
-			);
-			localDislikeAmount = (BigInt(localDislikeAmount) + dislikeWei).toString();
-			showDislikeModal = false;
-			dislikeAmountUsd = getDefaultDislikeAmountUsd();
-			showFeedback('success', m.success({ action: m.dislike() }));
-		} catch (error) {
-			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
-		} finally {
-			isDisliking = false;
-		}
+		
+		await executeInteraction(
+			(v) => isDisliking = v,
+			async () => {
+				if(!article) return;
+				const chainArticleId = BigInt(article.articleId);
+				const dislikeWei = await usdToWei(dislikeAmountUsd);
+				await callWithSessionKey(
+					(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
+					() => evaluateArticle(chainArticleId, EvaluationScore.Dislike, '', ZERO_ADDRESS, 0n, dislikeWei),
+					{ txValue: dislikeWei }
+				);
+				localDislikeAmount = (BigInt(localDislikeAmount) + dislikeWei).toString();
+			},
+			m.success({ action: m.dislike() }),
+			() => {
+				showDislikeModal = false;
+				dislikeAmountUsd = getDefaultDislikeAmountUsd();
+			}
+		);
 	}
 
 	// Handle Follow
+	// Handle Follow
 	async function handleFollow() {
-		if (!requireWallet() || isFollowing || !article) return;
-		// Security check: prevent self-follow
-		if (isAuthor) {
-			showFeedback('error', m.cannot_self_action({ action: m.follow() }));
-			return;
-		}
-		isFollowing = true;
-		try {
-			const targetAddress = (authorId || article.author?.id || '') as `0x${string}`;
-			await callWithSessionKey(
-				(sk) => followUserWithSessionKey(sk, targetAddress, true),
-				() => followUser(targetAddress, true),
-				{ txValue: 0n }
-			);
-			showFeedback('success', m.success({ action: m.follow() }));
-		} catch (error) {
-			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
-		} finally {
-			isFollowing = false;
-		}
+		if (!canPerformAction(m.follow()) || isFollowing) return;
+		
+		await executeInteraction(
+			(v) => isFollowing = v,
+			async () => {
+				const targetAddress = (authorId || article?.author?.id || '') as `0x${string}`;
+				await callWithSessionKey(
+					(sk) => followUserWithSessionKey(sk, targetAddress, true),
+					() => followUser(targetAddress, true),
+					{ txValue: 0n }
+				);
+			},
+			m.success({ action: m.follow() })
+		);
 	}
 
 	// Handle Tip
+	// Handle Tip
 	async function handleTip() {
-		if (!requireWallet() || !article) return;
-		// Security check: prevent self-evaluation
-		if (isAuthor) {
-			showFeedback('error', m.cannot_self_action({ action: 'evaluate' }));
+		if (!canPerformAction(m.tip())) {
 			showTipModal = false;
 			return;
 		}
@@ -429,56 +379,55 @@
 			showFeedback('error', m.invalid_amount());
 			return;
 		}
-		isTipping = true;
-		try {
-			// Use articleId for contract interaction (not arweaveId)
-			const chainArticleId = BigInt(article.articleId);
-			// Convert USD to wei using Pyth price
-			const tipWei = await usdToWei(tipAmountUsd);
-			await callWithSessionKey(
-				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
-				() => evaluateArticle(chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
-				{ txValue: tipWei }
-			);
-			showTipModal = false;
-			tipAmountUsd = getDefaultTipAmountUsd();
-			showFeedback('success', m.success({ action: m.tip() }));
-		} catch (error) {
-			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
-		} finally {
-			isTipping = false;
-		}
+
+		await executeInteraction(
+			(v) => isTipping = v,
+			async () => {
+				if(!article) return;
+				const chainArticleId = BigInt(article.articleId);
+				const tipWei = await usdToWei(tipAmountUsd);
+				await callWithSessionKey(
+					(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
+					() => evaluateArticle(chainArticleId, EvaluationScore.Like, '', ZERO_ADDRESS, 0n, tipWei),
+					{ txValue: tipWei }
+				);
+			},
+			m.success({ action: m.tip() }),
+			() => {
+				showTipModal = false;
+				tipAmountUsd = getDefaultTipAmountUsd();
+			}
+		);
 	}
 
 	// Handle Comment
+	// Handle Comment
 	async function handleComment(commentText: string): Promise<boolean> {
-		if (!requireWallet() || !commentText.trim() || !article) return false;
-		isCommenting = true;
-		try {
-			// Use articleId for contract interaction (not arweaveId)
-			const chainArticleId = BigInt(article.articleId);
-			// Convert minimum USD value to wei, but ensure it meets contract's minActionValue
-			const minValueUsd = getMinActionValueUsd();
-			const minValueFromUsd = await usdToWei(minValueUsd);
-			const contractMinValue = getMinActionValue();
-			// Use the larger of the two to ensure we meet both USD target and contract requirement
-			const minValue = minValueFromUsd > contractMinValue ? minValueFromUsd : contractMinValue;
-			const text = commentText.trim();
-			await callWithSessionKey(
-				(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
-				() => evaluateArticle(chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
-				{ txValue: minValue }
-			);
-			// Refresh comments after successful submission (wait for indexer)
-			await refreshArticleComments();
-			showFeedback('success', m.comment_success({}));
-			return true;
-		} catch (error) {
-			showFeedback('error', m.interaction_failed({ error: getErrorMessage(error) }));
-			return false;
-		} finally {
-			isCommenting = false;
-		}
+		if (!requireWallet() || !commentText.trim()) return false;
+		
+		let success = false;
+		await executeInteraction(
+			(v) => isCommenting = v,
+			async () => {
+				if(!article) return;
+				const chainArticleId = BigInt(article.articleId);
+				const minValueUsd = getMinActionValueUsd();
+				const minValueFromUsd = await usdToWei(minValueUsd);
+				const contractMinValue = getMinActionValue();
+				const minValue = minValueFromUsd > contractMinValue ? minValueFromUsd : contractMinValue;
+				const text = commentText.trim();
+				await callWithSessionKey(
+					(sk) => evaluateArticleWithSessionKey(sk, chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
+					() => evaluateArticle(chainArticleId, EvaluationScore.Neutral, text, ZERO_ADDRESS, 0n, minValue),
+					{ txValue: minValue }
+				);
+				// Refresh comments after successful submission (wait for indexer)
+				await refreshArticleComments();
+				success = true;
+			},
+			m.comment_success({})
+		);
+		return success;
 	}
 
 	// Refresh article comments from GraphQL (waits for indexer to process)
@@ -509,8 +458,7 @@
 		}
 	}
 
-	// getApproxNativeAmount wrapper using imported function
-	const calcApproxNativeAmount = (usdAmount: string) => getApproxNativeAmount(usdAmount, nativeTokenPrice);
+
 
 	// Get author ID from article data
 	const articleAuthorId = $derived(
@@ -522,7 +470,7 @@
 	const authorId = $derived(author.id || articleAuthorId || '');
 
 	// article.id is now arweaveId (primary key)
-	const coverUrl = $derived(article ? getCoverUrl(article.id) : '');
+	const coverUrl = $derived(article ? getCoverImageUrl(article.id, true) : '');
 	const categoryName = $derived(article ? getCategoryName(article.categoryId) : '');
 	// Display author name: prefer fetched nickname > article.author.nickname > originalAuthor > short address
 	const displayAuthor = $derived(
@@ -614,10 +562,7 @@
 
 	// formatTimestamp is imported from $lib/formatUtils
 
-	// Get word count from content
-	function getWordCount(content: string): number {
-		return content.trim().split(/\s+/).length;
-	}
+
 
 	// Toggle versions dropdown
 	async function toggleVersionsDropdown() {
@@ -966,19 +911,7 @@
 			<div class="flex items-center gap-3">
 				<!-- Avatar -->
 				<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
-					{#if getAvatarUrl(authorAvatar)}
-						<img
-							src={getAvatarUrl(authorAvatar)}
-							alt=""
-							class="h-11 w-11 rounded-full object-cover"
-						/>
-					{:else}
-						<div
-							class="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
-						>
-							{authorInitials}
-						</div>
-					{/if}
+					{@render avatar(getAvatarUrl(authorAvatar), authorInitials)}
 				</a>
 
 				<div class="flex flex-1 flex-col">
@@ -1010,7 +943,7 @@
 							<span>·</span>
 						{/if}
 						<time datetime={article.createdAt}>
-							{formatDate(article.createdAt)}
+							{formatDateMedium(article.createdAt)}
 						</time>
 						<span>·</span>
 						<!-- Originality Tag -->
@@ -1372,7 +1305,7 @@
 							{#if priceLoading}
 								{m.price_loading({})}
 							{:else if nativeTokenPrice}
-								≈ {calcApproxNativeAmount(config.value)} {nativeSymbol}
+								≈ {getApproxNativeAmount(config.value, nativeTokenPrice)} {nativeSymbol}
 							{/if}
 						</div>
 					</div>
@@ -1422,6 +1355,23 @@
 						</button>
 					</div>
 				</div>
+			</div>
+		{/if}
+	{/snippet}
+
+	{#snippet avatar(
+		url: string | null | undefined,
+		initials: string,
+		size: string = 'h-11 w-11',
+		textSize: string = 'text-sm'
+	)}
+		{#if url}
+			<img src={url} alt="" class="{size} rounded-full object-cover" />
+		{:else}
+			<div
+				class="flex {size} items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 {textSize} font-medium text-white"
+			>
+				{initials}
 			</div>
 		{/if}
 	{/snippet}
@@ -1494,19 +1444,12 @@
 													href={localizeHref(`/u?id=${collection.user.id}`)}
 													class="flex items-center gap-2 hover:underline"
 												>
-													{#if getAvatarUrl(collection.user.avatar)}
-														<img
-															src={getAvatarUrl(collection.user.avatar)}
-															alt=""
-															class="h-6 w-6 rounded-full object-cover"
-														/>
-													{:else}
-														<div
-															class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-xs font-medium text-white"
-														>
-															{collection.user.id.slice(2, 4).toUpperCase()}
-														</div>
-													{/if}
+													{@render avatar(
+														getAvatarUrl(collection.user.avatar),
+														collection.user.id.slice(2, 4).toUpperCase(),
+														'h-6 w-6',
+														'text-xs'
+													)}
 													<span class="truncate text-gray-700"
 														>{collection.user.nickname || shortAddress(collection.user.id)}</span
 													>
@@ -1516,7 +1459,7 @@
 												{formatTips(collection.amount)}
 											</td>
 											<td class="px-3 py-2 text-right text-gray-500">
-												{formatDate(collection.createdAt)}
+												{formatDateMedium(collection.createdAt)}
 											</td>
 										</tr>
 									{/each}
