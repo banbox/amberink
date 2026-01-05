@@ -39,9 +39,6 @@ export const ESTIMATED_GAS_UNITS = 500000n;
 // 价格服务相关常量
 // ============================================
 
-/** 价格过期阈值（秒）- 超过此时间的价格视为过期 */
-export const PRICE_STALE_THRESHOLD_SECONDS = 3600;
-
 /** 价格合理性验证上限（USD）- 用于检测异常价格 */
 export const MAX_REASONABLE_PRICE_USD = 1000000;
 

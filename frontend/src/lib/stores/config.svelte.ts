@@ -71,7 +71,7 @@ export const ENVIRONMENT_DEFAULTS: Record<'dev' | 'test' | 'prod', Partial<Defau
 	test: {
 		rpcUrl: 'https://sepolia.optimism.io',
 		chainId: 11155420,
-		subsquidEndpoint: 'https://amberink.banbot.site/graphql'
+		subsquidEndpoint: 'https://amberinktest.banbot.site/graphql'
 	},
 	prod: {
 		rpcUrl: 'https://mainnet.optimism.io',

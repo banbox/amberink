@@ -1,38 +1,21 @@
 /**
  * Price Service - Fetches native token prices from Pyth Network
- * Uses viem to interact with Pyth oracle contracts
+ * Uses Hermes API for fresh off-chain prices with on-chain fallback
  * Supports multiple chains (OP, Polygon, Arbitrum, Base, etc.)
  */
 
-import { createPublicClient, http, parseUnits, formatUnits } from 'viem';
-import { getChainConfig } from '$lib/chain';
-import { getRpcUrl, getChainId } from '$lib/config';
-import { getConfig, getPythContractAddress, getPythPriceFeedId, CHAIN_NATIVE_TOKEN, envName } from '$lib/stores/config.svelte';
-import { PRICE_STALE_THRESHOLD_SECONDS, MAX_REASONABLE_PRICE_USD } from './constants';
+import { parseUnits, formatUnits } from 'viem';
+import { getChainId } from '$lib/config';
+import { getConfig, getPythContractAddress, getPythPriceFeedId, CHAIN_NATIVE_TOKEN } from '$lib/stores/config.svelte';
+import { MAX_REASONABLE_PRICE_USD } from './constants';
 
-// Pyth Network ABI (minimal - only getPriceUnsafe)
-const PYTH_ABI = [
-	{
-		name: 'getPriceUnsafe',
-		type: 'function',
-		inputs: [{ name: 'id', type: 'bytes32' }],
-		outputs: [
-			{
-				name: '',
-				type: 'tuple',
-				components: [
-					{ name: 'price', type: 'int64' },
-					{ name: 'conf', type: 'uint64' },
-					{ name: 'expo', type: 'int32' },
-					{ name: 'publishTime', type: 'uint256' }
-				]
-			}
-		],
-		stateMutability: 'view'
-	}
-] as const;
+// Hermes API endpoint for fetching latest prices
+const HERMES_API_URL = 'https://hermes.pyth.network';
 
-// Price cache to avoid excessive RPC calls
+// Maximum age for price data from Hermes (in seconds)
+const HERMES_PRICE_MAX_AGE_SECONDS = 3600;
+
+// Price cache to avoid excessive API/RPC calls
 interface PriceCache {
 	price: number;
 	timestamp: number;
@@ -42,8 +25,87 @@ interface PriceCache {
 let priceCache: PriceCache | null = null;
 
 /**
+ * Hermes API response types
+ */
+interface HermesPriceData {
+	price: string;
+	conf: string;
+	expo: number;
+	publish_time: number;
+}
+
+interface HermesParsedPrice {
+	id: string;
+	price: HermesPriceData;
+	ema_price: HermesPriceData;
+}
+
+interface HermesResponse {
+	binary: {
+		encoding: string;
+		data: string[];
+	};
+	parsed: HermesParsedPrice[];
+}
+
+/**
+ * Fetch price from Hermes API (off-chain, real-time)
+ * This is the recommended approach for frontend applications
+ * @param priceFeedId - The Pyth price feed ID (with 0x prefix)
+ * @returns The price in USD, or null if failed
+ */
+async function fetchPriceFromHermes(priceFeedId: string): Promise<number | null> {
+	try {
+		// Remove 0x prefix if present for the API call
+		const feedIdWithoutPrefix = priceFeedId.startsWith('0x')
+			? priceFeedId.slice(2)
+			: priceFeedId;
+
+		const url = `${HERMES_API_URL}/v2/updates/price/latest?ids[]=${feedIdWithoutPrefix}`;
+		const response = await fetch(url);
+
+		if (!response.ok) {
+			console.warn(`Hermes API returned status ${response.status}`);
+			return null;
+		}
+
+		const data: HermesResponse = await response.json();
+
+		if (!data.parsed || data.parsed.length === 0) {
+			console.warn('No parsed price data in Hermes response');
+			return null;
+		}
+
+		const priceData = data.parsed[0].price;
+		const publishTime = priceData.publish_time;
+		const now = Math.floor(Date.now() / 1000);
+		const priceAge = now - publishTime;
+
+		// Check if price is too stale
+		if (priceAge > HERMES_PRICE_MAX_AGE_SECONDS) {
+			console.warn(`Hermes price is stale (${priceAge}s old, max allowed: ${HERMES_PRICE_MAX_AGE_SECONDS}s)`);
+			return null;
+		}
+
+		// Convert price: Price = price * 10^expo
+		const rawPrice = BigInt(priceData.price);
+		const expo = priceData.expo;
+		const price = Number(rawPrice) * Math.pow(10, expo);
+
+		console.log(`Hermes price: $${price.toFixed(2)} (age: ${priceAge}s)`);
+		return price;
+	} catch (error) {
+		console.warn('Failed to fetch price from Hermes:', error);
+		return null;
+	}
+}
+
+/**
  * Get the current native token price in USD from Pyth Network
- * Returns the price with caching to avoid excessive RPC calls
+ * Strategy:
+ * 1. First try Hermes API (off-chain, always fresh)
+ * 2. Use fallback price if both fail
+ * Returns the price with caching to avoid excessive calls
  */
 export async function getNativeTokenPriceUsd(): Promise<number> {
 	const config = getConfig();
@@ -72,76 +134,24 @@ export async function getNativeTokenPriceUsd(): Promise<number> {
 		return fallbackPrice;
 	}
 
-	try {
-		const chain = getChainConfig();
-		const publicClient = createPublicClient({
-			chain,
-			transport: http(getRpcUrl())
-		});
+	// Strategy 1: Try Hermes API first (fastest, always fresh)
+	let price = await fetchPriceFromHermes(priceFeedId);
 
-		// Get price from Pyth
-		const priceData = await publicClient.readContract({
-			address: pythContractAddress,
-			abi: PYTH_ABI,
-			functionName: 'getPriceUnsafe',
-			args: [priceFeedId]
-		});
-		console.log('pyth price', pythContractAddress, priceData);
-
-		const { price: rawPrice, expo, publishTime } = priceData;
-
-		// Check if price is stale
-		const now = Math.floor(Date.now() / 1000);
-		const priceAge = now - Number(publishTime);
-		
-		// In test environment, allow much older prices (30 days)
-		const isTestEnv = envName() != "prod"; // Sepolia or Anvil
-		const staleThreshold = isTestEnv ? 90 * 24 * 3600 : PRICE_STALE_THRESHOLD_SECONDS; // 30 days for test, 1 hour for prod
-		
-		if (priceAge > staleThreshold) {
-			// Stale price is expected on low-activity chains, use fallback silently
-			console.warn(`Pyth price is stale (${priceAge}s old, threshold: ${staleThreshold}s), using fallback`);
-			priceCache = {
-				price: fallbackPrice,
-				timestamp: Date.now(),
-				chainId
-			};
-			return fallbackPrice;
-		}
-
-		// Convert price: Price = price * 10^expo
-		const price = Number(rawPrice) * Math.pow(10, Number(expo));
-
-		// Sanity check - only warn if we got data but it's invalid
-		if (price <= 0 || price > MAX_REASONABLE_PRICE_USD) {
-			console.warn('Invalid price from Pyth, using fallback:', price);
-			priceCache = {
-				price: fallbackPrice,
-				timestamp: Date.now(),
-				chainId
-			};
-			return fallbackPrice;
-		}
-
-		// Update cache
-		priceCache = {
-			price,
-			timestamp: Date.now(),
-			chainId
-		};
-
-		console.log(`Pyth price for chain ${chainId}: $${price.toFixed(2)}`);
-		return price;
-	} catch (error) {
-		console.error('Failed to fetch Pyth price:', error);
-		// Use fallback on error
-		priceCache = {
-			price: fallbackPrice,
-			timestamp: Date.now(),
-			chainId
-		};
-		return fallbackPrice;
+	// Sanity check final price
+	if (!price || price <= 0 || price > MAX_REASONABLE_PRICE_USD) {
+		console.warn('Final price invalid, using fallback:', price);
+		price = fallbackPrice;
 	}
+
+	// Update cache
+	priceCache = {
+		price,
+		timestamp: Date.now(),
+		chainId
+	};
+
+	console.log(`Final price for chain ${chainId}: $${price.toFixed(2)}`);
+	return price;
 }
 
 /**

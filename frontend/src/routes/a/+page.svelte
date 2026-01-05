@@ -9,7 +9,7 @@
 	import { getCachedEncryptionKey, cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
 	import { getWalletClient, getEthereumAccount } from '$lib/wallet';
 	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import CommentSection from '$lib/components/CommentSection.svelte';
@@ -94,6 +94,10 @@
 	// Local counts (optimistic updates)
 	let localDislikeAmount = $state('0');
 	let localCollectCount = $state(0);
+
+	// Reactive article ID and version from URL - triggers article reload on navigation
+	const currentArticleId = $derived($page.url.searchParams.get('id'));
+	const currentVersionTxId = $derived($page.url.searchParams.get('v'));
 
 	// Check if current user can perform action on article (prevent self-action)
 	function canPerformAction(actionName: string): boolean {
@@ -620,18 +624,128 @@
 		}
 	});
 
-	// Load article data and content
-	onMount(async () => {
-		// Get article ID and version from URL
-		const articleId = $page.url.searchParams.get('id');
-		versionTxId = $page.url.searchParams.get('v');
-		
+	// Reset article state for new article load
+	function resetArticleState() {
+		article = null;
+		articleContent = null;
+		articleError = null;
+		contentError = null;
+		articleLoading = true;
+		contentLoading = true;
+		authorData = null;
+		currentUserData = null;
+		versions = [];
+		versionsLoaded = false;
+		versionsLoading = false;
+		currentVersionIndex = null;
+		currentVersionMeta = null;
+		currentIrysTxId = null;
+		localDislikeAmount = '0';
+		localCollectCount = 0;
+		showVersionsDropdown = false;
+	}
+
+	// Load article content (from Arweave)
+	async function loadArticleContent(loadedArticle: ArticleDetailData, versionId: string | null) {
+		try {
+			// If viewing a specific version, fetch that version's content and metadata
+			if (versionId) {
+				// Load versions to get metadata for the current version
+				if (!versionsLoaded) {
+					await loadVersions();
+				}
+				// Find the current version's metadata
+				const versionInfo = versions.find(v => v.txId === versionId);
+				if (versionInfo) {
+					currentVersionMeta = {
+						title: versionInfo.title,
+						owner: versionInfo.owner,
+						timestamp: versionInfo.timestamp
+					};
+				}
+				// Use the version tx ID for the Irys explorer link
+				currentIrysTxId = versionId;
+				articleContent = await fetchArticleVersionContent(versionId);
+			} else {
+				// Check if article is encrypted (visibility === 2)
+				if (loadedArticle.visibility === 2) {
+					console.log('Encrypted article detected, checking if current user is author...');
+					// Check if current user is the author
+					if (walletAddress && walletAddress.toLowerCase() === loadedArticle.author.id.toLowerCase()) {
+						console.log('Current user is author, attempting to decrypt...');
+						try {
+							const wClient = await getWalletClient();
+							const account = await getEthereumAccount();
+							if (wClient && account) {
+								// 首先尝试从缓存获取解密密钥
+								let decryptionKey = await getCachedEncryptionKey(loadedArticle.id);
+								
+								if (decryptionKey) {
+									console.log('Using cached encryption key');
+									try {
+										articleContent = await fetchArticleMarkdown(loadedArticle.id, true, decryptionKey);
+										console.log('Article decrypted successfully with cached key');
+									} catch (cacheDecryptError) {
+										// 缓存的密钥无效，清除缓存并重新请求签名
+										console.warn('Cached key failed, requesting new signature...', cacheDecryptError);
+										decryptionKey = null;
+									}
+								}
+								
+								// 如果缓存不存在或无效，请求新签名
+								if (!decryptionKey || !articleContent) {
+									console.log('Requesting wallet signature for decryption key...');
+									const message = getSignMessageForArticle(loadedArticle.id);
+									const signature = await wClient.signMessage({ account, message });
+									console.log('Wallet signature obtained');
+									
+									// 缓存签名以供下次使用
+									cacheEncryptionSignature(loadedArticle.id, signature);
+									
+									// 从签名派生密钥
+									decryptionKey = await deriveEncryptionKey(signature);
+									articleContent = await fetchArticleMarkdown(loadedArticle.id, true, decryptionKey);
+									console.log('Article decrypted successfully with new key');
+								}
+							} else {
+								contentError = 'Please connect your wallet to decrypt this article.';
+							}
+						} catch (decryptError) {
+							console.error('Failed to decrypt article:', decryptError);
+							contentError = 'Failed to decrypt article. Please try again.';
+						}
+					} else {
+						// Not the author - show encrypted message
+						console.log('Current user is not author, showing encrypted message');
+						contentError = 'This article is encrypted and can only be read by the author.';
+					}
+				} else {
+					// Normal (non-encrypted) article
+					articleContent = await fetchArticleMarkdown(loadedArticle.id);
+				}
+				// Query the latest Irys tx ID for the explorer link
+				currentIrysTxId = await queryLatestIrysTxId(loadedArticle.id);
+			}
+		} catch (e) {
+			contentError = e instanceof Error ? e.message : 'Failed to load article content';
+			console.error('Failed to fetch article content:', e);
+		} finally {
+			contentLoading = false;
+		}
+	}
+
+	// Load article data from GraphQL and content from Arweave
+	async function loadArticle(articleId: string, versionId: string | null) {
 		if (!articleId) {
 			articleError = 'Article ID is required';
 			articleLoading = false;
 			contentLoading = false;
 			return;
 		}
+
+		// Reset state for new article
+		resetArticleState();
+		versionTxId = versionId;
 
 		// Load article metadata from GraphQL with retry logic
 		// For newly published articles, the indexer may not have processed the event yet
@@ -696,9 +810,31 @@
 		// Load native token price for USD conversion
 		loadNativeTokenPrice();
 		
-		// Fetch author data first
+		// Fetch author data
 		fetchAuthorData();
 		
+		// Fetch current user data if wallet is connected
+		if (walletAddress) {
+			fetchCurrentUserData(walletAddress);
+		}
+		
+		// Load article content
+		await loadArticleContent(loadedArticle, versionId);
+	}
+
+	// React to article ID changes from URL navigation
+	$effect(() => {
+		const articleId = currentArticleId;
+		const versionId = currentVersionTxId;
+		untrack(() => {
+			if (articleId) {
+				loadArticle(articleId, versionId);
+			}
+		});
+	});
+
+	// One-time initialization: event listeners and wallet setup
+	onMount(() => {
 		// Close dropdown when clicking outside
 		const handleClickOutside = (e: MouseEvent) => {
 			if (showVersionsDropdown) {
@@ -710,110 +846,32 @@
 		};
 		document.addEventListener('click', handleClickOutside);
 		
-		await checkWalletConnection();
-		const eth = typeof window !== 'undefined' ? window.ethereum : undefined;
-		eth?.on?.('accountsChanged', async (accounts: unknown) => {
-			const accts = accounts as string[];
-			walletAddress = accts.length > 0 ? accts[0] : null;
-			if (walletAddress) {
-				sessionKey = getStoredSessionKey(walletAddress);
-				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
-				fetchCurrentUserData(walletAddress);
-			} else {
-				sessionKey = null;
-				hasValidSessionKey = false;
-				currentUserData = null;
-			}
-		});
-		try {
-			// If viewing a specific version, fetch that version's content and metadata
-			if (versionTxId) {
-				// Load versions to get metadata for the current version
-				if (!versionsLoaded) {
-					await loadVersions();
-				}
-				// Find the current version's metadata
-				const versionInfo = versions.find(v => v.txId === versionTxId);
-				if (versionInfo) {
-					currentVersionMeta = {
-						title: versionInfo.title,
-						owner: versionInfo.owner,
-						timestamp: versionInfo.timestamp
-					};
-				}
-				// Use the version tx ID for the Irys explorer link
-				currentIrysTxId = versionTxId;
-				articleContent = await fetchArticleVersionContent(versionTxId);
-			} else if (!articleContent) {
-				// Content not loaded yet (initial load failed or skipped), try again
-				// article.id is now arweaveId
-				// 详情页只需要 content，不需要 summary
-				
-				// Check if article is encrypted (visibility === 2)
-				if (article.visibility === 2) {
-					console.log('Encrypted article detected, checking if current user is author...');
-					// Check if current user is the author
-					if (walletAddress && walletAddress.toLowerCase() === article.author.id.toLowerCase()) {
-						console.log('Current user is author, attempting to decrypt...');
-						try {
-							const wClient = await getWalletClient();
-							const account = await getEthereumAccount();
-							if (wClient && account) {
-								// 首先尝试从缓存获取解密密钥
-								let decryptionKey = await getCachedEncryptionKey(article.id);
-								
-								if (decryptionKey) {
-									console.log('Using cached encryption key');
-									try {
-										articleContent = await fetchArticleMarkdown(article.id, true, decryptionKey);
-										console.log('Article decrypted successfully with cached key');
-									} catch (cacheDecryptError) {
-										// 缓存的密钥无效，清除缓存并重新请求签名
-										console.warn('Cached key failed, requesting new signature...', cacheDecryptError);
-										decryptionKey = null;
-									}
-								}
-								
-								// 如果缓存不存在或无效，请求新签名
-								if (!decryptionKey || !articleContent) {
-									console.log('Requesting wallet signature for decryption key...');
-									const message = getSignMessageForArticle(article.id);
-									const signature = await wClient.signMessage({ account, message });
-									console.log('Wallet signature obtained');
-									
-									// 缓存签名以供下次使用
-									cacheEncryptionSignature(article.id, signature);
-									
-									// 从签名派生密钥
-									decryptionKey = await deriveEncryptionKey(signature);
-									articleContent = await fetchArticleMarkdown(article.id, true, decryptionKey);
-									console.log('Article decrypted successfully with new key');
-								}
-							} else {
-								contentError = 'Please connect your wallet to decrypt this article.';
-							}
-						} catch (decryptError) {
-							console.error('Failed to decrypt article:', decryptError);
-							contentError = 'Failed to decrypt article. Please try again.';
-						}
-					} else {
-						// Not the author - show encrypted message
-						console.log('Current user is not author, showing encrypted message');
-						contentError = 'This article is encrypted and can only be read by the author.';
-					}
+		// Async initialization (wallet setup) - wrapped in IIFE to keep onMount sync
+		(async () => {
+			// Check wallet connection
+			await checkWalletConnection();
+			
+			// Listen for account changes
+			const eth = typeof window !== 'undefined' ? window.ethereum : undefined;
+			eth?.on?.('accountsChanged', async (accounts: unknown) => {
+				const accts = accounts as string[];
+				walletAddress = accts.length > 0 ? accts[0] : null;
+				if (walletAddress) {
+					sessionKey = getStoredSessionKey(walletAddress);
+					hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+					fetchCurrentUserData(walletAddress);
 				} else {
-					// Normal (non-encrypted) article
-					articleContent = await fetchArticleMarkdown(article.id);
+					sessionKey = null;
+					hasValidSessionKey = false;
+					currentUserData = null;
 				}
-				// Query the latest Irys tx ID for the explorer link
-				currentIrysTxId = await queryLatestIrysTxId(article.id);
-			}
-		} catch (e) {
-			contentError = e instanceof Error ? e.message : 'Failed to load article content';
-			console.error('Failed to fetch article content:', e);
-		} finally {
-			contentLoading = false;
-		}
+			});
+		})();
+		
+		// Cleanup on unmount (must be returned synchronously)
+		return () => {
+			document.removeEventListener('click', handleClickOutside);
+		};
 	});
 </script>
 

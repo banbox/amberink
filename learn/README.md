@@ -1615,3 +1615,11 @@ Claude：修改完成
 开发者：使用[### 2026-01-03 14:20  代码优化]提示词对profile页面进行代码优化  
 gemini：已完成
 
+### 2026-01-05 19:10  详情页链接未跳转
+@help.md 当前是文章详情页，URL比如https://amberink.eth.limo/zh-cn/a/?id=4rrEn9sWsQ5DWi2xSmEHwAWtkhuHdevt5ymMYSddaR8z，我发现点击内容中的链接时，比如https://amberink.eth.limo/zh-cn/a/?id=G4Zcp5maZzfZRQzspmyKgKfVE4taqvsWBDwwGAeB69hP，这时只有query params中的id发生了变化，页面立刻显示到了顶部，然后没有发生任何变化，正常应该是重新加载页面，使用变化后的id请求数据显示对应内容。
+请帮我排查当前未生效的原因，并解决  
+Claude：已解决
+
+### 2026-01-05 19:55  pyth价格过期
+[getPriceNoOlderThan文档](https://api-reference.pyth.network/price-feeds/evm/getPriceNoOlderThan)当前通过pyth获取指定品种价格，通过getPriceUnsafe方法。但是经常返回的是延迟很久的价格，帮我改为使用getPriceNoOlderThan方法。其说明如上。注意应当始终先调用updatePriceFeeds然后再调用getPriceNoOlderThan  
+Claude：updatePriceFeeds需要付费，不适合线下使用，已改为从Hermes API获取最新价格。  
