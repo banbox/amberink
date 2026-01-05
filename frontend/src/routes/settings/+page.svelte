@@ -8,7 +8,7 @@
 		isConfigOverridden,
 		getEnvDefault,
 		configFields,
-		MIN_DEFAULT_GAS_FEE_MULTIPLIER,
+		MIN_DEFAULT_CHARGE_AMT_USD,
 		type UserConfigKey,
 		getConfig
 	} from '$lib/config';
@@ -74,10 +74,10 @@
 
 	// Validate field value
 	function validateField(key: UserConfigKey, value: number | string | string[]): string | null {
-		if (key === 'defaultGasFeeMultiplier') {
-			const numValue = typeof value === 'string' ? parseInt(value, 10) : value as number;
-			if (isNaN(numValue) || numValue < MIN_DEFAULT_GAS_FEE_MULTIPLIER) {
-				return getLabel('gas_multiplier_min_error').replace('{min}', String(MIN_DEFAULT_GAS_FEE_MULTIPLIER));
+		if (key === 'defaultChargeAmtUsd') {
+			const numValue = typeof value === 'string' ? parseFloat(value) : value as number;
+			if (isNaN(numValue) || numValue < MIN_DEFAULT_CHARGE_AMT_USD) {
+				return getLabel('charge_usd_min_error').replace('{min}', String(MIN_DEFAULT_CHARGE_AMT_USD));
 			}
 		}
 		return null;
@@ -167,7 +167,7 @@
 <!-- Fixed Toast Messages at top of viewport -->
 <div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
 	{#if showSuccessToast}
-		<div 
+		<div
 			class="rounded-lg bg-green-600 px-4 py-3 text-sm text-white shadow-lg pointer-events-auto animate-fade-in"
 			role="status"
 		>
@@ -175,7 +175,7 @@
 		</div>
 	{/if}
 	{#if showErrorToast}
-		<div 
+		<div
 			class="rounded-lg bg-red-600 px-4 py-3 text-sm text-white shadow-lg pointer-events-auto animate-fade-in"
 			role="alert"
 		>

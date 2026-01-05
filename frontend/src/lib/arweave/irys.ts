@@ -24,7 +24,8 @@ import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2';
 import { createWalletClient, createPublicClient, custom, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { IrysConfig } from './types';
-import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getIrysFreeUploadLimit } from '$lib/config';
+import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultChargeAmtUsd, getIrysFreeUploadLimit } from '$lib/config';
+import { usdToWei, formatUsd } from '$lib/priceService';
 import { getChainConfig } from '$lib/chain';
 import { getEthereumAccount } from '$lib/wallet';
 import type { StoredSessionKey } from '$lib/sessionKey';
@@ -111,7 +112,7 @@ function createLocalSignerProvider(
 			if (method === 'eth_signTypedData_v4' || method === 'eth_signTypedData') {
 				const [, typedDataJson] = params as [string, string];
 				const typedData = JSON.parse(typedDataJson);
-				
+
 				// 使用 viem 的 signTypedData
 				const signature = await account.signTypedData({
 					domain: typedData.domain,
@@ -121,15 +122,15 @@ function createLocalSignerProvider(
 				});
 				return signature;
 			}
-			
+
 			if (method === 'personal_sign') {
 				const [message] = params as [string, string];
-				const signature = await account.signMessage({ 
+				const signature = await account.signMessage({
 					message: { raw: message as `0x${string}` }
 				});
 				return signature;
 			}
-			
+
 			if (method === 'eth_sign') {
 				const [, message] = params as [string, string];
 				const signature = await account.signMessage({
@@ -137,16 +138,16 @@ function createLocalSignerProvider(
 				});
 				return signature;
 			}
-			
+
 			if (method === 'eth_accounts' || method === 'eth_requestAccounts') {
 				return [account.address];
 			}
-			
+
 			if (method === 'eth_chainId') {
 				const chain = getChainConfig();
 				return `0x${chain.id.toString(16)}`;
 			}
-			
+
 			// 其他请求转发到 RPC
 			const response = await fetch(rpcUrl, {
 				method: 'POST',
@@ -313,9 +314,22 @@ async function calculateMinIrysBalance(uploader: IrysUploader, dataSize: number)
  */
 async function calculateIrysFundAmount(uploader: IrysUploader, dataSize: number) {
 	const price = await uploader.getPrice(dataSize);
-	const defaultMultiplier = getDefaultGasFeeMultiplier();
-	// Multiply price by defaultMultiplier for comfortable buffer
-	return price.multipliedBy(defaultMultiplier);
+
+	// Get default charge amount in USD and convert to wei
+	try {
+		const chargeAmtUsd = parseFloat(getDefaultChargeAmtUsd());
+		const chargeAmtWei = await usdToWei(chargeAmtUsd);
+		// Convert wei (bigint) to atomic (BigNumber) - Irys uses same 18 decimals as ETH
+		const { formatEther } = await import('viem');
+		const chargeAmtEth = formatEther(chargeAmtWei);
+		const chargeAmtAtomic = uploader.utils.toAtomic(chargeAmtEth);
+
+		// Return max of price and charge amount
+		return price.gt(chargeAmtAtomic) ? price : chargeAmtAtomic;
+	} catch {
+		// Fallback to price-based calculation if USD conversion fails
+		return price.multipliedBy(10);
+	}
 }
 
 /**
@@ -364,25 +378,25 @@ export async function ensureIrysBalance(
 	const price = await uploader.getPrice(dataSize);
 	const minBalance = await calculateMinIrysBalance(uploader, dataSize);
 	const fundAmount = await calculateIrysFundAmount(uploader, dataSize);
-	
+
 	const balanceReadable = uploader.utils.fromAtomic(balance).toString();
 	const priceReadable = uploader.utils.fromAtomic(price).toString();
 	const minBalanceReadable = uploader.utils.fromAtomic(minBalance).toString();
 	const fundAmountReadable = uploader.utils.fromAtomic(fundAmount).toString();
-	
+
 	console.log(`Irys balance: ${balanceReadable} ${uploader.token}, price: ${priceReadable}, min required: ${minBalanceReadable}`);
-	
+
 	if (balance.gte(minBalance)) {
 		console.log('Irys balance sufficient');
 		return true;
 	}
-	
+
 	// Ensure fund amount meets minimum requirement
 	const actualFundAmount = fundAmount.gte(minBalance) ? fundAmount : minBalance;
 	const actualFundReadable = uploader.utils.fromAtomic(actualFundAmount).toString();
-	
-	console.log(`Irys balance insufficient, funding ${actualFundReadable} ${uploader.token} (${getDefaultGasFeeMultiplier()}x price)...`);
-	
+
+	console.log(`Irys balance insufficient, funding ${actualFundReadable} ${uploader.token} (${formatUsd(getDefaultChargeAmtUsd())} USD)...`);
+
 	try {
 		await fundIrys(uploader, actualFundReadable);
 		return true;

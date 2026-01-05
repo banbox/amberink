@@ -1588,3 +1588,8 @@ Gemini：修改完成
 Gemini：没考虑L1 data费用导致，修改完成  
 开发者：但我的dapp后续要兼容其他layer 2链，其他链可能没有l1 data fee；请考虑兼容性，帮我在这里进行更友好更符合最佳实践的改动  
 Gemini：无需修改
+
+### 2026-01-05 10:00  充值金额优化
+@help.md 当前前端项目中充值金额是是通过defaultGasFeeMultiplier乘以gas费计算的，这不够直观，帮我改为defaultChargeAmtUsd，允许用户直接配置对应USD金额，然后充值时换算为代币数量。首先修改frontend/src/lib/stores/config.svelte.ts ，然后前端下搜索 defaultGasFeeMultiplier 忽略大小写，找到使用位置，对应进行修改  
+Claude：修改完成
+

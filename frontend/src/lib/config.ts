@@ -22,7 +22,7 @@ import {
 	isConfigOverridden,
 	getEnvDefault,
 	configFields,
-	MIN_DEFAULT_GAS_FEE_MULTIPLIER,
+	MIN_DEFAULT_CHARGE_AMT_USD,
 	getPythContractAddress,
 	getPythPriceFeedId,
 	PYTH_CONTRACT_ADDRESSES,
@@ -47,7 +47,7 @@ export {
 	isConfigOverridden,
 	getEnvDefault,
 	configFields,
-	MIN_DEFAULT_GAS_FEE_MULTIPLIER,
+	MIN_DEFAULT_CHARGE_AMT_USD,
 	getPythContractAddress,
 	getPythPriceFeedId,
 	PYTH_CONTRACT_ADDRESSES,
@@ -93,8 +93,8 @@ export function getMinGasFeeMultiplier(): number {
 	return getConfig().minGasFeeMultiplier;
 }
 
-export function getDefaultGasFeeMultiplier(): number {
-	return getConfig().defaultGasFeeMultiplier;
+export function getDefaultChargeAmtUsd(): string {
+	return getConfig().defaultChargeAmtUsd;
 }
 
 export function getIrysFreeUploadLimit(): number {

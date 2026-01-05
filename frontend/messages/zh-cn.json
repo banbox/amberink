@@ -228,8 +228,8 @@
 	"network": "网络",
 	"gateways": "网关",
 	"add_gateway": "添加网关",
-	"gas_multiplier": "Gas 费用倍数（最小：{min}）",
-	"gas_multiplier_error": "Gas 费用倍数最小为 {min}",
+	"default_charge_usd": "默认充值金额（美元）",
+	"charge_usd_min_error": "充值金额最小为 ${min}",
 	"fixed_config": "固定配置（只读）",
 	"current_environment": "当前环境",
 	"fixed_config_note": "这些值根据所选链自动确定",
@@ -412,6 +412,6 @@
 	"env_test": "测试环境",
 	"env_prod": "生产环境",
 	"fixed_configuration": "固定配置(只读)",
-	"gas_multiplier_min_error": "Gas 费用倍数最小为 {min}",
+	"charge_usd_min_error_2": "充值金额最小为 ${min}",
 	"reset_default": "重置为默认值"
 }

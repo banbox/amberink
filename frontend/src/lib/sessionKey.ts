@@ -5,12 +5,13 @@
 
 import { formatEther, parseEther, createWalletClient, http } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultGasFeeMultiplier, getRpcUrl, envName } from '$lib/config';
+import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultChargeAmtUsd, getRpcUrl, envName } from '$lib/config';
 import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
 import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
 import { getIrysUploaderDevnet, getIrysUploader, type IrysUploader } from '$lib/arweave/irys';
 import { getIrysNetwork } from '$lib/config';
+import { usdToWei } from '$lib/priceService';
 import {
 	SESSION_KEY_DEFAULT_SPENDING_LIMIT,
 	SESSION_KEY_DURATION_SECONDS,
@@ -197,7 +198,7 @@ export async function fundSessionKey(
 ): Promise<string> {
 	const walletClient = await getWalletClient();
 	const minBalance = await calculateGasAmount(getMinGasFeeMultiplier());
-	const fundAmount = amount ?? await calculateGasAmount(getDefaultGasFeeMultiplier());
+	const fundAmount = amount ?? await usdToWei(getDefaultChargeAmtUsd());
 	const actualAmount = fundAmount >= minBalance ? fundAmount : minBalance;
 
 	console.log(`Funding session key with ${formatEther(actualAmount)} ETH (min: ${formatEther(minBalance)} ETH)`);
@@ -241,7 +242,7 @@ export async function ensureSessionKeyBalance(
 	try {
 		// Fund with enough for gas + txValue + buffer
 		// Always include txValue in the fund amount to ensure we have enough for the transaction
-		const gasBuffer = await calculateGasAmount(getDefaultGasFeeMultiplier());
+		const gasBuffer = await usdToWei(getDefaultChargeAmtUsd());
 		const actualFundAmount = gasBuffer + txValue;
 		await fundSessionKey(sessionKeyAddress, actualFundAmount);
 

@@ -41,7 +41,7 @@ export const defaults = {
 	irysNetwork: 'devnet' as 'mainnet' | 'devnet',
 	// Gas settings
 	minGasFeeMultiplier: 10,
-	defaultGasFeeMultiplier: 30,
+	defaultChargeAmtUsd: '1.00',
 	// Irys settings
 	irysFreeUploadLimit: 102400,
 	minActionValue: '20000000000000', // Store as string for JSON serialization
@@ -132,7 +132,7 @@ export type UserConfigKey =
 	| 'chainId'
 	| 'arweaveGateways'
 	| 'subsquidEndpoint'
-	| 'defaultGasFeeMultiplier'
+	| 'defaultChargeAmtUsd'
 	| 'defaultTipAmountUsd'
 	| 'defaultDislikeAmountUsd'
 	| 'defaultCollectPriceUsd'
@@ -144,7 +144,7 @@ export interface UserConfig {
 	chainId?: number;
 	arweaveGateways?: string[];
 	subsquidEndpoint?: string;
-	defaultGasFeeMultiplier?: number;
+	defaultChargeAmtUsd?: string;
 	defaultTipAmountUsd?: string;
 	defaultDislikeAmountUsd?: string;
 	defaultCollectPriceUsd?: string;
@@ -162,8 +162,8 @@ export interface ConfigFieldMeta {
 	description?: string;
 }
 
-// Minimum value for defaultGasFeeMultiplier
-export const MIN_DEFAULT_GAS_FEE_MULTIPLIER = 10;
+// Minimum value for defaultChargeAmtUsd
+export const MIN_DEFAULT_CHARGE_AMT_USD = 0.01;
 
 // ============================================
 // Helper functions
@@ -232,10 +232,10 @@ export const configFields: ConfigFieldMeta[] = [
 		placeholder: 'https://gateway.irys.xyz'
 	},
 	{
-		key: 'defaultGasFeeMultiplier',
-		labelKey: 'gas_multiplier',
-		type: 'number',
-		placeholder: '30'
+		key: 'defaultChargeAmtUsd',
+		labelKey: 'default_charge_usd',
+		type: 'text',
+		placeholder: '1.00'
 	},
 	{
 		key: 'defaultTipAmountUsd',
@@ -358,7 +358,7 @@ export function getConfig() {
 		chainId,
 		arweaveGateways: userConfig.arweaveGateways || envDefaults.arweaveGateways,
 		subsquidEndpoint: userConfig.subsquidEndpoint || envDefaults.subsquidEndpoint,
-		defaultGasFeeMultiplier: userConfig.defaultGasFeeMultiplier ?? envDefaults.defaultGasFeeMultiplier,
+		defaultChargeAmtUsd: userConfig.defaultChargeAmtUsd || envDefaults.defaultChargeAmtUsd,
 		// USD pricing (user-overridable, uses fixed defaults)
 		defaultTipAmountUsd: userConfig.defaultTipAmountUsd || envDefaults.defaultTipAmountUsd,
 		defaultDislikeAmountUsd: userConfig.defaultDislikeAmountUsd || envDefaults.defaultDislikeAmountUsd,
@@ -486,15 +486,15 @@ export function isConfigOverridden(key: UserConfigKey): boolean {
  */
 export function getEnvDefault<K extends UserConfigKey>(key: K) {
 	const envDefaults = getCurrentEnvDefaults();
-	
+
 	// envName default
 	if (key === 'envName') return DEFAULT_ENV;
-	
+
 	// All other keys come from merged defaults
 	if (key in envDefaults) {
 		return envDefaults[key as keyof DefaultsConfig];
 	}
-	
+
 	// Fallback (should not reach here)
 	throw new Error(`Unknown config key: ${key}`);
 }

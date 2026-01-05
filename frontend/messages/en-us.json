@@ -228,8 +228,8 @@
 	"network": "Network",
 	"gateways": "Gateways",
 	"add_gateway": "Add Gateway",
-	"gas_multiplier": "Gas Fee Multiplier (min: {min})",
-	"gas_multiplier_error": "Gas fee multiplier must be at least {min}",
+	"default_charge_usd": "Default Charge Amount (USD)",
+	"charge_usd_min_error": "Charge amount must be at least ${min}",
 	"fixed_config": "Fixed Configuration (Read-Only)",
 	"current_environment": "Current Environment",
 	"fixed_config_note": "These values are automatically determined based on the selected chain",
@@ -412,6 +412,6 @@
 	"env_test": "Test",
 	"env_prod": "Production",
 	"fixed_configuration": "Fixed Configuration (Read-Only)",
-	"gas_multiplier_min_error": "Gas fee multiplier must be at least {min}",
+	"charge_usd_min_error_2": "Charge amount must be at least ${min}",
 	"reset_default": "Reset to Default"
 }
