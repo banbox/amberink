@@ -4,11 +4,11 @@
 	import { getCategoryName } from '$lib/categoryUtils';
 	import { formatDateMedium, formatTimestamp, getApproxNativeAmount, getReadingTime } from '$lib/formatUtils';
 	import { getContractErrorMessage } from '$lib/contractErrors';
-	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown } from '$lib/arweave';
+	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown, fetchArticleMetadataFromIrys, type IrysArticleMetadata } from '$lib/arweave';
 	import { getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
 	import { getCachedEncryptionKey, cacheEncryptionSignature } from '$lib/arweave/encryptionKeyCache';
 	import { getWalletClient, getEthereumAccount } from '$lib/wallet';
-	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion, getStaticFolderUrl, getMutableFolderUrl, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
+	import { queryArticleVersions, fetchArticleVersionContent, queryLatestIrysTxId, type ArticleVersion } from '$lib/arweave/folder';
 	import { onMount, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
@@ -16,7 +16,7 @@
 	import { client, USER_BY_ID_QUERY, ARTICLE_BY_ID_QUERY, type UserData, type ArticleDetailData } from '$lib/graphql';
 	import { page } from '$app/stores';
 	import { usdToWei, weiToUsd, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
-	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork } from '$lib/config';
+	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork, setEphemeralEnvName } from '$lib/config';
 	import { getBlockExplorerTxUrl, getViewblockArweaveUrl } from '$lib/chain';
 	import {
 		EvaluationScore,
@@ -38,6 +38,11 @@
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { ClockIcon, ThumbsUpIcon, ThumbsDownIcon, CommentIcon, BookmarkIcon, CloseIcon, BackIcon, EditIcon, ShareIcon, SpinnerIcon } from '$lib/components/icons';
 	import OriginalityTag from '$lib/components/OriginalityTag.svelte';
+	import AmountModal from '$lib/components/AmountModal.svelte';
+	import ArticleSkeleton from '$lib/components/ArticleSkeleton.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
+	import CollectModal from '$lib/components/CollectModal.svelte';  // new component
+	import { processContentImages, getScoreColor, pollForArticleWithRetry } from '$lib/utils/articleUtils';
 
 	// Native token price state
 	let nativeTokenPrice = $state<number | null>(null);
@@ -60,6 +65,10 @@
 	
 	// Current user data (for comment section)
 	let currentUserData = $state<UserData | null>(null);
+
+	// Irys metadata (for cross-chain display when Subsquid is unavailable)
+	let irysMetadata = $state<IrysArticleMetadata | null>(null);
+	let irysMetadataLoading = $state(false);
 
 	// Wallet & Session Key state
 	let walletAddress = $state<string | null>(null);
@@ -95,9 +104,10 @@
 	let localDislikeAmount = $state('0');
 	let localCollectCount = $state(0);
 
-	// Reactive article ID and version from URL - triggers article reload on navigation
-	const currentArticleId = $derived($page.url.searchParams.get('id'));
-	const currentVersionTxId = $derived($page.url.searchParams.get('v'));
+	// Article ID and version from URL - initialized in onMount to avoid prerendering issues
+	let currentArticleId = $state<string | null>(null);
+	let currentVersionTxId = $state<string | null>(null);
+	let isMounted = $state(false);
 
 	// Check if current user can perform action on article (prevent self-action)
 	function canPerformAction(actionName: string): boolean {
@@ -166,9 +176,6 @@
 	// Calculate reading time (words per minute)
 	// Handles both space-separated languages and character-based languages
 
-
-	// getCategoryName is imported from $lib/categoryUtils
-
 	// Share article
 	function handleShare() {
 		if (!article) return;
@@ -207,12 +214,6 @@
 	 * - Creates new session key only if needed (one popup)
 	 * - Funds session key only if balance is low (one popup)
 	 * - Falls back to regular wallet call if user rejects
-	 * 
-	 * @param withSessionKey - Function to call with session key
-	 * @param withoutSessionKey - Fallback function for regular wallet call
-	 * @param options - Optional configuration
-	 * @param options.autoCreate - If true, auto-create session key if not available (default: true)
-	 * @param options.txValue - Transaction value in wei (e.g., tip amount) to include in balance check
 	 */
 	async function callWithSessionKey<T>(
 		withSessionKey: (sk: StoredSessionKey) => Promise<T>,
@@ -287,6 +288,20 @@
 
 
 
+	// Generic user data fetcher
+	async function fetchUserData(address: string): Promise<UserData | null> {
+		if (!address) return null;
+		try {
+			const result = await client
+				.query(USER_BY_ID_QUERY, { id: address.toLowerCase() }, { requestPolicy: 'cache-first' })
+				.toPromise();
+			return result.data?.userById ?? null;
+		} catch (e) {
+			console.error('Failed to fetch user data for', address, e);
+			return null;
+		}
+	}
+
 	// Check wallet connection
 	async function checkWalletConnection() {
 		if (typeof window === 'undefined' || !window.ethereum) return;
@@ -297,25 +312,10 @@
 				sessionKey = getStoredSessionKey(walletAddress);
 				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
 				// Fetch current user data
-				fetchCurrentUserData(accounts[0]);
+				currentUserData = await fetchUserData(accounts[0]);
 			}
 		} catch (e) {
 			console.error('Failed to check wallet:', e);
-		}
-	}
-	
-	// Fetch current user data for comment section
-	async function fetchCurrentUserData(address: string) {
-		if (!article) return;
-		try {
-			const result = await client
-				.query(USER_BY_ID_QUERY, { id: address.toLowerCase() }, { requestPolicy: 'cache-first' })
-				.toPromise();
-			if (result.data?.userById) {
-				currentUserData = result.data.userById;
-			}
-		} catch (e) {
-			console.error('Failed to fetch current user data:', e);
 		}
 	}
 
@@ -353,7 +353,6 @@
 	}
 
 	// Handle Follow
-	// Handle Follow
 	async function handleFollow() {
 		if (!canPerformAction(m.follow()) || isFollowing) return;
 		
@@ -371,7 +370,6 @@
 		);
 	}
 
-	// Handle Tip
 	// Handle Tip
 	async function handleTip() {
 		if (!canPerformAction(m.tip())) {
@@ -464,19 +462,26 @@
 
 
 
-	// Get author ID from article data
+	// Get author ID from article data or Irys metadata
 	const articleAuthorId = $derived(
-		(article?.author?.id || '').toLowerCase()
+		(article?.author?.id || irysMetadata?.author || '').toLowerCase()
 	);
 
 	// Use fetched authorData if available, fallback to article.author
-	const author = $derived(authorData ?? article?.author ?? { id: '', nickname: null, avatar: null });
+	const author = $derived(authorData ?? article?.author ?? { id: irysMetadata?.author || '', nickname: null, avatar: null });
 	const authorId = $derived(author.id || articleAuthorId || '');
 
-	// article.id is now arweaveId (primary key)
-	const coverUrl = $derived(article ? getCoverImageUrl(article.id, true) : '');
+	// article.id is now arweaveId (primary key), also available as currentArticleId in Irys-only mode
+	const articleIdForDisplay = $derived(article?.id || currentArticleId || '');
+	const coverUrl = $derived(articleIdForDisplay ? getCoverImageUrl(articleIdForDisplay, true) : '');
 	const categoryName = $derived(article ? getCategoryName(article.categoryId) : '');
-	// Display author name: prefer fetched nickname > article.author.nickname > originalAuthor > short address
+	
+	// Display title: prefer version meta > article > irysMetadata
+	const displayTitle = $derived(
+		currentVersionMeta?.title || article?.title || irysMetadata?.title || 'Untitled'
+	);
+	
+	// Display author name: prefer fetched nickname > article.author.nickname > originalAuthor > irysMetadata author > short address
 	const displayAuthor = $derived(
 		authorData?.nickname ||
 		author.nickname ||
@@ -516,15 +521,7 @@
 		return Math.round(score * 10) / 10;
 	});
 	
-	// Get gradient color based on score (0-10)
-	function getScoreColor(score: number | null): string {
-		if (score === null) return 'text-gray-400';
-		if (score >= 8) return 'bg-gradient-to-r from-emerald-500 to-green-400 bg-clip-text text-transparent';
-		if (score >= 6) return 'bg-gradient-to-r from-lime-500 to-emerald-400 bg-clip-text text-transparent';
-		if (score >= 4) return 'bg-gradient-to-r from-amber-500 to-yellow-400 bg-clip-text text-transparent';
-		if (score >= 2) return 'bg-gradient-to-r from-orange-500 to-amber-400 bg-clip-text text-transparent';
-		return 'bg-gradient-to-r from-red-500 to-orange-400 bg-clip-text text-transparent';
-	}
+
 
 	// Fetch author data separately (SubSquid relation resolution has issues)
 	async function fetchAuthorData() {
@@ -532,17 +529,7 @@
 		const targetAuthorId = articleAuthorId;
 		if (!targetAuthorId || targetAuthorId === ZERO_ADDRESS) return;
 		
-		try {
-			const result = await client
-				.query(USER_BY_ID_QUERY, { id: targetAuthorId }, { requestPolicy: 'cache-first' })
-				.toPromise();
-			
-			if (result.data?.userById) {
-				authorData = result.data.userById;
-			}
-		} catch (e) {
-			console.error('Failed to fetch author data:', e);
-		}
+		authorData = await fetchUserData(targetAuthorId);
 	}
 
 	// Load article history versions
@@ -564,10 +551,6 @@
 		}
 	}
 
-	// formatTimestamp is imported from $lib/formatUtils
-
-
-
 	// Toggle versions dropdown
 	async function toggleVersionsDropdown() {
 		if (!versionsLoaded) {
@@ -579,42 +562,6 @@
 	// Check if viewing a specific version (not latest)
 	const isViewingOldVersion = $derived(!!versionTxId && article && versionTxId !== article.id);
 
-	// Get version cover URL (use static URL for specific version)
-	function getVersionCoverUrl(txId: string): string {
-		return getStaticFolderUrl(txId, ARTICLE_COVER_IMAGE_FILE);
-	}
-
-	/**
-	 * Process article content to replace relative image URLs with full Irys URLs
-	 * Handles two formats:
-	 * 1. Markdown: ![alt](filename.png) -> ![alt](https://{host}/mutable/{arweaveId}/filename.png)
-	 * 2. HTML: <img src="filename.jpg" ... /> -> <img src="https://{host}/mutable/{arweaveId}/filename.jpg" ... />
-	 * @param content - The markdown content
-	 * @param arweaveId - The article's arweave ID (manifest ID)
-	 * @param useMutable - Whether to use mutable URL (true for latest, false for specific version)
-	 */
-	function processContentImages(content: string, arweaveId: string, useMutable = true): string {
-		// Use getMutableFolderUrl/getStaticFolderUrl which handle devnet/mainnet correctly
-		const baseUrl = useMutable 
-			? getMutableFolderUrl(arweaveId)
-			: getStaticFolderUrl(arweaveId);
-		
-		// Process Markdown image syntax: ![alt](relative-path)
-		// Only replace if the path is relative (not starting with http://, https://, or /)
-		let processed = content.replace(
-			/!\[([^\]]*)\]\((?!https?:\/\/)(?!\/)([\w\-\.]+)\)/g,
-			(_, alt, filename) => `![${alt}](${baseUrl}/${filename})`
-		);
-		
-		// Process HTML img tags: <img src="relative-path" ... />
-		// Only replace if src is relative (not starting with http://, https://, or /)
-		processed = processed.replace(
-			/<img\s+([^>]*?)src=["'](?!https?:\/\/)(?!\/)([^"']+)["']([^>]*?)>/gi,
-			(_, before, filename, after) => `<img ${before}src="${baseUrl}/${filename}"${after}>`
-		);
-
-		return processed;
-	}
 
 	// Initialize local counts after article is loaded
 	$effect(() => {
@@ -643,11 +590,33 @@
 		localDislikeAmount = '0';
 		localCollectCount = 0;
 		showVersionsDropdown = false;
+		// Reset Irys metadata
+		irysMetadata = null;
+		irysMetadataLoading = false;
 	}
 
-	// Load article content (from Arweave)
-	async function loadArticleContent(loadedArticle: ArticleDetailData, versionId: string | null) {
+	/**
+	 * Load article content from Arweave
+	 * This function works independently of Subsquid data, using only Irys data
+	 * @param articleId - The manifest ID of the article
+	 * @param versionId - Optional version TX ID for historical versions
+	 * @param metadata - Optional Irys metadata (visibility, author) to avoid repeated fetching
+	 */
+	async function loadArticleContent(articleId: string, versionId: string | null, metadata?: IrysArticleMetadata | null) {
 		try {
+			// Use passed metadata, or fall back to stored irysMetadata, or fetch if not available
+			let meta = metadata || irysMetadata;
+			if (!meta) {
+				meta = await fetchArticleMetadataFromIrys(articleId);
+				if (meta) {
+					irysMetadata = meta;
+				}
+			}
+
+			// Determine visibility and author from Irys metadata or Subsquid data
+			const visibility = meta?.visibility ?? article?.visibility ?? 0;
+			const authorAddress = meta?.author?.toLowerCase() || article?.author?.id?.toLowerCase() || '';
+
 			// If viewing a specific version, fetch that version's content and metadata
 			if (versionId) {
 				// Load versions to get metadata for the current version
@@ -668,22 +637,22 @@
 				articleContent = await fetchArticleVersionContent(versionId);
 			} else {
 				// Check if article is encrypted (visibility === 2)
-				if (loadedArticle.visibility === 2) {
+				if (visibility === 2) {
 					console.log('Encrypted article detected, checking if current user is author...');
 					// Check if current user is the author
-					if (walletAddress && walletAddress.toLowerCase() === loadedArticle.author.id.toLowerCase()) {
+					if (walletAddress && walletAddress.toLowerCase() === authorAddress) {
 						console.log('Current user is author, attempting to decrypt...');
 						try {
 							const wClient = await getWalletClient();
 							const account = await getEthereumAccount();
 							if (wClient && account) {
 								// 首先尝试从缓存获取解密密钥
-								let decryptionKey = await getCachedEncryptionKey(loadedArticle.id);
+								let decryptionKey = await getCachedEncryptionKey(articleId);
 								
 								if (decryptionKey) {
 									console.log('Using cached encryption key');
 									try {
-										articleContent = await fetchArticleMarkdown(loadedArticle.id, true, decryptionKey);
+										articleContent = await fetchArticleMarkdown(articleId, true, decryptionKey);
 										console.log('Article decrypted successfully with cached key');
 									} catch (cacheDecryptError) {
 										// 缓存的密钥无效，清除缓存并重新请求签名
@@ -695,16 +664,16 @@
 								// 如果缓存不存在或无效，请求新签名
 								if (!decryptionKey || !articleContent) {
 									console.log('Requesting wallet signature for decryption key...');
-									const message = getSignMessageForArticle(loadedArticle.id);
+									const message = getSignMessageForArticle(articleId);
 									const signature = await wClient.signMessage({ account, message });
 									console.log('Wallet signature obtained');
 									
 									// 缓存签名以供下次使用
-									cacheEncryptionSignature(loadedArticle.id, signature);
+									cacheEncryptionSignature(articleId, signature);
 									
 									// 从签名派生密钥
 									decryptionKey = await deriveEncryptionKey(signature);
-									articleContent = await fetchArticleMarkdown(loadedArticle.id, true, decryptionKey);
+									articleContent = await fetchArticleMarkdown(articleId, true, decryptionKey);
 									console.log('Article decrypted successfully with new key');
 								}
 							} else {
@@ -721,10 +690,10 @@
 					}
 				} else {
 					// Normal (non-encrypted) article
-					articleContent = await fetchArticleMarkdown(loadedArticle.id);
+					articleContent = await fetchArticleMarkdown(articleId);
 				}
 				// Query the latest Irys tx ID for the explorer link
-				currentIrysTxId = await queryLatestIrysTxId(loadedArticle.id);
+				currentIrysTxId = await queryLatestIrysTxId(articleId);
 			}
 		} catch (e) {
 			contentError = e instanceof Error ? e.message : 'Failed to load article content';
@@ -735,6 +704,7 @@
 	}
 
 	// Load article data from GraphQL and content from Arweave
+	// Implements parallel loading: Irys content loads immediately while waiting for Subsquid
 	async function loadArticle(articleId: string, versionId: string | null) {
 		if (!articleId) {
 			articleError = 'Article ID is required';
@@ -747,94 +717,195 @@
 		resetArticleState();
 		versionTxId = versionId;
 
+		// Start loading content from Irys immediately (parallel with Subsquid query)
+		// This enables cross-chain display even when Subsquid hasn't indexed yet
+		const irysLoadPromise = loadArticleFromIrys(articleId, versionId);
+
 		// Load article metadata from GraphQL with retry logic
 		// For newly published articles, the indexer may not have processed the event yet
-		const MAX_RETRY_TIME = 15000; // 15 seconds max cumulative wait
-		const RETRY_DELAYS = [500, 1000, 1500, 2000, 2500, 3000, 3500]; // Exponential backoff delays
-		let totalWaitTime = 0;
-		let retryIndex = 0;
-		let loadedArticle: ArticleDetailData | null = null;
+		let loadedArticle = await pollForArticleWithRetry(client, articleId);
 
-		while (totalWaitTime < MAX_RETRY_TIME) {
-			try {
-				const result = await client.query(ARTICLE_BY_ID_QUERY, { id: articleId }, { requestPolicy: 'network-only' }).toPromise();
+		// Wait for Irys loading to complete
+		await irysLoadPromise;
 
-				if (result.error) {
-					articleError = result.error.message;
-					articleLoading = false;
-					contentLoading = false;
-					return;
-				}
+		// If we have article from Subsquid, use it and load additional content
+		if (loadedArticle) {
+			article = loadedArticle;
+			articleLoading = false;
+			
+			// Load native token price for USD conversion
+			loadNativeTokenPrice();
+			
+			// Fetch author data
+			fetchAuthorData();
+			
+			// Fetch current user data if wallet is connected
+			if (walletAddress) {
+				currentUserData = await fetchUserData(walletAddress);
+			}
+			
+			// If content wasn't loaded by Irys loading (e.g. encrypted article), load it now
+			if (!articleContent && !contentError) {
+				await loadArticleContent(loadedArticle.id, versionId, irysMetadata);
+			} else {
+				contentLoading = false;
+			}
+		} else {
+			// No Subsquid data available - use Irys-only mode
+			// This enables cross-chain display when Subsquid hasn't indexed the article
+			if (irysMetadata || articleContent) {
+				console.log('Using Irys-only display mode (Subsquid data not available)');
+				
+				// Construct a temporary article object from Irys metadata
+				article = {
+					id: articleId,
+					articleId: '0', // Placeholder, not on chain yet
+					title: irysMetadata?.title || 'Untitled',
+					summary: irysMetadata?.summary || '',
+					author: {
+						id: irysMetadata?.author || '',
+						nickname: null,
+						avatar: null
+					},
+					originalAuthor: null,
+					categoryId: '0', // Default category
+					visibility: irysMetadata?.visibility ?? 0,
+					originality: irysMetadata?.originality ?? 0,
+					createdAt: irysMetadata?.timestamp ? new Date(irysMetadata.timestamp).toISOString() : new Date().toISOString(),
+					blockNumber: 0,
+					txHash: '',
+					// Default stats
+					totalTips: '0',
+					likeAmount: '0',
+					dislikeAmount: '0',
+					collectCount: '0',
+					royaltyBps: 0,
+					collectPrice: '0',
+					maxCollectSupply: '0',
+					comments: [],
+					collections: []
+				};
 
-				loadedArticle = result.data?.articleById ?? null;
-
-				if (loadedArticle) {
-					// Found the article, break out of retry loop
-					break;
-				}
-
-				// Article not found, wait and retry
-				if (retryIndex < RETRY_DELAYS.length) {
-					const delay = RETRY_DELAYS[retryIndex];
-					if (totalWaitTime + delay > MAX_RETRY_TIME) {
-						// Would exceed max wait time, stop retrying
-						break;
-					}
-					console.log(`Article not found in index, retrying in ${delay}ms... (attempt ${retryIndex + 1})`);
-					await new Promise(resolve => setTimeout(resolve, delay));
-					totalWaitTime += delay;
-					retryIndex++;
+				articleLoading = false;
+				
+				// If content wasn't loaded (e.g. encrypted article), try loading it now
+				if (!articleContent && !contentError) {
+					await loadArticleContent(articleId, versionId, irysMetadata);
 				} else {
-					// No more retries
-					break;
+					contentLoading = false;
 				}
-			} catch (e) {
-				articleError = e instanceof Error ? e.message : 'Failed to load article';
-				console.error('Failed to load article:', e);
+			} else {
+				articleError = 'Article not found';
 				articleLoading = false;
 				contentLoading = false;
-				return;
 			}
 		}
-
-		if (!loadedArticle) {
-			articleError = 'Article not found';
-			articleLoading = false;
-			contentLoading = false;
-			return;
-		}
-
-		article = loadedArticle;
-		articleLoading = false;
-		
-		// Load native token price for USD conversion
-		loadNativeTokenPrice();
-		
-		// Fetch author data
-		fetchAuthorData();
-		
-		// Fetch current user data if wallet is connected
-		if (walletAddress) {
-			fetchCurrentUserData(walletAddress);
-		}
-		
-		// Load article content
-		await loadArticleContent(loadedArticle, versionId);
 	}
 
-	// React to article ID changes from URL navigation
+	/**
+	 * Load article content and metadata from Irys
+	 * This is called in parallel with Subsquid query for faster display
+	 */
+	async function loadArticleFromIrys(articleId: string, versionId: string | null) {
+		try {
+			irysMetadataLoading = true;
+
+			// Start both content and metadata loading in parallel
+			const metadataPromise = fetchArticleMetadataFromIrys(articleId);
+			const contentPromise = (async () => {
+				try {
+					if (versionId) {
+						// For specific version, load from static URL
+						return await fetchArticleVersionContent(versionId);
+					} else {
+						// For latest version, use mutable URL
+						// Note: encrypted articles need special handling (done by loadArticleContent later)
+						return await fetchArticleMarkdown(articleId);
+					}
+				} catch (e) {
+					console.warn('Failed to load article content from Irys:', e);
+					return null;
+				}
+			})();
+
+			const [metadata, content] = await Promise.all([metadataPromise, contentPromise]);
+
+			// Update state with Irys data
+			if (metadata) {
+				irysMetadata = metadata;
+				console.log('Irys metadata loaded:', metadata);
+			}
+
+			if (content) {
+				// Check if content is encrypted (starts with enc: prefix)
+				if (metadata?.encrypted || content.startsWith('enc:')) {
+					// Encrypted content - don't set articleContent here
+					// It will be handled by loadArticleContent which has access to wallet
+					console.log('Article is encrypted, deferring decryption to loadArticleContent');
+				} else {
+					articleContent = content;
+					console.log('Article content loaded from Irys');
+				}
+			}
+
+			// Update current Irys TX ID for explorer link
+			currentIrysTxId = versionId || await queryLatestIrysTxId(articleId);
+		} catch (e) {
+			console.error('Error loading from Irys:', e);
+		} finally {
+			irysMetadataLoading = false;
+			// Mark content loading as complete if we got content
+			if (articleContent) {
+				contentLoading = false;
+			}
+		}
+	}
+
+	// React to article ID changes from URL navigation (only after mount)
 	$effect(() => {
-		const articleId = currentArticleId;
-		const versionId = currentVersionTxId;
+		// Guard: only run when mounted (client-side) and URL is accessible
+		if (!isMounted) return;
+		
+		// Read URL params reactively - this creates the dependency
+		const articleId = $page.url.searchParams.get('id');
+		const versionId = $page.url.searchParams.get('v');
+		
+		// Update state and trigger article load if changed
 		untrack(() => {
-			if (articleId) {
-				loadArticle(articleId, versionId);
+			const idChanged = articleId !== currentArticleId;
+			const versionChanged = versionId !== currentVersionTxId;
+			
+			if (idChanged || versionChanged) {
+				currentArticleId = articleId;
+				currentVersionTxId = versionId;
+				if (articleId) {
+					loadArticle(articleId, versionId);
+				}
 			}
 		});
 	});
 
 	// One-time initialization: event listeners and wallet setup
 	onMount(() => {
+		// Initialize URL params from client-side (avoid prerendering issues)
+		currentArticleId = $page.url.searchParams.get('id');
+		currentVersionTxId = $page.url.searchParams.get('v');
+		
+		// Check for ephemeral env parameter
+		const envParam = $page.url.searchParams.get('env');
+		if (envParam && (envParam === 'dev' || envParam === 'test' || envParam === 'prod')) {
+			console.log(`Setting ephemeral environment to: ${envParam}`);
+			setEphemeralEnvName(envParam);
+		}
+
+		// Mark as mounted - this triggers the $effect to start watching URL changes
+		isMounted = true;
+		
+		// Initial article load
+		if (currentArticleId) {
+			loadArticle(currentArticleId, currentVersionTxId);
+		}
+		
 		// Close dropdown when clicking outside
 		const handleClickOutside = (e: MouseEvent) => {
 			if (showVersionsDropdown) {
@@ -859,7 +930,7 @@
 				if (walletAddress) {
 					sessionKey = getStoredSessionKey(walletAddress);
 					hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
-					fetchCurrentUserData(walletAddress);
+					currentUserData = await fetchUserData(walletAddress);
 				} else {
 					sessionKey = null;
 					hasValidSessionKey = false;
@@ -871,6 +942,8 @@
 		// Cleanup on unmount (must be returned synchronously)
 		return () => {
 			document.removeEventListener('click', handleClickOutside);
+			// Reset ephemeral environment on unmount
+			setEphemeralEnvName(null);
 		};
 	});
 </script>
@@ -880,52 +953,7 @@
 </svelte:head>
 
 {#if articleLoading}
-	<!-- Skeleton Screen -->
-	<article class="mx-auto w-full max-w-[680px] px-6 py-12">
-		<!-- Title Skeleton -->
-		<header class="mb-8">
-			<div class="mb-6 h-20 w-full animate-pulse rounded-lg bg-gray-200"></div>
-
-			<!-- Author Info Skeleton -->
-			<div class="flex items-center gap-3">
-				<div class="h-11 w-11 shrink-0 animate-pulse rounded-full bg-gray-200"></div>
-				<div class="flex flex-1 flex-col gap-2">
-					<div class="h-5 w-32 animate-pulse rounded bg-gray-200"></div>
-					<div class="h-4 w-48 animate-pulse rounded bg-gray-200"></div>
-				</div>
-			</div>
-		</header>
-
-		<!-- Interaction Bar Skeleton -->
-		<div class="mb-8">
-			<div class="flex items-center justify-between border-y border-gray-100 py-3">
-				<div class="flex items-center gap-5">
-					<div class="h-6 w-8 animate-pulse rounded bg-gray-200"></div>
-					<div class="h-6 w-16 animate-pulse rounded bg-gray-200"></div>
-					<div class="h-6 w-12 animate-pulse rounded bg-gray-200"></div>
-					<div class="h-6 w-12 animate-pulse rounded bg-gray-200"></div>
-				</div>
-				<div class="flex items-center gap-3">
-					<div class="h-6 w-6 animate-pulse rounded bg-gray-200"></div>
-					<div class="h-6 w-6 animate-pulse rounded bg-gray-200"></div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Cover Image Skeleton -->
-		<div class="mb-10 h-96 w-full animate-pulse rounded-lg bg-gray-200"></div>
-
-		<!-- Content Skeleton -->
-		<div class="prose prose-lg max-w-none space-y-4">
-			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
-			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
-			<div class="h-4 w-3/4 animate-pulse rounded bg-gray-200"></div>
-			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
-			<div class="h-4 w-5/6 animate-pulse rounded bg-gray-200"></div>
-			<div class="h-4 w-full animate-pulse rounded bg-gray-200"></div>
-			<div class="h-4 w-2/3 animate-pulse rounded bg-gray-200"></div>
-		</div>
-	</article>
+	<ArticleSkeleton />
 {:else if articleError}
 	<div class="mx-auto max-w-2xl px-6 py-16">
 		<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
@@ -962,14 +990,14 @@
 		<!-- Title -->
 		<header class="mb-8">
 			<h1 class="mb-6 font-serif text-[32px] font-bold leading-tight text-gray-900 sm:text-[42px]">
-				{currentVersionMeta?.title || article.title || `Article #${article.articleId}`}
+				{displayTitle}
 			</h1>
 
 			<!-- Author Info Bar -->
 			<div class="flex items-center gap-3">
 				<!-- Avatar -->
 				<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
-					{@render avatar(getAvatarUrl(authorAvatar), authorInitials)}
+					<Avatar url={getAvatarUrl(authorAvatar)} initials={authorInitials} />
 				</a>
 
 				<div class="flex flex-1 flex-col">
@@ -1000,12 +1028,14 @@
 							<span>{m.min_read({ count: readingTime })}</span>
 							<span>·</span>
 						{/if}
-						<time datetime={article.createdAt}>
-							{formatDateMedium(article.createdAt)}
-						</time>
-						<span>·</span>
+						{#if article?.createdAt}
+							<time datetime={article.createdAt}>
+								{formatDateMedium(article.createdAt)}
+							</time>
+							<span>·</span>
+						{/if}
 						<!-- Originality Tag -->
-						<OriginalityTag originality={article.originality} />
+						<OriginalityTag originality={article?.originality ?? 0} />
 					</div>
 				</div>
 			</div>
@@ -1306,293 +1336,56 @@
 		</details>
 	</article>
 
-	{#snippet amountModal(config: {
-	show: boolean,
-	onClose: () => void,
-	title: string,
-	description?: string,
-	labelText: string,
-	inputId: string,
-	value: string,
-	onValueChange: (v: string) => void,
-	isProcessing: boolean,
-	onSubmit: () => void,
-	submitText: string,
-	colorScheme: 'emerald' | 'amber' | 'red'
-})}
-		{#if config.show}
-			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
-			<div
-				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-				role="dialog"
-				aria-modal="true"
-				tabindex="-1"
-				onclick={config.onClose}
-			>
-				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-				<div
-					class="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
-					role="document"
-					onclick={(e) => e.stopPropagation()}
-				>
-					<h3 class="mb-4 text-lg font-bold text-gray-900">{config.title}</h3>
-					{#if config.description}
-						<p class="mb-4 text-sm text-gray-500">{config.description}</p>
-					{/if}
-
-					<div class="mb-4">
-						<label for={config.inputId} class="mb-2 block text-sm font-medium text-gray-700"
-							>{config.labelText}</label
-						>
-						<div class="flex items-center gap-2">
-							<span class="text-sm font-medium text-gray-600">$</span>
-							<input
-								id={config.inputId}
-								type="number"
-								value={config.value}
-								oninput={(e) => config.onValueChange(e.currentTarget.value)}
-								step="0.01"
-								min="0.01"
-								class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-								disabled={config.isProcessing}
-							/>
-							<span class="text-sm font-medium text-gray-600">USD</span>
-						</div>
-						<!-- Show approximate native token amount -->
-						<div class="mt-2 text-xs text-gray-500">
-							{#if priceLoading}
-								{m.price_loading({})}
-							{:else if nativeTokenPrice}
-								≈ {getApproxNativeAmount(config.value, nativeTokenPrice)} {nativeSymbol}
-							{/if}
-						</div>
-					</div>
-
-					<!-- Quick USD amounts -->
-					<div class="mb-6 flex gap-2">
-						{#each ['0.10', '0.50', '2.00', '5.00'] as amount}
-							<button
-								type="button"
-								onclick={() => config.onValueChange(amount)}
-								class="flex-1 rounded-lg border border-gray-200 py-1.5 text-sm transition-colors hover:border-{config.colorScheme}-500 hover:bg-{config.colorScheme}-50"
-								class:border-emerald-500={config.colorScheme === 'emerald' &&
-									config.value === amount}
-								class:bg-emerald-50={config.colorScheme === 'emerald' && config.value === amount}
-								class:border-amber-500={config.colorScheme === 'amber' && config.value === amount}
-								class:bg-amber-50={config.colorScheme === 'amber' && config.value === amount}
-								class:border-red-500={config.colorScheme === 'red' && config.value === amount}
-								class:bg-red-50={config.colorScheme === 'red' && config.value === amount}
-							>
-								${amount}
-							</button>
-						{/each}
-					</div>
-
-					<div class="flex gap-3">
-						<button
-							type="button"
-							onclick={config.onClose}
-							class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-							disabled={config.isProcessing}
-						>
-							{m.cancel({})}
-						</button>
-						<button
-							type="button"
-							onclick={config.onSubmit}
-							disabled={config.isProcessing || !config.value}
-							class="flex-1 rounded-lg py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-							class:bg-emerald-500={config.colorScheme === 'emerald'}
-							class:hover:bg-emerald-600={config.colorScheme === 'emerald'}
-							class:bg-amber-500={config.colorScheme === 'amber'}
-							class:hover:bg-amber-600={config.colorScheme === 'amber'}
-							class:bg-red-500={config.colorScheme === 'red'}
-							class:hover:bg-red-600={config.colorScheme === 'red'}
-						>
-							{config.isProcessing ? m.processing({}) : config.submitText}
-						</button>
-					</div>
-				</div>
-			</div>
-		{/if}
-	{/snippet}
-
-	{#snippet avatar(
-		url: string | null | undefined,
-		initials: string,
-		size: string = 'h-11 w-11',
-		textSize: string = 'text-sm'
-	)}
-		{#if url}
-			<img src={url} alt="" class="{size} rounded-full object-cover" />
-		{:else}
-			<div
-				class="flex {size} items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 {textSize} font-medium text-white"
-			>
-				{initials}
-			</div>
-		{/if}
-	{/snippet}
-
 	<!-- Collect Modal (only when collecting is enabled) -->
-	{#if showCollectModal && collectEnabled && article}
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_interactive_supports_focus -->
-		<div
-			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-			role="dialog"
-			aria-modal="true"
-			tabindex="-1"
-			onclick={() => (showCollectModal = false)}
-		>
-			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-			<div
-				class="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-				role="document"
-				onclick={(e) => e.stopPropagation()}
-			>
-				<h3 class="mb-4 text-lg font-bold text-gray-900">{m.collect_article()}</h3>
-
-				<!-- Collect Stats -->
-				<div class="mb-6 grid grid-cols-2 gap-4">
-					<div class="rounded-lg bg-gray-50 p-3 text-center">
-						<div class="text-2xl font-bold text-emerald-600">
-							{formatTips(article?.collectPrice || '0')}
-							{nativeSymbol}
-						</div>
-						<div class="mt-1 text-xs text-gray-500">
-							{#if nativeTokenPrice}
-								{#await weiToUsd(article?.collectPrice || '0')}
-									≈ {formatUsd(0)}
-								{:then usdPrice}
-									≈ {formatUsd(usdPrice)}
-								{/await}
-							{:else}
-								{m.price_label()}
-							{/if}
-						</div>
-					</div>
-					<div class="rounded-lg bg-gray-50 p-3 text-center">
-						<div class="text-2xl font-bold text-gray-900">
-							{localCollectCount}/{maxCollectSupply > 0n ? maxCollectSupply.toString() : '∞'}
-						</div>
-						<div class="text-xs text-gray-500">{m.collected_count()}/{m.total()}</div>
-					</div>
-				</div>
-
-				<!-- Collectors List -->
-				{#if article?.collections && article.collections.length > 0}
-					<div class="mb-6">
-						<h4 class="mb-3 text-sm font-medium text-gray-700">
-							{m.collectors()} ({article.collections.length})
-						</h4>
-						<div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200">
-							<table class="w-full text-sm">
-								<thead class="sticky top-0 bg-gray-50">
-									<tr class="text-left text-xs text-gray-500">
-										<th class="px-3 py-2">{m.address()}</th>
-										<th class="px-3 py-2 text-right">{m.amount()}</th>
-										<th class="px-3 py-2 text-right">{m.time()}</th>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-gray-100">
-									{#each article.collections as collection}
-										<tr class="hover:bg-gray-50">
-											<td class="px-3 py-2">
-												<a
-													href={localizeHref(`/u?id=${collection.user.id}`)}
-													class="flex items-center gap-2 hover:underline"
-												>
-													{@render avatar(
-														getAvatarUrl(collection.user.avatar),
-														collection.user.id.slice(2, 4).toUpperCase(),
-														'h-6 w-6',
-														'text-xs'
-													)}
-													<span class="truncate text-gray-700"
-														>{collection.user.nickname || shortAddress(collection.user.id)}</span
-													>
-												</a>
-											</td>
-											<td class="px-3 py-2 text-right font-medium text-emerald-600">
-												{formatTips(collection.amount)}
-											</td>
-											<td class="px-3 py-2 text-right text-gray-500">
-												{formatDateMedium(collection.createdAt)}
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					</div>
-				{:else}
-					<div class="mb-6 rounded-lg border border-gray-200 p-4 text-center text-sm text-gray-500">
-						{m.no_items({ items: m.collectors() })}
-					</div>
-				{/if}
-
-				<!-- Action Buttons -->
-				<div class="flex gap-3">
-					<button
-						type="button"
-						onclick={() => (showCollectModal = false)}
-						class="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-						disabled={isCollecting}
-					>
-						{m.cancel({})}
-					</button>
-					<button
-						type="button"
-						onclick={handleCollect}
-						disabled={isCollecting || !collectAvailable}
-						class="flex-1 rounded-lg bg-emerald-500 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
-					>
-						{#if isCollecting}
-							{m.processing({})}
-						{:else if !collectAvailable}
-							{m.sold_out()}
-						{:else}
-							{m.collect_for({
-								price: formatTips(article?.collectPrice || '0'),
-								symbol: nativeSymbol
-							})}
-						{/if}
-					</button>
-				</div>
-			</div>
-		</div>
-	{/if}
+	<CollectModal
+		open={showCollectModal}
+		{article}
+		{collectEnabled}
+		{localCollectCount}
+		{maxCollectSupply}
+		{nativeTokenPrice}
+		{nativeSymbol}
+		{isCollecting}
+		onClose={() => (showCollectModal = false)}
+		onCollect={handleCollect}
+	/>
 
 	<!-- Tip Modal -->
-	{@render amountModal({
-		show: showTipModal,
-		onClose: () => (showTipModal = false),
-		title: m.tip_author({}),
-		labelText: m.tip_in_usd({}),
-		inputId: 'tip-amount',
-		value: tipAmountUsd,
-		onValueChange: (v: string) => (tipAmountUsd = v),
-		isProcessing: isTipping,
-		onSubmit: handleTip,
-		submitText: m.send_tip({}),
-		colorScheme: 'amber'
-	})}
+	<AmountModal
+		show={showTipModal}
+		onClose={() => (showTipModal = false)}
+		title={m.tip_author({})}
+		labelText={m.tip_in_usd({})}
+		inputId="tip-amount"
+		value={tipAmountUsd}
+		onValueChange={(v) => (tipAmountUsd = v)}
+		isProcessing={isTipping}
+		onSubmit={handleTip}
+		submitText={m.send_tip({})}
+		colorScheme="amber"
+		{nativeTokenPrice}
+		{nativeSymbol}
+		{priceLoading}
+	/>
 
 	<!-- Dislike Modal -->
-	{@render amountModal({
-		show: showDislikeModal,
-		onClose: () => (showDislikeModal = false),
-		title: m.dislike({}),
-		description: m.dislike_description({}),
-		labelText: m.dislike_in_usd({}),
-		inputId: 'dislike-amount',
-		value: dislikeAmountUsd,
-		onValueChange: (v: string) => (dislikeAmountUsd = v),
-		isProcessing: isDisliking,
-		onSubmit: handleDislike,
-		submitText: m.send_dislike({}),
-		colorScheme: 'red'
-	})}
+	<AmountModal
+		show={showDislikeModal}
+		onClose={() => (showDislikeModal = false)}
+		title={m.dislike({})}
+		description={m.dislike_description({})}
+		labelText={m.dislike_in_usd({})}
+		inputId="dislike-amount"
+		value={dislikeAmountUsd}
+		onValueChange={(v) => (dislikeAmountUsd = v)}
+		isProcessing={isDisliking}
+		onSubmit={handleDislike}
+		submitText={m.send_dislike({})}
+		colorScheme="red"
+		{nativeTokenPrice}
+		{nativeSymbol}
+		{priceLoading}
+	/>
 
 	<!-- Feedback Toast -->
 	{#if feedbackMessage}

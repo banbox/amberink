@@ -74,6 +74,8 @@ export interface ArticleFolderUploadParams {
 	contentImages?: ContentImageInfo[]; // 内容图片列表
 	tags: string[];
 	visibility?: Visibility; // 文章可见性 (默认 Public)
+	authorAddress: string;   // 作者钱包地址
+	originality?: number;    // 原创性 (0: Original, 1: SemiOriginal, 2: Reprint)
 	/**
 	 * 签名提供回调（当 visibility 为 Encrypted 时需要）
 	 * 在获取到初始 manifestId 后调用，用于派生加密密钥

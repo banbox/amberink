@@ -5,6 +5,7 @@
 
 import { uploadArticleFolderWithSessionKey } from '$lib/arweave';
 import type { ArticleFolderUploadParams, ContentImageInfo, Visibility } from '$lib/arweave';
+import { getSessionKeyOwner } from '$lib/arweave/irys';
 import { publishToContractWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 import {
 	ensureSessionKeyReady,
@@ -133,6 +134,8 @@ async function publishArticleWithSessionKeyInternal(
 		contentImages: contentImages,
 		tags,
 		visibility: visibility as Visibility,
+		authorAddress: getSessionKeyOwner(sessionKey),
+		originality,
 		signatureProvider
 	};
 

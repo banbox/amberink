@@ -96,7 +96,10 @@ export {
 	fetchArticleMarkdown,
 	getFolderCoverImageUrl,
 	getFolderFileUrl,
-	fetchArticleSummaryFromTags
+	fetchArticleSummaryFromTags,
+	// Irys 元数据获取功能（用于跨链显示）
+	fetchArticleMetadataFromIrys,
+	type IrysArticleMetadata
 } from './fetch';
 
 // 文章文件夹功能

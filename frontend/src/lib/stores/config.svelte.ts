@@ -88,17 +88,27 @@ const DEFAULT_ENV: 'dev' | 'test' | 'prod' = 'prod';
 // Environment name management
 // ============================================
 
-// Dynamic localStorage key based on environment to avoid conflicts when switching environments
-function getConfigStorageKey(): string {
-	const currentEnvName = getEnvName();
-	return `amberink_user_config_${currentEnvName}`;
+// Ephemeral environment override (page-specific, not persisted)
+let ephemeralEnvName = $state<'dev' | 'test' | 'prod' | null>(null);
+
+/**
+ * Set ephemeral environment name (for current page session only)
+ * This overrides both default and localStorage settings
+ */
+export function setEphemeralEnvName(name: 'dev' | 'test' | 'prod' | null): void {
+	ephemeralEnvName = name;
+	// Reload userConfig to ensure dependencies update
+	userConfig = loadUserConfig();
+	envNameVersion++;
 }
 
 /**
  * Get current environment name (supports user override)
- * Defaults to 'dev' if nothing is set
+ * Priority: Ephemeral (URL param) > User (localStorage) > Default
  */
 function getEnvName(): 'dev' | 'test' | 'prod' {
+	if (ephemeralEnvName) return ephemeralEnvName;
+
 	if (!browser) return DEFAULT_ENV;
 	try {
 		// Try to read from localStorage with a fixed key (not environment-dependent)
@@ -120,6 +130,12 @@ function getEnvName(): 'dev' | 'test' | 'prod' {
  * This is a function that should be called to get the current envName
  */
 export { getEnvName as envName };
+
+// Dynamic localStorage key based on environment to avoid conflicts when switching environments
+function getConfigStorageKey(): string {
+	const currentEnvName = getEnvName();
+	return `amberink_user_config_${currentEnvName}`;
+}
 
 // ============================================
 // Type definitions

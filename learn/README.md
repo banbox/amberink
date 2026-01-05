@@ -1623,3 +1623,26 @@ Claude：已解决
 ### 2026-01-05 19:55  pyth价格过期
 [getPriceNoOlderThan文档](https://api-reference.pyth.network/price-feeds/evm/getPriceNoOlderThan)当前通过pyth获取指定品种价格，通过getPriceUnsafe方法。但是经常返回的是延迟很久的价格，帮我改为使用getPriceNoOlderThan方法。其说明如上。注意应当始终先调用updatePriceFeeds然后再调用getPriceNoOlderThan  
 Claude：updatePriceFeeds需要付费，不适合线下使用，已改为从Hermes API获取最新价格。  
+
+### 2026-01-05 20:45  详情页build失败
+目前为了解决searchParams中的参数值发生变化时并未重新加载问题，使用$derived 来创建响应式变量，但当前前端是用于编译为静态网站的，所以所有的对page.url.searchParams 的访问都需要放在onMount中。否则会出现错误：Cannot access url.searchParams on a page with prerendering enabled。请帮我修改代码，确保同时解决上面两个问题  
+Claude：已解决  
+开发者：help.md 帮我在发布和编辑文章时，将各个属性嵌入到index.md对应的irys的tags中，重点是 frontend/src/lib/arweave/upload.ts: uploadMarkdownContent 这个函数，包括但不限于：标题、作者、可见性、原创属性等。
+然后再文章详情页 frontend/src/routes/a/+page.svelte 的 loadArticle加载文章时，把 loadArticleContent 从 loadArticle 中提取出来，然后再所有执行loadArticle的地方，都改为同时执行这两个函数。loadArticleContent是从irys获取所有正文和属性。如果先从irys获取内容，则应该先展示。
+这样做的目的是，确保即使数据只从irys获取到了，通过squid未获取到，也能正常显示，这在跨链显示内容时很有必要。  
+Claude：大体完成，但正文并未加载。  
+开发者：loadArticleContent 目前是使用从squid加载后的数据，但需要的数据完全可以从irys的tags中全部提取，这样可以避免链的依赖，只要irys有数据就能加载。帮我修改  
+Claude：正文可从irys加载。  
+开发者：文章并未显示，页面显示【文章未找到】，请帮我排查解决  
+Claude：可加载，但article多处null错误  
+开发者：当直接从irys获取到了数据，但squid接口未获取到时，应该更新article对象，确保能正确从这个对象展示数据  
+Claude：已修复  
+开发者：@help.md frontend/src/routes/a/+page.svelte 875行创建时间应该从irys取，不应该使用当前时间  
+Claude:已修复  
+开发者：@help.md 帮我在当前详情页面，增加一个从searchParams解析的参数：env；可选值为：dev/test/prod；这个值应该对应 frontend/src/lib/stores/config.svelte.ts 中的envName；但是仅对当前页面本次会话生效，离开页面后或参数变了都失效，不应该更新到localStorage中。
+这样确保其他参数能按传入的env解析加载数据，但不影响其他页面。请帮我实现上面要求。  
+Claude：新增了setEphemeralEnvName，符合要求。但有2个onMount  
+开发者：frontend/src/routes/a/+page.svelte 你在107行新增的onMount是没必要的，此文件已经在 1021 行定义了onMount，请使用1021行的  
+Claude：已修复  
+开发者：使用`2026-01-03 14:20  代码优化`提示词优化代码  
+Claude：已完成

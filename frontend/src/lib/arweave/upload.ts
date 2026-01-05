@@ -330,6 +330,9 @@ export async function uploadDataWithSessionKey(
  * @param content - Markdown 内容
  * @param title - 文章标题（用于标签）
  * @param articleTags - 文章标签
+ * @param authorAddress - 作者钱包地址
+ * @param visibility - 文章可见性 (0: Public, 1: Private, 2: Encrypted)
+ * @param originality - 原创性 (0: Original, 1: SemiOriginal, 2: Reprint)
  * @param paidBy - 可选，付费账户地址（Balance Approvals 机制）
  * @param encryptionKey - 可选，加密密钥（用于加密文章内容）
  */
@@ -338,6 +341,9 @@ async function uploadMarkdownContent(
 	content: string,
 	title: string,
 	articleTags: string[],
+	authorAddress: string,
+	visibility: number,
+	originality: number,
 	paidBy?: string,
 	encryptionKey?: CryptoKey
 ): Promise<string> {
@@ -374,6 +380,9 @@ async function uploadMarkdownContent(
 		{ name: 'App-Version', value: appVersion },
 		{ name: 'Type', value: 'article-content' },
 		{ name: 'Title', value: title },
+		{ name: 'Author', value: authorAddress },
+		{ name: 'Visibility', value: visibility.toString() },
+		{ name: 'Originality', value: originality.toString() },
 		{ name: 'Encrypted', value: encryptionKey ? 'true' : 'false' },
 		...articleTags.map((tag) => ({ name: 'Tag', value: tag }))
 	];
@@ -520,12 +529,18 @@ function cachePlaceholderTxId(txId: string): void {
  * @param uploader - Irys uploader 实例
  * @param title - 文章标题（用于标签）
  * @param articleTags - 文章标签
+ * @param authorAddress - 作者钱包地址
+ * @param visibility - 文章可见性
+ * @param originality - 原创性
  * @param paidBy - 可选，付费账户地址
  */
 async function getOrCreatePlaceholderTxId(
 	uploader: IrysUploader,
 	title: string,
 	articleTags: string[],
+	authorAddress: string,
+	visibility: number,
+	originality: number,
 	paidBy?: string
 ): Promise<string> {
 	// 尝试从缓存获取
@@ -538,7 +553,7 @@ async function getOrCreatePlaceholderTxId(
 	// 缓存不存在，创建新的 placeholder
 	console.log(`No cached placeholder for env '${envName()}', creating new one...`);
 	const placeholderContent = 'empty text';
-	const placeholderTxId = await uploadMarkdownContent(uploader, placeholderContent, title, articleTags, paidBy);
+	const placeholderTxId = await uploadMarkdownContent(uploader, placeholderContent, title, articleTags, authorAddress, visibility, originality, paidBy);
 
 	// 缓存新创建的 txId
 	cachePlaceholderTxId(placeholderTxId);
@@ -564,7 +579,7 @@ export async function uploadArticleFolderWithUploader(
 	params: ArticleFolderUploadParams,
 	paidBy?: string
 ): Promise<ArticleFolderUploadResult> {
-	const { title, summary, content, coverImage, contentImages, tags: articleTags, signatureProvider } = params;
+	const { title, summary, content, coverImage, contentImages, tags: articleTags, signatureProvider, authorAddress, visibility = 0, originality = 0 } = params;
 	const isEncrypted = !!signatureProvider;
 
 	// Step 1: 上传封面图片（如果有）- 先上传封面
@@ -609,7 +624,7 @@ export async function uploadArticleFolderWithUploader(
 			console.log(`  Using existing file as initial index placeholder: ${initialIndexTxId}`);
 		} else {
 			// 没有任何文件内容时，需要使用 placeholder
-			initialIndexTxId = await getOrCreatePlaceholderTxId(uploader, title, articleTags, paidBy);
+			initialIndexTxId = await getOrCreatePlaceholderTxId(uploader, title, articleTags, authorAddress, visibility, originality, paidBy);
 			console.log(`  Using placeholder as initial index: ${initialIndexTxId}`);
 		}
 
@@ -646,7 +661,7 @@ export async function uploadArticleFolderWithUploader(
 
 		// Step 5: 加密内容并上传
 		console.log('Step 5: Uploading encrypted article content...');
-		const encryptedIndexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, paidBy, encryptionKey);
+		const encryptedIndexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, authorAddress, visibility, originality, paidBy, encryptionKey);
 
 		// Step 6: 创建更新后的 manifest，设置 Root-TX
 		console.log('Step 6: Creating updated manifest with Root-TX...');
@@ -683,7 +698,7 @@ export async function uploadArticleFolderWithUploader(
 
 	// === 普通文章：一阶段上传 ===
 	console.log('Step 3: Uploading article content (index.md)...');
-	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, paidBy);
+	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, authorAddress, visibility, originality, paidBy);
 
 	// Step 4: 使用 Irys SDK 生成文件夹 manifest
 	console.log('Step 4: Creating article folder manifest using Irys SDK...');
@@ -782,6 +797,9 @@ export interface ArticleFolderUpdateParams {
 	coverImage?: File;       // 新封面图片（可选，不提供则保留原有）
 	tags: string[];
 	keepExistingCover?: boolean; // 是否保留现有封面（默认 true）
+	authorAddress: string;   // 作者钱包地址
+	visibility?: number;     // 文章可见性 (0: Public, 1: Private, 2: Encrypted)
+	originality?: number;    // 原创性 (0: Original, 1: SemiOriginal, 2: Reprint)
 }
 
 /** 文章更新结果 */
@@ -806,7 +824,7 @@ export async function updateArticleFolderWithUploader(
 	params: ArticleFolderUpdateParams,
 	paidBy?: string
 ): Promise<ArticleFolderUpdateResult> {
-	const { title, summary, content, coverImage, tags: articleTags, keepExistingCover = true } = params;
+	const { title, summary, content, coverImage, tags: articleTags, keepExistingCover = true, authorAddress, visibility = 0, originality = 0 } = params;
 
 	// Debug: log cover image params
 	console.log('Update article params:', {
@@ -818,7 +836,7 @@ export async function updateArticleFolderWithUploader(
 
 	// Step 1: 上传新的文章内容（index.md）
 	console.log('Uploading updated article content (index.md)...');
-	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, paidBy);
+	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, authorAddress, visibility, originality, paidBy);
 
 	// Step 2: 处理封面图片
 	let coverImageTxId: string | undefined;

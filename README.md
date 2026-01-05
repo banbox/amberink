@@ -66,3 +66,4 @@ amberink/
 - 多标签索引（类别、话题、地区）
 - Markdown 编辑器 [cherry-markdown](https://github.com/Tencent/cherry-markdown)
 - 去中心化身份 DID 接入
+- 更新help.md，优化其他页面代码

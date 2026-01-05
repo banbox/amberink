@@ -151,7 +151,10 @@ export function getFolderFileUrl(manifestId: string, fileName: string, useMutabl
  * @param manifestId - 原始 Manifest ID
  * @returns 标签数组，每个标签包含 name 和 value
  */
-async function fetchManifestTags(manifestId: string): Promise<Array<{ name: string; value: string }>> {
+async function fetchManifestTags(manifestId: string): Promise<{
+	tags: Array<{ name: string; value: string }>;
+	timestamp?: number;
+}> {
 	// 根据环境选择 GraphQL 端点
 	const graphqlEndpoints = [
 		IRYS_DEVNET_GRAPHQL,
@@ -171,6 +174,7 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 				edges {
 					node {
 						id
+						timestamp
 						tags {
 							name
 							value
@@ -188,6 +192,7 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 				edges {
 					node {
 						id
+						timestamp
 						tags {
 							name
 							value
@@ -215,7 +220,10 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 				const latestEdges = latestResult?.data?.transactions?.edges || [];
 				if (latestEdges.length > 0) {
 					console.log(`Found latest manifest version: ${latestEdges[0].node.id}`);
-					return latestEdges[0].node.tags || [];
+					return {
+						tags: latestEdges[0].node.tags || [],
+						timestamp: latestEdges[0].node.timestamp
+					};
 				}
 			}
 
@@ -234,7 +242,10 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 				const edges = result?.data?.transactions?.edges || [];
 				if (edges.length > 0) {
 					console.log(`Using original manifest tags: ${manifestId}`);
-					return edges[0].node.tags || [];
+					return {
+						tags: edges[0].node.tags || [],
+						timestamp: edges[0].node.timestamp
+					};
 				}
 			}
 		} catch (error) {
@@ -242,7 +253,7 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
 		}
 	}
 
-	return [];
+	return { tags: [] };
 }
 
 /**
@@ -253,7 +264,7 @@ async function fetchManifestTags(manifestId: string): Promise<Array<{ name: stri
  */
 export async function fetchArticleSummaryFromTags(manifestId: string): Promise<string> {
 	try {
-		const tags = await fetchManifestTags(manifestId);
+		const { tags } = await fetchManifestTags(manifestId);
 		const summaryTag = tags.find(t => t.name === 'Article-Summary');
 		if (summaryTag) {
 			console.log(`Fetched summary from manifest tags: "${summaryTag.value.substring(0, 50)}..."`);
@@ -263,4 +274,77 @@ export async function fetchArticleSummaryFromTags(manifestId: string): Promise<s
 		console.warn('Failed to fetch manifest tags for summary:', error);
 	}
 	return '';
+}
+
+/**
+ * 从 Irys 标签获取的文章元数据
+ * 用于在 Subsquid 索引不可用时显示文章基本信息
+ */
+export interface IrysArticleMetadata {
+	title?: string;
+	summary?: string;
+	author?: string;
+	visibility?: number;
+	originality?: number;
+	encrypted?: boolean;
+	timestamp?: number;
+	tags?: string[];
+}
+
+/**
+ * 从 Irys GraphQL 获取文章元数据（从标签）
+ * 用于跨链场景下，当 Subsquid 数据不可用时仍能显示文章基本信息
+ * @param manifestId - 文章文件夹的 Manifest ID
+ * @returns 从 Irys 标签提取的文章元数据，如果获取失败返回 null
+ */
+export async function fetchArticleMetadataFromIrys(manifestId: string): Promise<IrysArticleMetadata | null> {
+	try {
+		const { tags, timestamp } = await fetchManifestTags(manifestId);
+		if (tags.length === 0) {
+			console.log(`No tags found for manifest: ${manifestId}`);
+			return null;
+		}
+
+		const getTagValue = (name: string): string | undefined =>
+			tags.find(t => t.name === name)?.value;
+
+		const result: IrysArticleMetadata = {};
+
+		// Extract article metadata from tags
+		const title = getTagValue('Article-Title') || getTagValue('Title');
+		if (title) result.title = title;
+
+		const summary = getTagValue('Article-Summary');
+		if (summary) result.summary = summary;
+
+		const author = getTagValue('Author');
+		if (author) result.author = author;
+
+		const visibility = getTagValue('Visibility');
+		if (visibility !== undefined) result.visibility = parseInt(visibility, 10);
+
+		const originality = getTagValue('Originality');
+		if (originality !== undefined) result.originality = parseInt(originality, 10);
+
+		const encrypted = getTagValue('Encrypted');
+		if (encrypted !== undefined) result.encrypted = encrypted === 'true';
+
+		if (timestamp) {
+			// Normalize to milliseconds if needed (Arweave uses seconds, Irys uses milliseconds)
+			// Heuristic: if timestamp is small (< 100 billion), it's likely seconds
+			result.timestamp = timestamp < 100000000000 ? timestamp * 1000 : timestamp;
+		}
+
+		// Extract article tags
+		const articleTags = tags
+			.filter(t => t.name === 'Article-Tag' || t.name === 'Tag')
+			.map(t => t.value);
+		if (articleTags.length > 0) result.tags = articleTags;
+
+		console.log(`Fetched article metadata from Irys for ${manifestId}:`, result);
+		return result;
+	} catch (error) {
+		console.warn('Failed to fetch article metadata from Irys:', error);
+		return null;
+	}
 }
