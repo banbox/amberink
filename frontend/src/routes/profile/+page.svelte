@@ -84,9 +84,14 @@
 		{ key: 'articles', label: () => m.articles() },
 		{ key: 'followers', label: () => m.followers() },
 		{ key: 'following', label: () => m.following_list() },
-		{ key: 'about', label: () => m.bio() },
+		{ key: 'about', label: () => m.about() },
 		{ key: 'sessionkey', label: () => m.session_key() }
 	];
+
+	async function executeQuery<T>(query: any, variables: Record<string, any>, listKey: string): Promise<T[]> {
+		const result = await client.query(query, variables).toPromise();
+		return result.data?.[listKey] || [];
+	}
 
 	async function fetchUserProfile() {
 		if (!walletAddress) return;
@@ -104,100 +109,46 @@
 		}
 	}
 
-	async function fetchArticles(reset = false) {
+	async function fetchTabContent(reset = false) {
 		if (!walletAddress || loading) return;
 
 		loading = true;
 		const currentOffset = reset ? 0 : offset;
 
 		try {
-			const result = await client
-				.query(ARTICLES_BY_AUTHOR_QUERY, {
+			let newItems: any[] = [];
+			if (activeTab === 'articles') {
+				newItems = await executeQuery(ARTICLES_BY_AUTHOR_QUERY, {
 					authorId: walletAddress.toLowerCase(),
 					limit: PAGE_SIZE,
 					offset: currentOffset
-				})
-				.toPromise();
-
-			const newArticles = result.data?.articles || [];
-
-			if (reset) {
-				articles = newArticles;
-				offset = PAGE_SIZE;
-			} else {
-				articles = [...articles, ...newArticles];
-				offset = currentOffset + PAGE_SIZE;
-			}
-
-			hasMore = newArticles.length === PAGE_SIZE;
-		} catch (e) {
-			console.error('Failed to fetch articles:', e);
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function fetchFollowers(reset = false) {
-		if (!walletAddress || loading) return;
-
-		loading = true;
-		const currentOffset = reset ? 0 : offset;
-
-		try {
-			const result = await client
-				.query(USER_FOLLOWERS_QUERY, {
+				}, 'articles');
+				articles = reset ? newItems : [...articles, ...newItems];
+			} else if (activeTab === 'followers') {
+				newItems = await executeQuery(USER_FOLLOWERS_QUERY, {
 					userId: walletAddress.toLowerCase(),
 					limit: PAGE_SIZE,
 					offset: currentOffset
-				})
-				.toPromise();
-
-			const newFollowers = result.data?.follows || [];
-
-			if (reset) {
-				followers = newFollowers;
-				offset = PAGE_SIZE;
-			} else {
-				followers = [...followers, ...newFollowers];
-				offset = currentOffset + PAGE_SIZE;
-			}
-
-			hasMore = newFollowers.length === PAGE_SIZE;
-		} catch (e) {
-			console.error('Failed to fetch followers:', e);
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function fetchFollowing(reset = false) {
-		if (!walletAddress || loading) return;
-
-		loading = true;
-		const currentOffset = reset ? 0 : offset;
-
-		try {
-			const result = await client
-				.query(USER_FOLLOWING_QUERY, {
+				}, 'follows');
+				followers = reset ? newItems : [...followers, ...newItems];
+			} else if (activeTab === 'following') {
+				newItems = await executeQuery(USER_FOLLOWING_QUERY, {
 					userId: walletAddress.toLowerCase(),
 					limit: PAGE_SIZE,
 					offset: currentOffset
-				})
-				.toPromise();
-
-			const newFollowing = result.data?.follows || [];
+				}, 'follows');
+				following = reset ? newItems : [...following, ...newItems];
+			}
 
 			if (reset) {
-				following = newFollowing;
 				offset = PAGE_SIZE;
 			} else {
-				following = [...following, ...newFollowing];
 				offset = currentOffset + PAGE_SIZE;
 			}
 
-			hasMore = newFollowing.length === PAGE_SIZE;
+			hasMore = newItems.length === PAGE_SIZE;
 		} catch (e) {
-			console.error('Failed to fetch following:', e);
+			console.error(`Failed to fetch ${activeTab}:`, e);
 		} finally {
 			loading = false;
 		}
@@ -259,21 +210,34 @@
 		}
 	}
 
-	async function handleReauthorize() {
-		if (!sessionKey || reauthorizing) return;
-		reauthorizing = true;
+	async function executeSessionAction(
+		actionName: string,
+		action: () => Promise<void>,
+		errorMessagePrefix: string,
+		loadingSetter?: (v: boolean) => void
+	) {
+		if (loadingSetter) loadingSetter(true);
 		sessionKeyError = '';
 
 		try {
-			const updated = await reauthorizeSessionKey(sessionKey);
-			sessionKey = updated;
+			await action();
 			await fetchSessionKeyInfo();
 		} catch (e) {
-			console.error('Failed to reauthorize session key:', e);
-			sessionKeyError = 'Failed to reauthorize: ' + (e instanceof Error ? e.message : 'Unknown error');
+			console.error(`Failed to ${actionName}:`, e);
+			sessionKeyError = `${errorMessagePrefix}: ` + (e instanceof Error ? e.message : 'Unknown error');
 		} finally {
-			reauthorizing = false;
+			if (loadingSetter) loadingSetter(false);
 		}
+	}
+
+	async function handleReauthorize() {
+		if (!sessionKey || reauthorizing) return;
+		await executeSessionAction(
+			'reauthorize session key',
+			async () => { sessionKey = await reauthorizeSessionKey(sessionKey!); },
+			'Failed to reauthorize',
+			(v) => reauthorizing = v
+		);
 	}
 
 	async function handleWithdrawAll() {
@@ -289,18 +253,12 @@
 			return;
 		}
 
-		withdrawing = true;
-		sessionKeyError = '';
-
-		try {
-			await withdrawAllFromSessionKey(sessionKey.address);
-			await fetchSessionKeyInfo();
-		} catch (e) {
-			console.error('Failed to withdraw:', e);
-			sessionKeyError = 'Failed to withdraw: ' + (e instanceof Error ? e.message : 'Unknown error');
-		} finally {
-			withdrawing = false;
-		}
+		await executeSessionAction(
+			'withdraw',
+			async () => { await withdrawAllFromSessionKey(sessionKey!.address); },
+			'Failed to withdraw',
+			(v) => withdrawing = v
+		);
 	}
 
 	async function handleCreateNewKey() {
@@ -314,7 +272,6 @@
 			await fetchSessionKeyInfo();
 		} catch (e) {
 			if (e instanceof Error && e.message === 'User cancelled Session Key creation') {
-				// User cancelled, do nothing
 				console.log('User cancelled Session Key creation');
 			} else {
 				console.error('Failed to create session key:', e);
@@ -327,32 +284,21 @@
 
 	async function handleRevoke() {
 		if (!sessionKey || !confirm(m.confirm_revoke())) return;
-		sessionKeyError = '';
-
-		try {
-			await revokeSessionKey();
-			await fetchSessionKeyInfo();
-		} catch (e) {
-			console.error('Failed to revoke session key:', e);
-			sessionKeyError = 'Failed to revoke: ' + (e instanceof Error ? e.message : 'Unknown error');
-		}
+		await executeSessionAction(
+			'revoke session key',
+			async () => { await revokeSessionKey(); },
+			'Failed to revoke'
+		);
 	}
 
 	async function handleExtendSessionKey() {
 		if (!sessionKey || extending) return;
-		extending = true;
-		sessionKeyError = '';
-
-		try {
-			const updated = await extendSessionKey(sessionKey);
-			sessionKey = updated;
-			await fetchSessionKeyInfo();
-		} catch (e) {
-			console.error('Failed to extend session key:', e);
-			sessionKeyError = 'Failed to extend: ' + (e instanceof Error ? e.message : 'Unknown error');
-		} finally {
-			extending = false;
-		}
+		await executeSessionAction(
+			'extend session key',
+			async () => { sessionKey = await extendSessionKey(sessionKey!); },
+			'Failed to extend',
+			(v) => extending = v
+		);
 	}
 
 	function switchTab(tab: TabType) {
@@ -361,14 +307,10 @@
 		offset = 0;
 		hasMore = true;
 
-		if (tab === 'articles') {
-			fetchArticles(true);
-		} else if (tab === 'followers') {
-			fetchFollowers(true);
-		} else if (tab === 'following') {
-			fetchFollowing(true);
-		} else if (tab === 'sessionkey') {
+		if (tab === 'sessionkey') {
 			fetchSessionKeyInfo();
+		} else if (tab !== 'about') {
+			fetchTabContent(true);
 		}
 	}
 
@@ -436,7 +378,8 @@
 		untrack(() => {
 			if (addr) {
 				fetchUserProfile();
-				fetchArticles(true);
+				// Use the unified fetch function
+				fetchTabContent(true);
 			} else {
 				user = null;
 				articles = [];
@@ -466,9 +409,9 @@
 			const clientHeight = window.innerHeight;
 
 			if (scrollHeight - scrollTop - clientHeight < 200) {
-				if (activeTab === 'articles') fetchArticles();
-				else if (activeTab === 'followers') fetchFollowers();
-				else if (activeTab === 'following') fetchFollowing();
+				if (['articles', 'followers', 'following'].includes(activeTab)) {
+					fetchTabContent();
+				}
 			}
 		};
 
@@ -477,9 +420,57 @@
 	});
 </script>
 
-<svelte:head>
 	<title>{m.profile ? m.profile() : 'Profile'} - {getConfig().appName}</title>
 </svelte:head>
+
+{#snippet avatar(url: string | undefined | null, name: string | undefined, id: string, sizeClass: string = "h-12 w-12")}
+	{#if getAvatarUrl(url)}
+		<img
+			src={getAvatarUrl(url)}
+			alt="Avatar"
+			class="{sizeClass} rounded-full object-cover"
+		/>
+	{:else}
+		<div
+			class="flex {sizeClass} items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 font-bold text-white shadow-sm"
+		>
+			<span class="text-sm">
+				{name ? name.slice(0, 2).toUpperCase() : id.slice(2, 4).toUpperCase()}
+			</span>
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet userList(items: FollowData[], type: 'follower' | 'following', emptyMessage: string)}
+	{#if items.length > 0}
+		<div class="divide-y divide-gray-100">
+			{#each items as item}
+				{@const listUser = type === 'follower' ? item.follower : item.following}
+				{#if listUser}
+					<a
+						href={localizeHref(`/u?id=${listUser.id}`)}
+						class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
+					>
+						{@render avatar(listUser.avatar, listUser.nickname, listUser.id)}
+						<div class="flex-1">
+							<p class="font-medium text-gray-900">
+								{listUser.nickname || shortAddress(listUser.id)}
+							</p>
+							<p class="text-sm text-gray-500">
+								{listUser.totalArticles}
+								{m.articles().toLowerCase()}
+							</p>
+						</div>
+					</a>
+				{/if}
+			{/each}
+		</div>
+	{:else if !loading}
+		<div class="py-16 text-center">
+			<p class="text-gray-500">{emptyMessage}</p>
+		</div>
+	{/if}
+{/snippet}
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	{#if !connected}
@@ -492,19 +483,7 @@
 		<div class="mb-8">
 			<div class="flex items-start gap-4">
 				<!-- Avatar -->
-				{#if getAvatarUrl(user?.avatar)}
-					<img
-						src={getAvatarUrl(user?.avatar)}
-						alt="Avatar"
-						class="h-20 w-20 rounded-full object-cover"
-					/>
-				{:else}
-					<div
-						class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-2xl font-bold text-white"
-					>
-						{walletAddress?.slice(2, 4).toUpperCase()}
-					</div>
-				{/if}
+				{@render avatar(user?.avatar, user?.nickname, walletAddress || '', "h-20 w-20 text-2xl")}
 
 				<div class="flex-1">
 					<h1 class="text-2xl font-bold text-gray-900">
@@ -575,105 +554,11 @@
 				</div>
 			{/if}
 		{:else if activeTab === 'followers'}
-			{#if followers.length > 0}
-				<div class="divide-y divide-gray-100">
-					{#each followers as follow}
-						{@const follower = follow.follower}
-						{#if follower}
-							<a
-								href={localizeHref(`/u?id=${follower.id}`)}
-								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
-							>
-								{#if getAvatarUrl(follower.avatar)}
-									<img
-										src={getAvatarUrl(follower.avatar)}
-										alt=""
-										class="h-12 w-12 rounded-full object-cover"
-									/>
-								{:else}
-									<div
-										class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
-									>
-										{follower.nickname
-											? follower.nickname.slice(0, 2).toUpperCase()
-											: follower.id.slice(2, 4).toUpperCase()}
-									</div>
-								{/if}
-								<div class="flex-1">
-									<p class="font-medium text-gray-900">
-										{follower.nickname || shortAddress(follower.id)}
-									</p>
-									<p class="text-sm text-gray-500">
-										{follower.totalArticles}
-										{m.articles().toLowerCase()}
-									</p>
-								</div>
-							</a>
-						{/if}
-					{/each}
-				</div>
-			{:else if !loading}
-				<div class="py-16 text-center">
-					<p class="text-gray-500">{m.no_items({ items: 'followers' })}</p>
-				</div>
-			{/if}
+			{@render userList(followers, 'follower', m.no_items({ items: 'followers' }))}
 		{:else if activeTab === 'following'}
-			{#if following.length > 0}
-				<div class="divide-y divide-gray-100">
-					{#each following as follow}
-						{@const followingUser = follow.following}
-						{#if followingUser}
-							<a
-								href={localizeHref(`/u?id=${followingUser.id}`)}
-								class="flex items-center gap-4 py-4 transition-colors hover:bg-gray-50"
-							>
-								{#if getAvatarUrl(followingUser.avatar)}
-									<img
-										src={getAvatarUrl(followingUser.avatar)}
-										alt=""
-										class="h-12 w-12 rounded-full object-cover"
-									/>
-								{:else}
-									<div
-										class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-sm font-medium text-white"
-									>
-										{followingUser.nickname
-											? followingUser.nickname.slice(0, 2).toUpperCase()
-											: followingUser.id.slice(2, 4).toUpperCase()}
-									</div>
-								{/if}
-								<div class="flex-1">
-									<p class="font-medium text-gray-900">
-										{followingUser.nickname || shortAddress(followingUser.id)}
-									</p>
-									<p class="text-sm text-gray-500">
-										{followingUser.totalArticles}
-										{m.articles().toLowerCase()}
-									</p>
-								</div>
-							</a>
-						{/if}
-					{/each}
-				</div>
-			{:else if !loading}
-				<div class="py-16 text-center">
-					<p class="text-gray-500">{m.no_items({ items: 'following' })}</p>
-				</div>
-			{/if}
+			{@render userList(following, 'following', m.no_items({ items: 'following' }))}
 		{:else if activeTab === 'about'}
 			<div class="py-4">
-				<div class="mb-6 flex items-center justify-between">
-					{#if !editingProfile}
-						<button
-							type="button"
-							onclick={startEditProfile}
-							class="text-sm text-blue-600 hover:text-blue-700"
-						>
-							{m.edit_profile()}
-						</button>
-					{/if}
-				</div>
-
 				{#if editingProfile}
 					<div class="space-y-4">
 						<!-- Nickname -->
@@ -752,32 +637,90 @@
 					</div>
 				{:else}
 					<!-- Display profile info -->
-					<div class="space-y-4">
-						<!-- Nickname -->
-						<div>
-							<p class="text-sm font-medium text-gray-500">{m.nickname()}</p>
-							<p class="mt-1 text-gray-900">{user?.nickname || m.not_set()}</p>
+					<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+						<div
+							class="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-6 py-4"
+						>
+							<h3 class="font-semibold text-gray-900">{m.information()}</h3>
+							<button
+								type="button"
+								onclick={startEditProfile}
+								class="rounded-lg bg-white px-4 py-2 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-gray-200 transition-all hover:bg-blue-50 hover:text-blue-700 hover:shadow-md"
+							>
+								{m.edit_profile()}
+							</button>
 						</div>
 
-						<!-- Avatar -->
-						{#if user?.avatar}
-							{@const avatarUrl = getAvatarUrl(user.avatar)}
-							{#if avatarUrl}
-								<div>
-									<p class="text-sm font-medium text-gray-500">{m.avatar()}</p>
-									<img
-										src={avatarUrl}
-										alt="Avatar"
-										class="mt-2 h-24 w-24 rounded-full object-cover"
-									/>
+						<div class="p-6 md:p-8">
+							<div class="flex flex-col gap-8 md:flex-row md:items-start md:gap-12">
+								<!-- Left Column: Avatar -->
+								<div class="flex flex-shrink-0 flex-col items-center md:items-start">
+									<p class="mb-3 pl-1 text-xs font-bold uppercase tracking-wider text-gray-400">
+										{m.avatar()}
+									</p>
+									{#if user?.avatar}
+										{@const avatarUrl = getAvatarUrl(user.avatar)}
+										{#if avatarUrl}
+											<div class="relative">
+												<img
+													src={avatarUrl}
+													alt="Avatar"
+													class="h-40 w-40 rounded-full object-cover shadow-md ring-4 ring-white"
+												/>
+												<div class="absolute inset-0 rounded-full ring-1 ring-black/5"></div>
+											</div>
+										{:else}
+											<div
+												class="flex h-40 w-40 items-center justify-center rounded-full bg-gray-100 text-gray-400 shadow-inner"
+											>
+												<svg class="h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+													><path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="1.5"
+														d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+													></path></svg
+												>
+											</div>
+										{/if}
+									{:else}
+										<div
+											class="flex h-40 w-40 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-300 shadow-inner"
+										>
+											<svg class="h-16 w-16" fill="currentColor" viewBox="0 0 24 24"
+												><path
+													d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"
+												/></svg
+											>
+										</div>
+									{/if}
 								</div>
-							{/if}
-						{/if}
 
-						<!-- Bio -->
-						<div>
-							<p class="text-sm font-medium text-gray-500">{m.bio()}</p>
-							<p class="mt-1 whitespace-pre-wrap text-gray-900">{user?.bio || m.no_bio()}</p>
+								<!-- Right Column: Info -->
+								<div class="flex-1 space-y-8 md:mt-2">
+									<!-- Nickname -->
+									<div>
+										<p class="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+											{m.nickname()}
+										</p>
+										<div class="text-xl font-medium text-gray-900 md:text-2xl">
+											{user?.nickname || m.not_set()}
+										</div>
+									</div>
+
+									<!-- Bio -->
+									<div>
+										<p class="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+											{m.bio()}
+										</p>
+										<div
+											class="min-h-[8rem] rounded-xl border border-gray-100 bg-gray-50 p-5 text-base leading-relaxed text-gray-700"
+										>
+											{user?.bio || m.no_bio()}
+										</div>
+									</div>
+								</div>
+							</div>
 						</div>
 					</div>
 				{/if}
