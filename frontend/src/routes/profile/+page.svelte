@@ -420,16 +420,18 @@
 	});
 </script>
 
+<svelte:head>
 	<title>{m.profile ? m.profile() : 'Profile'} - {getConfig().appName}</title>
 </svelte:head>
 
-{#snippet avatar(url: string | undefined | null, name: string | undefined, id: string, sizeClass: string = "h-12 w-12")}
+{#snippet avatar(
+	url: string | undefined | null,
+	name: string | undefined | null,
+	id: string,
+	sizeClass: string = 'h-12 w-12'
+)}
 	{#if getAvatarUrl(url)}
-		<img
-			src={getAvatarUrl(url)}
-			alt="Avatar"
-			class="{sizeClass} rounded-full object-cover"
-		/>
+		<img src={getAvatarUrl(url)} alt="Avatar" class="{sizeClass} rounded-full object-cover" />
 	{:else}
 		<div
 			class="flex {sizeClass} items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 font-bold text-white shadow-sm"
@@ -483,7 +485,7 @@
 		<div class="mb-8">
 			<div class="flex items-start gap-4">
 				<!-- Avatar -->
-				{@render avatar(user?.avatar, user?.nickname, walletAddress || '', "h-20 w-20 text-2xl")}
+				{@render avatar(user?.avatar, user?.nickname, walletAddress || '', 'h-20 w-20 text-2xl')}
 
 				<div class="flex-1">
 					<h1 class="text-2xl font-bold text-gray-900">
