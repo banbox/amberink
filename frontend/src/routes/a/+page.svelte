@@ -17,7 +17,7 @@
 	import { page } from '$app/stores';
 	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol } from '$lib/priceService';
 	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork, setEphemeralEnvName } from '$lib/config';
-	import { getBlockExplorerTxUrl, getViewblockArweaveUrl } from '$lib/chain';
+	import { getBlockExplorerTxUrl, getViewblockArweaveUrl, getBlockExplorerAddressUrl } from '$lib/chain';
 	import {
 		EvaluationScore,
 		collectArticle,
@@ -364,9 +364,26 @@
 		authorData?.nickname ||
 		author.nickname ||
 		article?.originalAuthor ||
-		shortAddress(authorId) ||
+		shortAddress(authorId || irysMetadata?.author || '') ||
 		'Anonymous'
 	);
+
+	// Check if author is address-only (no nickname)
+	const isAddressOnlyAuthor = $derived(
+		authorId && 
+		!authorData?.nickname &&
+		!author.nickname &&
+		!article?.originalAuthor
+	);
+
+	const authorAddress = $derived(authorId || irysMetadata?.author || '');
+	const authorLink = $derived(
+		isAddressOnlyAuthor 
+			? getBlockExplorerAddressUrl(authorAddress) 
+			: localizeHref(`/u?id=${authorAddress}`)
+	);
+	
+	const authorTarget = $derived(isAddressOnlyAuthor ? '_blank' : '_self');
 	// Get author avatar (prefer fetched data)
 	const authorAvatar = $derived(authorData?.avatar || author.avatar);
 	// Get author avatar initials safely
@@ -375,13 +392,12 @@
 			? (authorData?.nickname || author.nickname || '').slice(0, 2).toUpperCase()
 			: (article?.originalAuthor
 				? article.originalAuthor.slice(0, 2).toUpperCase()
-				: (authorId ? authorId.slice(2, 4).toUpperCase() : '??'))
+				: (authorAddress ? authorAddress.slice(2, 4).toUpperCase() : '??'))
 	);
-	const authorAddress = $derived(authorId);
 	const readingTime = $derived(articleContent ? getReadingTime(articleContent) : 0);
 	// Check if current user is the article author (for edit button)
 	const isAuthor = $derived(
-		walletAddress && article && walletAddress.toLowerCase() === authorId.toLowerCase()
+		walletAddress && article && authorAddress && walletAddress.toLowerCase() === authorAddress.toLowerCase()
 	);
 	const maxCollectSupply = $derived(article ? BigInt(article.maxCollectSupply) : 0n);
 	const collectEnabled = $derived(maxCollectSupply > 0n);
@@ -597,14 +613,12 @@
 
 		// Start loading content from Irys immediately (parallel with Subsquid query)
 		// This enables cross-chain display even when Subsquid hasn't indexed yet
+		// We capture the promise to await it later if needed
 		const irysLoadPromise = loadArticleFromIrys(articleId, versionId);
 
 		// Load article metadata from GraphQL with retry logic
 		// For newly published articles, the indexer may not have processed the event yet
 		let loadedArticle = await pollForArticleWithRetry(client, articleId);
-
-		// Wait for Irys loading to complete
-		await irysLoadPromise;
 
 		// If we have article from Subsquid, use it and load additional content
 		if (loadedArticle) {
@@ -630,43 +644,21 @@
 			}
 		} else {
 			// No Subsquid data available - use Irys-only mode
-			// This enables cross-chain display when Subsquid hasn't indexed the article
-			if (irysMetadata || articleContent) {
-				console.log('Using Irys-only display mode (Subsquid data not available)');
-				
-				// Construct a temporary article object from Irys metadata
-				article = {
-					id: articleId,
-					articleId: '0', // Placeholder, not on chain yet
-					title: irysMetadata?.title || 'Untitled',
-					summary: irysMetadata?.summary || '',
-					author: {
-						id: irysMetadata?.author || '',
-						nickname: null,
-						avatar: null
-					},
-					originalAuthor: null,
-					categoryId: '0', // Default category
-					visibility: irysMetadata?.visibility ?? 0,
-					originality: irysMetadata?.originality ?? 0,
-					createdAt: irysMetadata?.timestamp ? new Date(irysMetadata.timestamp).toISOString() : new Date().toISOString(),
-					blockNumber: 0,
-					txHash: '',
-					// Default stats
-					totalTips: '0',
-					likeAmount: '0',
-					dislikeAmount: '0',
-					collectCount: '0',
-					royaltyBps: 0,
-					collectPrice: '0',
-					maxCollectSupply: '0',
-					comments: [],
-					collections: []
-				};
+			// This ensures we don't show "Article not found" while Irys is still fetching
+			await irysLoadPromise;
 
-				articleLoading = false;
+			// Check if we already have a partial article from Irys loading
+			if (article) {
+				console.log('Using Irys-only display mode (already loaded)');
+				// We already have the placeholder article, just ensure content is fine
+				if (!articleContent && !contentError) {
+					await loadArticleContent(articleId, versionId, irysMetadata);
+				}
+			} else if (irysMetadata || articleContent) {
+				// Fallback if Irys loaded but didn't set article yet (edge case)
+				console.log('Using Irys-only display mode (constructing now)');
+				article = createPlaceholderArticle(articleId, irysMetadata, articleContent);
 				
-				// If content wasn't loaded (e.g. encrypted article), try loading it now
 				if (!articleContent && !contentError) {
 					await loadArticleContent(articleId, versionId, irysMetadata);
 				} else {
@@ -678,6 +670,38 @@
 				contentLoading = false;
 			}
 		}
+	}
+
+	// Construct a placeholder article object from Irys metadata
+	function createPlaceholderArticle(id: string, metadata: IrysArticleMetadata | null, content: string | null): ArticleDetailData {
+		return {
+			id: id,
+			articleId: '0', // Placeholder, not on chain yet
+			title: metadata?.title || 'Untitled',
+			summary: metadata?.summary || '',
+			author: {
+				id: metadata?.author || '',
+				nickname: null,
+				avatar: null
+			},
+			originalAuthor: null,
+			categoryId: '0', // Default category
+			visibility: metadata?.visibility ?? 0,
+			originality: metadata?.originality ?? 0,
+			createdAt: metadata?.timestamp ? new Date(metadata.timestamp).toISOString() : new Date().toISOString(),
+			blockNumber: 0,
+			txHash: '',
+			// Default stats
+			totalTips: '0',
+			likeAmount: '0',
+			dislikeAmount: '0',
+			collectCount: '0',
+			royaltyBps: 0,
+			collectPrice: '0',
+			maxCollectSupply: '0',
+			comments: [],
+			collections: []
+		};
 	}
 
 	/**
@@ -728,6 +752,13 @@
 
 			// Update current Irys TX ID for explorer link
 			currentIrysTxId = versionId || await queryLatestIrysTxId(articleId);
+
+			// If we have data and main article is still loading (or null), show what we have
+			if (!article && (metadata || content)) {
+				console.log('Irys data loaded, showing partial article');
+				article = createPlaceholderArticle(articleId, metadata || null, content || null);
+			}
+
 		} catch (e) {
 			console.error('Error loading from Irys:', e);
 		} finally {
@@ -870,7 +901,7 @@
 			<!-- Author Info Bar -->
 			<div class="flex items-center gap-3">
 				<!-- Avatar -->
-				<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
+				<a href={authorLink} target={authorTarget} class="shrink-0">
 					<UserAvatar url={getAvatarUrl(authorAvatar)} initials={authorInitials} size="lg" />
 				</a>
 
@@ -878,12 +909,13 @@
 					<!-- Name & Follow -->
 					<div class="flex items-center gap-2">
 						<a
-							href={localizeHref(`/u?id=${authorAddress}`)}
+							href={authorLink}
+							target={authorTarget}
 							class="font-medium text-gray-900 hover:underline"
 						>
 							{displayAuthor}
 						</a>
-						{#if !isAuthor}
+						{#if !isAuthor && !isAddressOnlyAuthor}
 							<span class="text-gray-300">·</span>
 							<button
 								type="button"
@@ -1111,7 +1143,9 @@
 		{/snippet}
 
 		<!-- Interaction Bar (Top) -->
-		{@render interactionBar('top')}
+		{#if article && article.articleId !== '0'}
+			{@render interactionBar('top')}
+		{/if}
 
 		<!-- Cover Image -->
 		<div class="mb-10 overflow-hidden" id="cover-container">
@@ -1167,21 +1201,25 @@
 
 		<!-- Interaction Bar (Bottom) - only show when content is loaded and long enough -->
 		{#if articleContent && !contentLoading && (readingTime > 2 || articleContent.length > 800)}
-			{@render interactionBar('bottom')}
+			{#if article && article.articleId !== '0'}
+				{@render interactionBar('bottom')}
+			{/if}
 		{/if}
 
 		<!-- Comments Section -->
-		<CommentSection
-			articleId={article.articleId}
-			comments={article.comments || []}
-			{walletAddress}
-			currentUserAvatar={currentUserData?.avatar}
-			currentUserNickname={currentUserData?.nickname}
-			{sessionKey}
-			{hasValidSessionKey}
-			{isCommenting}
-			onComment={handleComment}
-		/>
+		{#if article && article.articleId !== '0'}
+			<CommentSection
+				articleId={article.articleId}
+				comments={article.comments || []}
+				{walletAddress}
+				currentUserAvatar={currentUserData?.avatar}
+				currentUserNickname={currentUserData?.nickname}
+				{sessionKey}
+				{hasValidSessionKey}
+				{isCommenting}
+				onComment={handleComment}
+			/>
+		{/if}
 
 		<!-- Transaction Info (collapsed) -->
 		<details class="mt-10 text-sm text-gray-500">
@@ -1189,17 +1227,19 @@
 				{m.blockchain_info({})}
 			</summary>
 			<div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 rounded-lg bg-gray-50 p-4">
-				<div class="flex items-center gap-1">
-					<span class="font-medium text-gray-700">{m.contract_tx()}:</span>
-					<a
-						href={getBlockExplorerTxUrl(article.txHash)}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="text-blue-600 hover:underline"
-					>
-						{article.txHash.slice(0, 10)}...{article.txHash.slice(-8)}
-					</a>
-				</div>
+				{#if article.txHash}
+					<div class="flex items-center gap-1">
+						<span class="font-medium text-gray-700">{m.contract_tx()}:</span>
+						<a
+							href={getBlockExplorerTxUrl(article.txHash)}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="text-blue-600 hover:underline"
+						>
+							{article.txHash.slice(0, 10)}...{article.txHash.slice(-8)}
+						</a>
+					</div>
+				{/if}
 				<div class="flex items-center gap-1">
 					<span class="font-medium text-gray-700">{m.storage_tx()}:</span>
 					<a

@@ -1655,3 +1655,31 @@ Claude：已完成
 Claude：已完成  
 开发者：使用`2025-12-27 15:39  更新 help.md`进行更新  
 Claude：更新完成
+
+### 2026-01-06 12:00  代码优化
+使用`2026-01-03 14:20  代码优化`提示词对`frontend/src/lib`下代码进行优化  
+Claude: 修改完成
+
+### 2026-01-06 12:40  详情页优化
+@help.md 当前是文章详情页，会从subsquid和irys同时读取数据，有时候可能只有irys有数据，这时文章是只读的，无法进行评论、点赞、收藏等操作。帮我改为：
+任何数据都未加载完成时：显示骨架屏（当前默认）
+irys或squid之一加载完成，另一个正在加载或无数据：显示可用部分，隐藏不可用部分。如squid未加载完成或无数据则隐藏工具条和评论等。
+irys和squid都有数据：全部显示  
+Antigravity Gemini：修改完成，测试加载有问题  
+开发者：[浏览器控制台错误]上面是我测试的irys有数据但squid返回错误的情况，目前显示Article not found；这和预期不符；
+在“Using original manifest tags”这行日志之前，页面就显示Article not found了；后续加载了irys数据也没显示，请帮我解决  
+Gemini：已解决  
+开发者：@help.md 目前详情页支持仅irys有数据而squid无数据的情况，这时作者显示Anonymous；但这种情况是可以从irys中获取作者的钱包地址的，帮我改为显示钱包地址（截断）作为昵称，点击时跳转到区块链浏览器查看地址详情页面。不显示“关注”按钮。  
+Gemini：未解决  
+开发者：刷新后依然显示Anonymous，似乎并未获取到作者地址  
+Gemini：未解决  
+开发者：现在作者地址依然未显示，反而之前显示正常的标题变成了Untitled  
+Gemini：未解决  
+开发者：@help.md 当前是文章详情页，会从subsquid和irys同时读取数据，有时候只有irys有数据，这时文章是只读的，会隐藏评论、工具条等。
+不过目前作者显示Anonymous；但这种情况是可以从irys中获取作者的钱包地址的，帮我改为显示钱包地址（截断）作为昵称，点击时跳转到区块链浏览器查看地址详情页面。
+并且标题之前能正常显示，现在标题变成了Untitled，帮我恢复。
+你可以使用git查看frontend/src/routes/a/+page.svelte 和 frontend/src/lib/arweave/fetch.ts 已进行的修改  
+Claude Opus：仍未解决，发现network接口报错，之前没注意到  
+开发者：Cannot query field \"owner\" on type \"Transaction\" @help.md frontend/src/lib/arweave/fetch.ts fetchManifestTags新增了获取owner，但目前接口返回错误如上。
+@IRYS.md 请你阅读irys的相关文档，了解如何正确获取创建人地址  
+Claude：修正了owner错误，标题和作者地址都正常了。  

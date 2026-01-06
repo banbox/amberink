@@ -154,6 +154,7 @@ export function getFolderFileUrl(manifestId: string, fileName: string, useMutabl
 async function fetchManifestTags(manifestId: string): Promise<{
 	tags: Array<{ name: string; value: string }>;
 	timestamp?: number;
+	address?: string;
 }> {
 	// 根据环境选择 GraphQL 端点
 	const graphqlEndpoints = [
@@ -174,6 +175,7 @@ async function fetchManifestTags(manifestId: string): Promise<{
 				edges {
 					node {
 						id
+						address
 						timestamp
 						tags {
 							name
@@ -192,6 +194,7 @@ async function fetchManifestTags(manifestId: string): Promise<{
 				edges {
 					node {
 						id
+						address
 						timestamp
 						tags {
 							name
@@ -220,9 +223,11 @@ async function fetchManifestTags(manifestId: string): Promise<{
 				const latestEdges = latestResult?.data?.transactions?.edges || [];
 				if (latestEdges.length > 0) {
 					console.log(`Found latest manifest version: ${latestEdges[0].node.id}`);
+					const node = latestEdges[0].node;
 					return {
-						tags: latestEdges[0].node.tags || [],
-						timestamp: latestEdges[0].node.timestamp
+						tags: node.tags || [],
+						timestamp: node.timestamp,
+						address: node.address
 					};
 				}
 			}
@@ -242,9 +247,11 @@ async function fetchManifestTags(manifestId: string): Promise<{
 				const edges = result?.data?.transactions?.edges || [];
 				if (edges.length > 0) {
 					console.log(`Using original manifest tags: ${manifestId}`);
+					const node = edges[0].node;
 					return {
-						tags: edges[0].node.tags || [],
-						timestamp: edges[0].node.timestamp
+						tags: node.tags || [],
+						timestamp: node.timestamp,
+						address: node.address
 					};
 				}
 			}
@@ -299,9 +306,10 @@ export interface IrysArticleMetadata {
  */
 export async function fetchArticleMetadataFromIrys(manifestId: string): Promise<IrysArticleMetadata | null> {
 	try {
-		const { tags, timestamp } = await fetchManifestTags(manifestId);
-		if (tags.length === 0) {
-			console.log(`No tags found for manifest: ${manifestId}`);
+		const { tags, timestamp, address } = await fetchManifestTags(manifestId);
+		
+		if (tags.length === 0 && !address) {
+			console.log(`No metadata found for manifest: ${manifestId}`);
 			return null;
 		}
 
@@ -317,7 +325,7 @@ export async function fetchArticleMetadataFromIrys(manifestId: string): Promise<
 		const summary = getTagValue('Article-Summary');
 		if (summary) result.summary = summary;
 
-		const author = getTagValue('Author');
+		const author = getTagValue('Author') || address;
 		if (author) result.author = author;
 
 		const visibility = getTagValue('Visibility');
