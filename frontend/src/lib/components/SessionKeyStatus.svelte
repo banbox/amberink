@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatEthDisplay } from '$lib/data';
+	import { formatEthDisplay } from '$lib/formatUtils';
 	import * as m from '$lib/paraglide/messages';
 	import {
 		getStoredSessionKey,

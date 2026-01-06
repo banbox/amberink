@@ -18,7 +18,7 @@ import {
 	SESSION_KEY_DURATION_SECONDS,
 	ESTIMATED_GAS_UNITS
 } from './constants';
-import { ContractError } from '$lib/contracts';
+import { ContractError, FUNCTION_SELECTORS } from '$lib/contracts';
 
 // Internal helpers
 const getStorageKey = (account: string) => `amberink_session_key_${envName()}_${account.toLowerCase()}`;
@@ -125,22 +125,10 @@ const SESSION_KEY_MANAGER_ABI = [
 	}
 ] as const;
 
-const PUBLISH_SELECTOR = '0x2801f5df' as const;
 
 // Allowed function selectors for session key
-// Use: cast sig "functionName(params)" to get selector
-// 更新这里时需要一并更新：frontend\src\lib\contracts.ts  FUNCTION_SELECTORS
-const ALLOWED_SELECTORS: `0x${string}`[] = [
-	'0xff1f090a', // evaluate(uint256,uint8,string,address,uint256)
-	'0xdffd40f2', // likeComment(uint256,uint256,address,address)
-	'0x63c3cc16', // follow(address,bool)
-	'0x2801f5df', // publish((string,uint16,uint96,string,string,string,address,uint96,uint16,uint8,uint8)) - PublishParams struct
-	'0x8d3c100a', // collect(uint256,address)
-	'0x461e2378'  // editArticle((uint256,string,string,string,uint16)) - EditArticleParams struct
-];
-
-
-
+// Derived from contracts.ts to ensure consistency
+const ALLOWED_SELECTORS: `0x${string}`[] = Object.values(FUNCTION_SELECTORS);
 
 /** Calculate gas-based amount: maxFeePerGas * estimatedGas * multiplier 
  * Uses EIP-1559 fee estimation for more accurate gas cost calculation

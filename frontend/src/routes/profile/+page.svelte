@@ -19,7 +19,7 @@
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import { getAvatarUrl, uploadImage } from '$lib/arweave';
 	import { getIrysNetwork, getConfig } from '$lib/config';
-	import { shortAddress, formatDate, formatEth } from '$lib/utils';
+	import { shortAddress, ZERO_ADDRESS } from '$lib/utils';
 	import ImageProcessor from '$lib/components/ImageProcessor.svelte';
 	import { LockIcon, SpinnerIcon } from '$lib/components/icons';
 	import { 
@@ -33,7 +33,7 @@
 		createNewSessionKey,
 		type StoredSessionKey
 	} from '$lib/sessionKey';
-	import { formatEthDisplay } from '$lib/data';
+	import { formatDateMedium, formatEthDisplay } from '$lib/formatUtils';
 	import { getBlockExplorerTxUrl, getBlockExplorerAddressUrl } from '$lib/chain';
 	import { getNativeTokenSymbol } from '$lib/priceService';
 	import { localizeHref } from '$lib/paraglide/runtime';
@@ -514,7 +514,7 @@
 						</div>
 						<p class="mt-1 text-sm text-gray-400">
 							{m.member_since()}
-							{formatDate(user.createdAt)}
+							{formatDateMedium(user.createdAt)}
 						</p>
 					{/if}
 				</div>

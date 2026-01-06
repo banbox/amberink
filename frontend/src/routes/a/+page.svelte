@@ -1,8 +1,8 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
+	import { shortAddress, ZERO_ADDRESS } from '$lib/utils';
 	import { getCategoryName } from '$lib/categoryUtils';
-	import { formatDateMedium, formatTimestamp, getReadingTime } from '$lib/formatUtils';
+	import { formatDateMedium, formatTimestamp, getReadingTime, formatWeiToEth } from '$lib/formatUtils';
 	import { getContractErrorMessage } from '$lib/contractErrors';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown, fetchArticleMetadataFromIrys, type IrysArticleMetadata } from '$lib/arweave';
 	import { getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
@@ -35,7 +35,7 @@
 	import OriginalityTag from '$lib/components/OriginalityTag.svelte';
 	import AmountModal from '$lib/components/AmountModal.svelte';
 	import ArticleSkeleton from '$lib/components/ArticleSkeleton.svelte';
-	import Avatar from '$lib/components/Avatar.svelte';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import CollectModal from '$lib/components/CollectModal.svelte';  // new component
 	import { processContentImages, getScoreColor, pollForArticleWithRetry } from '$lib/utils/articleUtils';
 
@@ -871,7 +871,7 @@
 			<div class="flex items-center gap-3">
 				<!-- Avatar -->
 				<a href={localizeHref(`/u?id=${authorAddress}`)} class="shrink-0">
-					<Avatar url={getAvatarUrl(authorAvatar)} initials={authorInitials} />
+					<UserAvatar url={getAvatarUrl(authorAvatar)} initials={authorInitials} size="lg" />
 				</a>
 
 				<div class="flex flex-1 flex-col">
@@ -941,7 +941,10 @@
 							>
 								<!-- Thumbs Up Icon -->
 								<ThumbsUpIcon size={20} />
-								<span class="text-sm">{formatTips(article.totalTips)} {nativeSymbol}</span>
+								<span class="text-sm"
+									>{formatWeiToEth(article.totalTips, 4, { minDisplay: 0.0001 })}
+									{nativeSymbol}</span
+								>
 							</button>
 
 							<!-- Comments -->
@@ -978,7 +981,9 @@
 							>
 								<!-- Thumbs Down Icon -->
 								<ThumbsDownIcon size={20} />
-								<span class="text-sm">{formatTips(localDislikeAmount)}</span>
+								<span class="text-sm"
+									>{formatWeiToEth(localDislikeAmount, 4, { minDisplay: 0.0001 })}</span
+								>
 							</button>
 						</div>
 
@@ -1226,7 +1231,7 @@
 
 	<!-- Tip Modal -->
 	<AmountModal
-		show={showTipModal}
+		open={showTipModal}
 		onClose={() => (showTipModal = false)}
 		title={m.tip_author({})}
 		labelText={m.tip_in_usd({})}
@@ -1244,7 +1249,7 @@
 
 	<!-- Dislike Modal -->
 	<AmountModal
-		show={showDislikeModal}
+		open={showDislikeModal}
 		onClose={() => (showDislikeModal = false)}
 		title={m.dislike({})}
 		description={m.dislike_description({})}

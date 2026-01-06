@@ -12,7 +12,8 @@
 	} from '$lib/graphql';
 	import { getWalletAddress, isWalletConnected } from '$lib/stores/wallet.svelte';
 	import { followUser } from '$lib/contracts';
-	import { shortAddress, formatDate, infiniteScroll } from '$lib/utils';
+	import { shortAddress, infiniteScroll } from '$lib/utils';
+	import { formatDateMedium } from '$lib/formatUtils';
 	import ArticleListItem from '$lib/components/ArticleListItem.svelte';
 	import ProfileSkeleton from '$lib/components/ProfileSkeleton.svelte';
 	import LoadingState from '$lib/components/LoadingState.svelte';
@@ -211,7 +212,7 @@
 						</div>
 						<p class="mt-1 text-sm text-gray-400">
 							{m.member_since()}
-							{formatDate(user.createdAt)}
+							{formatDateMedium(user.createdAt)}
 						</p>
 						{#if user.bio}
 							<p class="mt-3 whitespace-pre-wrap text-gray-600">{user.bio}</p>

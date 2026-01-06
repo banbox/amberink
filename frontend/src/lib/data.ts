@@ -47,16 +47,3 @@ export const CATEGORY_KEYS = [
 ] as const;
 
 export type CategoryKey = (typeof CATEGORY_KEYS)[number];
-
-import { formatWeiToEth } from './formatUtils';
-
-/**
- * Format ETH amount for display to users with 8 decimal places (rounded)
- * For logs and calculations, use formatEther directly for full precision
- * @param wei - Amount in wei
- * @returns Formatted string with up to 8 decimal places (trailing zeros removed)
- */
-export function formatEthDisplay(wei: bigint): string {
-	return formatWeiToEth(wei, 8, { trimTrailingZeros: true });
-}
-

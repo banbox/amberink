@@ -2,8 +2,9 @@
 	import type { ArticleData, UserData } from '$lib/graphql';
 	import { client, USER_BY_ID_QUERY } from '$lib/graphql';
 	import { CATEGORY_KEYS } from '$lib/data';
-	import { shortAddress, formatDate, formatTips, ZERO_ADDRESS } from '$lib/utils';
+	import { shortAddress, ZERO_ADDRESS } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages';
+	import { formatDateMedium, formatWeiToEth } from '$lib/formatUtils';
 	import { getCoverImageUrl } from '$lib/arweave';
 	import { onMount } from 'svelte';
 	import { getNativeTokenSymbol } from '$lib/priceService';
@@ -105,18 +106,21 @@
 		<!-- Interaction Bar -->
 		<div class="flex items-center gap-4 text-sm text-gray-500">
 			<!-- Date -->
-			<time datetime={article.createdAt}>{formatDate(article.createdAt)}</time>
+			<time datetime={article.createdAt}>{formatDateMedium(article.createdAt)}</time>
 
 			<!-- Likes -->
 			<div class="flex items-center gap-1">
 				<HeartIcon size={16} />
-				<span>{formatTips(article.likeAmount)}</span>
+				<span>{formatWeiToEth(article.likeAmount, 4, { minDisplay: 0.0001 })}</span>
 			</div>
 
 			<!-- Tips -->
 			<div class="flex items-center gap-1">
 				<CoinIcon size={16} />
-				<span>{formatTips(article.totalTips)} {getNativeTokenSymbol()}</span>
+				<span
+					>{formatWeiToEth(article.totalTips, 4, { minDisplay: 0.0001 })}
+					{getNativeTokenSymbol()}</span
+				>
 			</div>
 
 			<!-- Read more -->

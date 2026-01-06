@@ -3,8 +3,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { CATEGORY_KEYS, type CategoryKey } from '$lib/data';
 	import { getCategoryLabel } from '$lib/categoryUtils';
-	import { formatDateShort } from '$lib/formatUtils';
-	import { formatEth } from '$lib/utils';
+	import { formatDateShort, formatWeiToEth } from '$lib/formatUtils';
 	import { client } from '$lib/graphql';
 	import { gql } from '@urql/svelte';
 	import { getWalletAddress } from '$lib/stores/wallet.svelte';
@@ -355,8 +354,8 @@
 										m.anonymous()}</span
 								>
 								<span>{formatDate(article.createdAt)}</span>
-								<span>👍 {formatEth(article.likeAmount)}</span>
-								<span>💰 {formatEth(article.totalTips)}</span>
+								<span>👍 {formatWeiToEth(article.likeAmount, 3, { minDisplay: 0.001 })}</span>
+								<span>💰 {formatWeiToEth(article.totalTips, 3, { minDisplay: 0.001 })}</span>
 								<span>🔖 {article.collectCount}</span>
 							</div>
 						</a>

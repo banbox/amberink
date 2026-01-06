@@ -6,6 +6,7 @@
 	import { getMinActionValue } from '$lib/config';
 	import { getAvatarUrl } from '$lib/arweave';
 	import { shortAddress, ZERO_ADDRESS } from '$lib/utils';
+	import { formatDateMedium } from '$lib/formatUtils';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { HeartOutlineIcon, BoldIcon, ItalicIcon } from './icons';
 
@@ -29,16 +30,6 @@
 	let commentText = $state('');
 	let isInputFocused = $state(false);
 	let inputRef = $state<HTMLTextAreaElement | null>(null);
-
-	// Format date - Medium style (e.g., "Dec 9, 2025")
-	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
-		return date.toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
-		});
-	}
 
 	// Handle submit
 	async function handleSubmit() {
@@ -186,7 +177,7 @@
 								{getUserDisplay(comment.user)}
 							</a>
 							<time class="text-xs text-gray-500" datetime={comment.createdAt}>
-								{formatDate(comment.createdAt)}
+								{formatDateMedium(comment.createdAt)}
 							</time>
 						</div>
 					</div>

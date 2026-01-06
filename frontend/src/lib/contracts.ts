@@ -1349,15 +1349,9 @@ export async function updateProfile(
 	bio: string
 ): Promise<string> {
 	// Validate lengths
-	if (new TextEncoder().encode(nickname).length > 64) {
-		throw new Error('Nickname is too long (max 64 bytes)');
-	}
-	if (new TextEncoder().encode(avatar).length > 128) {
-		throw new Error('Avatar URL is too long (max 128 bytes)');
-	}
-	if (new TextEncoder().encode(bio).length > 256) {
-		throw new Error('Bio is too long (max 256 bytes)');
-	}
+	assertBytesLimit(nickname, 64, 'Nickname');
+	assertBytesLimit(avatar, 128, 'Avatar URL');
+	assertBytesLimit(bio, 256, 'Bio');
 
 	return executeContractAction({
 		actionName: 'updateProfile',
@@ -1371,9 +1365,9 @@ export async function updateProfile(
 /** 验证文章编辑参数 */
 function validateEditArticleParams(articleId: bigint, originalAuthor: string, title: string, summary: string) {
 	if (articleId <= 0n) throw new Error('Article ID must be positive');
-	if (originalAuthor && new TextEncoder().encode(originalAuthor).length > 64) throw new Error('Original author name is too long (max 64 bytes)');
-	if (title && new TextEncoder().encode(title).length > 128) throw new Error('Title is too long (max 128 bytes)');
-	if (summary && new TextEncoder().encode(summary).length > 500) throw new Error('Summary is too long (max 500 bytes)');
+	assertBytesLimit(originalAuthor, 64, 'Original author name');
+	assertBytesLimit(title, 128, 'Title');
+	assertBytesLimit(summary, 512, 'Summary');
 }
 
 export async function editArticle(

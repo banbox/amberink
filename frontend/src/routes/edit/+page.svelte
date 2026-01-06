@@ -212,7 +212,8 @@
 				content: formData.content.trim(),
 				coverImage: formData.coverImageFile || undefined,
 				tags,
-				keepExistingCover: keepExistingCover && !formData.coverImageFile
+				keepExistingCover: keepExistingCover && !formData.coverImageFile,
+				authorAddress: walletAddress || ''
 			};
 			console.log('Update params keepExistingCover:', updateParams.keepExistingCover);
 

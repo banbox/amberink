@@ -30,45 +30,12 @@ export function shortAddress(address: string): string {
 	if (!address) return '';
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
-
-/**
- * Format date to localized string
- */
-export function formatDate(dateStr: string): string {
-	const date = new Date(dateStr);
-	return date.toLocaleDateString(undefined, {
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric'
-	});
-}
-
-/**
- * Format wei to ETH display string (4 decimal places, with <0.0001 threshold)
- */
-export function formatTips(tips: string): string {
-	return formatWeiToEth(tips, 4, { minDisplay: 0.0001 });
-}
-
-/**
- * Format wei to ETH with 3 decimal places
- */
-export function formatEth(wei: string): string {
-	return formatWeiToEth(wei, 3, { minDisplay: 0.001 });
-}
-
+// Re-export formatWeiToEth for backward compatibility convenience
 import { formatWeiToEth } from './formatUtils';
 
 // Re-export ZERO_ADDRESS from centralized constants for backward compatibility
 import { ZERO_ADDRESS } from './constants';
 export { ZERO_ADDRESS };
-
-/**
- * Check if address is zero address
- */
-export function isZeroAddress(address: string): boolean {
-	return !address || address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
-}
 
 // ============================================================
 //                  Svelte Actions
