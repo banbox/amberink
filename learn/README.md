@@ -1683,3 +1683,8 @@ Claude Opus：仍未解决，发现network接口报错，之前没注意到
 开发者：Cannot query field \"owner\" on type \"Transaction\" @help.md frontend/src/lib/arweave/fetch.ts fetchManifestTags新增了获取owner，但目前接口返回错误如上。
 @IRYS.md 请你阅读irys的相关文档，了解如何正确获取创建人地址  
 Claude：修正了owner错误，标题和作者地址都正常了。  
+
+### 2026-01-06 12:40  详情页优化
+@help.md 当前详情页显示有问题，对于irys获取数据成功，但squid获取失败的，应该正常显示irys的数据。
+但目前squid测试出现cors错误时，虽然irys加载了数据，但是一直处于骨架屏loading状态，帮我修复解决  
+Claude：已解决

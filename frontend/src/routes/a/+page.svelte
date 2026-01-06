@@ -757,6 +757,7 @@
 			if (!article && (metadata || content)) {
 				console.log('Irys data loaded, showing partial article');
 				article = createPlaceholderArticle(articleId, metadata || null, content || null);
+				articleLoading = false;
 			}
 
 		} catch (e) {
