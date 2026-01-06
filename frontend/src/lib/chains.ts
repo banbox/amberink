@@ -77,8 +77,9 @@ export const SUPPORTED_CHAINS: Record<number, ChainInfo> = {
         nativeToken: 'ETH',
         explorerUrl: 'https://optimistic.etherscan.io',
         pythContractAddress: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C',
-        blogHubAddress: '0x78Eaf1C87d999159b37E02Eb94ED23Fa62a06540',
-        sessionKeyManagerAddress: '0x5a6dEBC81299DD3ff464Dad0ba7Aa7a167fFA131',
+        blogHubAddress: '0x6a6Ac4decd218aC4d0fe57Af418f230514C0843a',
+        payMasterAddress: '0x2B73B8312eb4A874EF531579F72Aebbe08f706B6',
+        sessionKeyManagerAddress: '0xcFAa8395E839d2FE5aaECB772681E5c10D82096e',
     },
     11155420: {
         id: 11155420,
