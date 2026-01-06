@@ -12,11 +12,13 @@ import { browser } from '$app/environment';
 import { getIrysUploaderDevnet, getIrysUploader, type IrysUploader } from '$lib/arweave/irys';
 import { getIrysNetwork } from '$lib/config';
 import { usdToWei } from '$lib/priceService';
+import { client, USER_BY_ID_QUERY, type UserData } from '$lib/graphql';
 import {
 	SESSION_KEY_DEFAULT_SPENDING_LIMIT,
 	SESSION_KEY_DURATION_SECONDS,
 	ESTIMATED_GAS_UNITS
 } from './constants';
+import { ContractError } from '$lib/contracts';
 
 // Internal helpers
 const getStorageKey = (account: string) => `amberink_session_key_${envName()}_${account.toLowerCase()}`;
@@ -880,4 +882,221 @@ export interface SessionKeyTransaction {
 	selector?: string;
 	gasUsed?: bigint;
 	gasPrice?: bigint;
+}
+
+/**
+ * Execute contract call with session key, auto-creating if needed.
+ * Minimizes MetaMask popups:
+ * - Uses existing valid session key if available
+ * - Creates new session key only if needed (one popup)
+ * - Funds session key only if balance is low (one popup)
+ * - Falls back to regular wallet call if user rejects
+ * 
+ * @param withSessionKey - Function to execute with session key
+ * @param withoutSessionKey - Fallback function to execute without session key
+ * @param options - Configuration options
+ * @returns Result of the contract call
+ */
+export async function callWithSessionKey<T>(
+	withSessionKey: (sk: StoredSessionKey) => Promise<T>,
+	withoutSessionKey: () => Promise<T>,
+	options: { autoCreate?: boolean; txValue?: bigint } = {}
+): Promise<T> {
+	const { autoCreate = true, txValue = 0n } = options;
+
+	try {
+		// Use unified ensureSessionKeyReady - handles validation, creation, and funding
+		const sk = autoCreate
+			? await ensureSessionKeyReady({ txValue })
+			: null;
+
+		if (sk) {
+			return await withSessionKey(sk);
+		}
+
+		// User rejected or no session key available, fall back to regular wallet
+		console.log('Session key not available, using regular wallet call');
+		return await withoutSessionKey();
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+		const errorName = error instanceof ContractError ? error.code : '';
+
+		// Only fallback to wallet for specific safe-to-retry scenarios:
+		// 1. User rejected the operation (wallet popup dismissed)
+		// 2. RPC connection errors (network issues)
+		// Do NOT fallback for:
+		// - Contract reverts (session key validation failed, nonce mismatch, etc.)
+		// - Insufficient funds (might cause duplicate tx if session key tx is pending)
+		// - Gas estimation failures (contract would revert)
+
+		const isUserRejection = errorMessage.includes('user rejected') ||
+			errorMessage.includes('user denied') ||
+			errorMessage.includes('rejected by user');
+
+		const isRpcError = errorMessage.includes('network') ||
+			errorMessage.includes('connection') ||
+			errorMessage.includes('timeout') ||
+			errorMessage.includes('rpc');
+
+		const isContractError = errorName === 'contract_reverted' ||
+			errorName === 'gas_estimation_failed' ||
+			errorMessage.includes('insufficient funds') ||
+			errorMessage.includes('insufficient balance') ||
+			errorMessage.includes('execution failed') ||
+			errorMessage.includes('execution reverted');
+
+		if (isContractError) {
+			// Contract-level errors should NOT fallback - re-throw to prevent duplicate tx
+			console.error('Session key contract error, not falling back:', error);
+			throw error;
+		}
+
+		if (isUserRejection || isRpcError) {
+			// Safe to fallback - no session key tx was sent
+			console.log('Session key operation cancelled/failed, falling back to regular wallet:', error);
+			return await withoutSessionKey();
+		}
+
+		// For unknown errors, re-throw to be safe (prevent duplicate transactions)
+		console.error('Session key operation failed with unknown error:', error);
+		throw error;
+	}
+}
+
+/**
+ * Update session key state after a successful operation
+ * This is a helper to keep session key state in sync
+ * 
+ * @param currentSessionKey - Current session key state
+ * @param newSessionKey - New session key from operation
+ * @returns Updated session key and validation status
+ */
+export function updateSessionKeyState(
+	currentSessionKey: StoredSessionKey | null,
+	newSessionKey: StoredSessionKey | null
+): { sessionKey: StoredSessionKey | null; hasValidSessionKey: boolean } {
+	if (!newSessionKey) {
+		return { sessionKey: currentSessionKey, hasValidSessionKey: !!currentSessionKey };
+	}
+
+	// Update local state if we got a new session key
+	if (!currentSessionKey || currentSessionKey.address !== newSessionKey.address) {
+		return { sessionKey: newSessionKey, hasValidSessionKey: true };
+	}
+
+	return { sessionKey: currentSessionKey, hasValidSessionKey: true };
+}
+
+/**
+ * Fetch user data from GraphQL by wallet address
+ * @param address - The wallet address to fetch data for
+ * @returns User data or null if not found
+ */
+export async function fetchUserData(address: string): Promise<UserData | null> {
+	if (!address) return null;
+	try {
+		const result = await client
+			.query(USER_BY_ID_QUERY, { id: address.toLowerCase() }, { requestPolicy: 'cache-first' })
+			.toPromise();
+		return result.data?.userById ?? null;
+	} catch (e) {
+		console.error('Failed to fetch user data for', address, e);
+		return null;
+	}
+}
+
+/**
+ * Check wallet connection and return wallet state
+ * @returns Object containing wallet address, session key, and validation status
+ */
+export async function checkWalletConnection(): Promise<{
+	walletAddress: string | null;
+	sessionKey: StoredSessionKey | null;
+	hasValidSessionKey: boolean;
+	currentUserData: UserData | null;
+}> {
+	if (typeof window === 'undefined' || !window.ethereum) {
+		return {
+			walletAddress: null,
+			sessionKey: null,
+			hasValidSessionKey: false,
+			currentUserData: null
+		};
+	}
+
+	try {
+		const accounts = (await window.ethereum.request({ method: 'eth_accounts' })) as string[];
+		if (accounts.length > 0) {
+			const walletAddress = accounts[0];
+			const sessionKey = getStoredSessionKey(walletAddress);
+			const hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+			const currentUserData = await fetchUserData(walletAddress);
+
+			return {
+				walletAddress,
+				sessionKey,
+				hasValidSessionKey,
+				currentUserData
+			};
+		}
+	} catch (e) {
+		console.error('Failed to check wallet:', e);
+	}
+
+	return {
+		walletAddress: null,
+		sessionKey: null,
+		hasValidSessionKey: false,
+		currentUserData: null
+	};
+}
+
+/**
+ * Setup wallet account change listener
+ * @param onAccountChange - Callback function when account changes
+ * @returns Cleanup function to remove the listener
+ */
+export function setupWalletAccountListener(
+	onAccountChange: (state: {
+		walletAddress: string | null;
+		sessionKey: StoredSessionKey | null;
+		hasValidSessionKey: boolean;
+		currentUserData: UserData | null;
+	}) => void
+): () => void {
+	if (typeof window === 'undefined' || !window.ethereum) {
+		return () => { };
+	}
+
+	const handleAccountsChanged = async (accounts: unknown) => {
+		const accts = accounts as string[];
+		const walletAddress = accts.length > 0 ? accts[0] : null;
+
+		if (walletAddress) {
+			const sessionKey = getStoredSessionKey(walletAddress);
+			const hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
+			const currentUserData = await fetchUserData(walletAddress);
+
+			onAccountChange({
+				walletAddress,
+				sessionKey,
+				hasValidSessionKey,
+				currentUserData
+			});
+		} else {
+			onAccountChange({
+				walletAddress: null,
+				sessionKey: null,
+				hasValidSessionKey: false,
+				currentUserData: null
+			});
+		}
+	};
+
+	window.ethereum.on?.('accountsChanged', handleAccountsChanged);
+
+	// Return cleanup function
+	return () => {
+		window.ethereum?.removeListener?.('accountsChanged', handleAccountsChanged);
+	};
 }

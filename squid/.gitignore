@@ -9,6 +9,5 @@ src/abi/*.json
 # IDE files
 /.idea
 .env
-.env.*
-!.env.example
-!.env.dev
+.env.prodmy
+.env.testmy

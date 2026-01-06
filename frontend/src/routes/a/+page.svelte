@@ -2,7 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { shortAddress, formatTips, ZERO_ADDRESS } from '$lib/utils';
 	import { getCategoryName } from '$lib/categoryUtils';
-	import { formatDateMedium, formatTimestamp, getApproxNativeAmount, getReadingTime } from '$lib/formatUtils';
+	import { formatDateMedium, formatTimestamp, getReadingTime } from '$lib/formatUtils';
 	import { getContractErrorMessage } from '$lib/contractErrors';
 	import { getCoverImageUrl, getAvatarUrl, fetchArticleMarkdown, fetchArticleMetadataFromIrys, type IrysArticleMetadata } from '$lib/arweave';
 	import { getSignMessageForArticle, deriveEncryptionKey } from '$lib/arweave/crypto';
@@ -13,9 +13,9 @@
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import CommentSection from '$lib/components/CommentSection.svelte';
-	import { client, USER_BY_ID_QUERY, ARTICLE_BY_ID_QUERY, type UserData, type ArticleDetailData } from '$lib/graphql';
+	import { client, ARTICLE_BY_ID_QUERY, type UserData, type ArticleDetailData } from '$lib/graphql';
 	import { page } from '$app/stores';
-	import { usdToWei, weiToUsd, getNativeTokenPriceUsd, getNativeTokenSymbol, formatUsd } from '$lib/priceService';
+	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol } from '$lib/priceService';
 	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork, setEphemeralEnvName } from '$lib/config';
 	import { getBlockExplorerTxUrl, getViewblockArweaveUrl } from '$lib/chain';
 	import {
@@ -25,15 +25,10 @@
 		evaluateArticle,
 		evaluateArticleWithSessionKey,
 		followUser,
-		followUserWithSessionKey,
-		ContractError
+		followUserWithSessionKey
 	} from '$lib/contracts';
-	import {
-		getStoredSessionKey,
-		isSessionKeyValidForCurrentWallet,
-		ensureSessionKeyReady,
-		type StoredSessionKey
-	} from '$lib/sessionKey';
+	import {type StoredSessionKey, callWithSessionKey} from '$lib/sessionKey';
+	import { fetchUserData, checkWalletConnection, setupWalletAccountListener } from '$lib/sessionKey';
 	import { getMinActionValue } from '$lib/config';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { ClockIcon, ThumbsUpIcon, ThumbsDownIcon, CommentIcon, BookmarkIcon, CloseIcon, BackIcon, EditIcon, ShareIcon, SpinnerIcon } from '$lib/components/icons';
@@ -111,7 +106,11 @@
 
 	// Check if current user can perform action on article (prevent self-action)
 	function canPerformAction(actionName: string): boolean {
-		if (!requireWallet() || !article) return false;
+		if (!walletAddress) {
+			showFeedback('error', m.connect_wallet_first());
+			return false;
+		}
+		if (!article) return false;
 		if (isAuthor) {
 			showFeedback('error', m.cannot_action_own({ action: actionName, item: m.article() }));
 			return false;
@@ -173,9 +172,6 @@
 		);
 	}
 
-	// Calculate reading time (words per minute)
-	// Handles both space-separated languages and character-based languages
-
 	// Share article
 	function handleShare() {
 		if (!article) return;
@@ -190,133 +186,12 @@
 		}
 	}
 
-	// Show feedback message
+	// Show feedback message (inline implementation)
 	function showFeedback(type: 'success' | 'error', text: string) {
 		feedbackMessage = { type, text };
 		setTimeout(() => {
 			feedbackMessage = null;
 		}, 3000);
-	}
-
-	// Check wallet and show error if not connected, returns true if wallet is connected
-	function requireWallet(): boolean {
-		if (!walletAddress) {
-			showFeedback('error', m.connect_wallet_first());
-			return false;
-		}
-		return true;
-	}
-
-	/**
-	 * Execute contract call with session key, auto-creating if needed.
-	 * Minimizes MetaMask popups:
-	 * - Uses existing valid session key if available
-	 * - Creates new session key only if needed (one popup)
-	 * - Funds session key only if balance is low (one popup)
-	 * - Falls back to regular wallet call if user rejects
-	 */
-	async function callWithSessionKey<T>(
-		withSessionKey: (sk: StoredSessionKey) => Promise<T>,
-		withoutSessionKey: () => Promise<T>,
-		options: { autoCreate?: boolean; txValue?: bigint } = {}
-	): Promise<T> {
-		const { autoCreate = true, txValue = 0n } = options;
-		
-		try {
-			// Use unified ensureSessionKeyReady - handles validation, creation, and funding
-			const sk = autoCreate 
-				? await ensureSessionKeyReady({ txValue })
-				: (hasValidSessionKey && sessionKey ? sessionKey : null);
-			
-			if (sk) {
-				// Update local state if we got a new session key
-				if (!sessionKey || sessionKey.address !== sk.address) {
-					sessionKey = sk;
-					hasValidSessionKey = true;
-				}
-				return await withSessionKey(sk);
-			}
-			
-			// User rejected or no session key available, fall back to regular wallet
-			console.log('Session key not available, using regular wallet call');
-			return await withoutSessionKey();
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
-			const errorName = error instanceof ContractError ? error.code : '';
-			
-			// Only fallback to wallet for specific safe-to-retry scenarios:
-			// 1. User rejected the operation (wallet popup dismissed)
-			// 2. RPC connection errors (network issues)
-			// Do NOT fallback for:
-			// - Contract reverts (session key validation failed, nonce mismatch, etc.)
-			// - Insufficient funds (might cause duplicate tx if session key tx is pending)
-			// - Gas estimation failures (contract would revert)
-			
-			const isUserRejection = errorMessage.includes('user rejected') || 
-				errorMessage.includes('user denied') ||
-				errorMessage.includes('rejected by user');
-			
-			const isRpcError = errorMessage.includes('network') ||
-				errorMessage.includes('connection') ||
-				errorMessage.includes('timeout') ||
-				errorMessage.includes('rpc');
-			
-			const isContractError = errorName === 'contract_reverted' ||
-				errorName === 'gas_estimation_failed' ||
-				errorMessage.includes('insufficient funds') ||
-				errorMessage.includes('insufficient balance') ||
-				errorMessage.includes('execution failed') ||
-				errorMessage.includes('execution reverted');
-			
-			if (isContractError) {
-				// Contract-level errors should NOT fallback - re-throw to prevent duplicate tx
-				console.error('Session key contract error, not falling back:', error);
-				throw error;
-			}
-			
-			if (isUserRejection || isRpcError) {
-				// Safe to fallback - no session key tx was sent
-				console.log('Session key operation cancelled/failed, falling back to regular wallet:', error);
-				return await withoutSessionKey();
-			}
-			
-			// For unknown errors, re-throw to be safe (prevent duplicate transactions)
-			console.error('Session key operation failed with unknown error:', error);
-			throw error;
-		}
-	}
-
-
-
-	// Generic user data fetcher
-	async function fetchUserData(address: string): Promise<UserData | null> {
-		if (!address) return null;
-		try {
-			const result = await client
-				.query(USER_BY_ID_QUERY, { id: address.toLowerCase() }, { requestPolicy: 'cache-first' })
-				.toPromise();
-			return result.data?.userById ?? null;
-		} catch (e) {
-			console.error('Failed to fetch user data for', address, e);
-			return null;
-		}
-	}
-
-	// Check wallet connection
-	async function checkWalletConnection() {
-		if (typeof window === 'undefined' || !window.ethereum) return;
-		try {
-			const accounts = (await window.ethereum.request({ method: 'eth_accounts' })) as string[];
-			if (accounts.length > 0) {
-				walletAddress = accounts[0];
-				sessionKey = getStoredSessionKey(walletAddress);
-				hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
-				// Fetch current user data
-				currentUserData = await fetchUserData(accounts[0]);
-			}
-		} catch (e) {
-			console.error('Failed to check wallet:', e);
-		}
 	}
 
 	// Handle Dislike
@@ -403,9 +278,12 @@
 	}
 
 	// Handle Comment
-	// Handle Comment
 	async function handleComment(commentText: string): Promise<boolean> {
-		if (!requireWallet() || !commentText.trim()) return false;
+		if (!walletAddress) {
+			showFeedback('error', m.connect_wallet_first());
+			return false;
+		}
+		if (!commentText.trim()) return false;
 		
 		let success = false;
 		await executeInteraction(
@@ -919,23 +797,19 @@
 		
 		// Async initialization (wallet setup) - wrapped in IIFE to keep onMount sync
 		(async () => {
-			// Check wallet connection
-			await checkWalletConnection();
+			// Check wallet connection using utility function
+			const walletState = await checkWalletConnection();
+			walletAddress = walletState.walletAddress;
+			sessionKey = walletState.sessionKey;
+			hasValidSessionKey = walletState.hasValidSessionKey;
+			currentUserData = walletState.currentUserData;
 			
-			// Listen for account changes
-			const eth = typeof window !== 'undefined' ? window.ethereum : undefined;
-			eth?.on?.('accountsChanged', async (accounts: unknown) => {
-				const accts = accounts as string[];
-				walletAddress = accts.length > 0 ? accts[0] : null;
-				if (walletAddress) {
-					sessionKey = getStoredSessionKey(walletAddress);
-					hasValidSessionKey = await isSessionKeyValidForCurrentWallet();
-					currentUserData = await fetchUserData(walletAddress);
-				} else {
-					sessionKey = null;
-					hasValidSessionKey = false;
-					currentUserData = null;
-				}
+			// Setup account change listener using utility function
+			setupWalletAccountListener((state) => {
+				walletAddress = state.walletAddress;
+				sessionKey = state.sessionKey;
+				hasValidSessionKey = state.hasValidSessionKey;
+				currentUserData = state.currentUserData;
 			});
 		})();
 		

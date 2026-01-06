@@ -116,3 +116,57 @@ export function infiniteScroll(_node: HTMLElement, options: InfiniteScrollOption
 		}
 	};
 }
+
+// ============================================================
+//                  UI Helper Functions
+// ============================================================
+
+export interface FeedbackMessage {
+	type: 'success' | 'error';
+	text: string;
+}
+
+/**
+ * Create a feedback manager for showing temporary messages
+ * Returns functions to show and clear feedback messages
+ */
+export function createFeedbackManager(duration = 3000) {
+	let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	return {
+		showFeedback: (
+			type: 'success' | 'error',
+			text: string,
+			setter: (msg: FeedbackMessage | null) => void
+		) => {
+			setter({ type, text });
+			if (timeoutId) clearTimeout(timeoutId);
+			timeoutId = setTimeout(() => {
+				setter(null);
+				timeoutId = null;
+			}, duration);
+		},
+		clearFeedback: (setter: (msg: FeedbackMessage | null) => void) => {
+			if (timeoutId) {
+				clearTimeout(timeoutId);
+				timeoutId = null;
+			}
+			setter(null);
+		}
+	};
+}
+
+/**
+ * Check if wallet is connected and show error message if not
+ */
+export function requireWallet(
+	walletAddress: string | null,
+	errorMessage: string,
+	showFeedback: (type: 'success' | 'error', text: string) => void
+): boolean {
+	if (!walletAddress) {
+		showFeedback('error', errorMessage);
+		return false;
+	}
+	return true;
+}

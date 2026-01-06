@@ -87,126 +87,129 @@ AmberInk 是一个完全去中心化的永久内容发布平台，无后端参�
 
 ### 核心服务库 (src/lib/)
 
-- **contracts.ts**: 智能合约交互工具。定义 ContractError 错误类、错误解析函数、发布文章、评价、评论、点赞等链上操作。支持 viem 钱包客户端、Session Key 签名、错误处理。
+- **contracts.ts**: 智能合约交互核心模块。定义 ContractError 类和 ContractErrorCode 错误码；实现发布、评价、评论、点赞、关注、收藏等所有链上操作；支持钱包模式和 Session Key 模式；包含参数验证、Gas 估算、错误解析等完整功能。完整 BlogHub ABI 定义。
 
-- **sessionKey.ts**: Session Key 管理工具。生成临时密钥对、注册 Session Key、验证有效性、存储在 LocalStorage。支持 Session Key 余额检查、权限验证、过期检查、自动创建。支持 EIP-712 签名和 ECDSA 验证。
+- **sessionKey.ts**: Session Key 完整管理。生成临时密钥对、注册到链、余额管理（检查/充值）、Irys Balance Approval 创建、权限验证、过期检查。核心函数：`ensureSessionKeyReady`（统一准备流程）、`createSessionKey`、`fundSessionKey`、`ensureSessionKeyBalance`、`isSessionKeyActiveOnChain`。
 
-- **publish.ts**: 文章发布编排工具。协调 Arweave 上传和区块链发布流程。获取或创建有效 Session Key、上传文章文件夹、发布到 BlogHub 合约。
+- **publish.ts**: 文章发布流程编排。统一调用 `ensureSessionKeyReady` 准备 Session Key，协调 Arweave 上传和链上发布，支持加密文章签名回调。核心函数：`publishArticle`、`publishArticleWithSessionKeyInternal`、`isGaslessPublishingAvailable`。
 
-- **chains.ts**: 集中化链配置。定义支持的链（Ethereum、Optimism、Arbitrum、Base、Polygon、zkSync、Mantle、Scroll 等）及其 Pyth Network 预言机地址、BlogHub 合约地址、SessionKeyManager 合约地址。所有链相关配置的唯一来源。
+- **chains.ts**: 多链配置中心。定义支持的所有链（Optimism、Base、Arbitrum、Polygon 等）的配置，包括 chainId、名称、RPC、区块浏览器、合约地址（BlogHub、SessionKeyManager、Pyth Oracle）、价格 Feed ID。各环境（dev/test/prod）的链白名单。
 
-- **chain.ts**: 链配置工具。管理不同网络的 RPC、合约地址、链 ID、网络参数等配置。
+- **chain.ts**: 链工具函数。从 chains.ts 获取链配置、解析链信息。
 
-- **config.ts**: 全局配置管理。从 stores/config.svelte.ts 读取配置，提供 getter 函数。包含 RPC URL、链 ID、Arweave 网关、Gas 费用倍数、USD 定价等配置。支持用户在设置页面覆盖默认配置。
+- **config.ts**: 配置读取接口。从 stores/config.svelte.ts 读取配置，提供 `getConfig`、`getChainId`、`getIrysNetwork` 等 getter 函数。
 
-- **constants.ts**: 集中管理前端固定常量。包含 Irys 网关 URL、Session Key 配置（有效期、消费限额）、价格服务阈值、零地址等硬编码值。
+- **constants.ts**: 硬编码常量。Irys 网关 URL、Session Key 默认配置（有效期 7 天、消费限额 10 ETH、Gas 估算值）、价格验证上限、零地址。
 
-- **priceService.ts**: 价格服务。从 Pyth Network 预言机获取原生代币价格（USD），支持多链，包含缓存机制。提供 USD/Wei 互转、格式化显示等工具函数。
+- **priceService.ts**: 原生代币价格服务。通过 Pyth Hermes API 获取实时价格（带缓存）；提供 `usdToWei`、`weiToUsd` 转换，`formatUsd`、`formatNativeToken` 格式化，`getNativeTokenSymbol` 获取符号。
 
-- **data.ts**: 文章分类定义。定义 CATEGORY_KEYS 常量数组（40+ 分类），提供 formatEthDisplay 格式化函数。
+- **data.ts**: 分类定义。40+ 文章分类 Key（如 Technology、Art、Finance 等）。
 
-- **categoryUtils.ts**: 分类工具函数。提供分类名称国际化、分类 ID 与 Key 转换等功能。
+- **categoryUtils.ts**: 分类工具。分类名称国际化、ID/Key 互转。
 
-- **formatUtils.ts**: 格式化工具函数。提供 formatWeiToEth 等数值格式化函数，支持精度控制和阈值显示。
+- **formatUtils.ts**: 格式化工具。日期格式化（`formatDateShort`、`formatDateMedium`、`formatTimestamp`）、Wei/ETH 转换（`formatWeiToEth` 支持阈值和精度）、阅读时间计算（`getReadingTime` 支持多语言）。
 
-- **utils.ts**: 通用工具函数。包含 NFT TokenID 工具（COLLECTOR_TOKEN_OFFSET）、地址格式化（shortAddress）、日期格式化、零地址检查、infiniteScroll Svelte action。
+- **utils.ts**: 通用工具。NFT TokenID 计算（`COLLECTOR_TOKEN_OFFSET = 1<<250`、`getArticleIdFromTokenId`）、地址格式化（`shortAddress`）、零地址检查、Svelte `infiniteScroll` action、反馈消息管理（`createFeedbackManager`）、钱包检查（`requireWallet`）。
 
-- **wallet.ts**: 钱包工具函数。提供 getEthereumAccount、switchToTargetChain、getWalletClient、getPublicClient 等钱包交互函数。
+- **wallet.ts**: 钱包交互。获取账户（`getEthereumAccount`）、切换链（`switchToTargetChain`）、获取客户端（`getWalletClient`、`getPublicClient`）。
 
-- **contractErrors.ts**: 合约错误码定义。定义 ContractErrorCode 枚举，用于国际化错误消息。
-
-- **index.ts**: 库导出文件，导出公共 API。
+- **contractErrors.ts**: 错误码枚举。定义所有合约错误码，用于 i18n。
 
 ### 状态管理 (src/lib/stores/)
 
-- **config.svelte.ts**: 响应式配置状态管理，使用 Svelte 5 runes ($state)。支持 localStorage 持久化，允许用户覆盖默认配置。定义 envDefaults、configFields 元数据、Pyth 预言机地址映射。
-- **wallet.svelte.ts**: 钱包状态管理，使用 Svelte 5 runes。管理钱包连接状态、用户地址，提供 connectWallet、disconnectWallet、handleAccountsChanged 等函数。
+- **config.svelte.ts**: 响应式配置管理（Svelte 5 runes $state）。环境配置硬编码（dev/test/prod），支持 localStorage 持久化用户覆盖。管理 RPC URL、chainId、Subsquid 端点、Irys 网络、USD 定价、缓存时长等。提供 `getConfig`、`setConfigValue`、`getEnvName`、`getPythContractAddress`、`getAllowedChainIds` 等函数。configFields 元数据支持设置 UI。
+- **wallet.svelte.ts**: 钱包状态管理（Svelte 5 runes）。管理连接状态、用户地址，监听账户切换。提供 `connectWallet`、`disconnectWallet`、`handleAccountsChanged`。
+
+### 工具模块 (src/lib/utils/)
+
+- **articleUtils.ts**: 文章内容处理工具。`processContentImages`（替换相对路径为 Irys URL）、`getScoreColor`（评分渐变色）、`pollForArticleWithRetry`（轮询查询新发布文章）。
+- **imageCompressor.ts**: 图片压缩工具。支持质量调整、尺寸限制。
 
 ### 组件库 (src/lib/components/)
 
-- **WalletButton.svelte**: 钱包连接按钮，支持连接/断开钱包、显示地址。
-- **SessionKeyStatus.svelte**: Session Key 状态显示，显示有效期、权限范围、余额信息。
-- **ArticleListItem.svelte**: 文章列表项组件，展示文章标题、摘要、作者、评分、发布时间。
-- **ArticleSearch.svelte**: 文章搜索组件，支持关键词搜索、范围筛选（全部/我的）、分类筛选、排序。
-- **ArticleEditor.svelte**: 文章编辑器组件，支持 Markdown 编辑、实时预览、可见性设置（公开/不公开/加密）。
-- **CategoryFilter.svelte**: 分类筛选组件，展示分类列表、支持多选。
-- **CommentSection.svelte**: 评论区组件，支持评论展示、回复、点赞、分页。
-- **ImageProcessor.svelte**: 图片处理组件，支持上传、预览、压缩、裁剪。
-- **ContentImageManager.svelte**: 内容图片管理组件，管理文章中的图片。
-- **SearchButton.svelte**: 搜索按钮组件，触发搜索操作。
-- **SearchSelect.svelte**: 搜索选择组件，支持搜索和下拉选择。
-- **Sidebar.svelte**: 侧边栏组件，导航菜单、用户信息、无限滚动加载。
-- **UserAvatar.svelte**: 用户头像组件，统一显示用户头像和默认占位符。
-- **LoadingState.svelte**: 加载状态组件，显示加载动画和提示。
-- **LoadingSpinner.svelte**: 加载动画组件，SVG 旋转动画。
-- **EndOfList.svelte**: 列表结束提示组件，显示"没有更多"信息。
-- **EmptyState.svelte**: 空状态组件，显示无数据时的提示。
-- **ErrorAlert.svelte**: 错误提示组件，显示错误信息。
-- **OriginalityTag.svelte**: 原创性标签组件，显示原创/部分原创/转载标识。
-- **EditorSkeleton.svelte**: 编辑器骨架屏组件，编辑器加载占位。
-- **ProfileSkeleton.svelte**: 用户资料骨架屏组件，资料页加载占位。
-- **icons/**: 图标组件库（35 个 SVG 图标）。
+- **WalletButton.svelte**: 钱包连接按钮，显示连接状态和地址。
+- **SessionKeyStatus.svelte**: Session Key 状态展示，显示有效期、余额、权限。
+- **ArticleListItem.svelte**: 文章列表项，展示标题、摘要、作者、评分、时间。
+- **ArticleSearch.svelte**: 文章搜索，支持关键词、范围（全部/我的）、分类、排序。
+- **ArticleEditor.svelte**: Markdown 编辑器，实时预览、可见性设置。
+- **ArticleSkeleton.svelte**: 文章详情骨架屏。
+- **Avatar.svelte**: 头像组件，统一头像显示逻辑。
+- **CategoryFilter.svelte**: 分类筛选，多选支持。
+- **CommentSection.svelte**: 评论区，展示、回复、点赞、分页。
+- **AmountModal.svelte**: 数额输入弹窗（打赏/收藏等）。
+- **CollectModal.svelte**: 收藏弹窗，显示价格和已收藏数。
+- **ImageProcessor.svelte**: 图片处理，上传、预览、压缩。
+- **ContentImageManager.svelte**: 文章内容图片管理。
+- **SearchButton.svelte**: 搜索按钮。
+- **SearchSelect.svelte**: 搜索下拉选择。
+- **Sidebar.svelte**: 侧边栏导航，无限滚动。
+- **UserAvatar.svelte**: 用户头像，默认占位符。
+- **LoadingState.svelte**: 加载状态。
+- **LoadingSpinner.svelte**: 加载动画。
+- **EndOfList.svelte**: 列表结束提示。
+- **EmptyState.svelte**: 空状态提示。
+- **ErrorAlert.svelte**: 错误提示。
+- **OriginalityTag.svelte**: 原创性标签。
+- **EditorSkeleton.svelte**: 编辑器骨架屏。
+- **ProfileSkeleton.svelte**: 用户资料骨架屏。
+- **icons/**: SVG 图标库（35+ 图标）。
 
 ### Arweave 集成 (src/lib/arweave/)
 
-- **irys.ts**: Irys 客户端初始化和管理。支持 Mainnet（永久存储）和 Devnet（测试用）两种网络。支持 MetaMask 模式和 Session Key 模式。创建 Irys Uploader、管理余额、处理上传。
+- **irys.ts**: Irys 客户端初始化。支持 Mainnet/Devnet、MetaMask/Session Key 两种模式。使用 Viem 适配器连接钱包。提供 `createIrysUploader`、`getIrysUploader`、`createSessionKeyIrysUploader`、`ensureIrysBalance`、`calculateMinIrysBalance`、`calculateIrysFundAmount` 等函数。Session Key 模式使用自定义 EIP-1193 Provider 本地签名。
 
-- **folder.ts**: Irys 可更新文件夹功能。实现文章文件夹结构（index.md 文章内容、coverImage 封面、内容图片）、Manifest 下载、文件夹更新。支持 mutable folders 获取最新版本。
+- **folder.ts**: Irys Mutable Folders 管理。文章文件夹结构：index.md（内容）、coverImage（封面）、内容图片。提供 `generateArticleFolderManifest`（SDK 生成）、`uploadManif est`、`uploadUpdatedManifest`（可变更新）、`downloadManifest`、`queryArticleVersions`（GraphQL 查询历史版本）、URL 生成（`getMutableFolderUrl`、`getStaticFolderUrl`）。
 
-- **upload.ts**: Arweave 上传功能。上传文章文件夹、图片到 Arweave。支持 MetaMask 和 Session Key 两种模式。支持加密文章两阶段上传（先上传获取 manifestId，再加密内容后更新）。
+- **upload.ts**: 文章上传核心。支持 MetaMask/Session Key/Balance Approvals 三种模式。提供 `uploadArticleFolderWithSessionKey`（完整文章文件夹上传）、`uploadMarkdownContent`、`uploadCoverImageFile`、`uploadContentImageFile`。支持加密文章两阶段上传（先上传占位符获取 manifestId，签名派生密钥后更新加密内容）。Placeholder 缓存机制。
 
-- **fetch.ts**: Arweave 内容获取。从 Arweave 网关下载文章、图片、Manifest，支持多网关重试。自动处理 devnet/mainnet 不同的 mutable folder URL。
+- **fetch.ts**: Arweave 内容获取。从网关下载文章/图片/Manifest，支持多网关重试。自动处理 devnet/mainnet URL 差异。提供 `fetchArticleContent`、`fetchImage`、`fetchManifest`、`fetchArticleMetadata`（从 Irys tags）。
 
-- **crypto.ts**: 文章内容加密/解密模块。使用钱包签名派生 AES-256-GCM 密钥（通过 HKDF），支持加密/解密内容、检测加密内容。
+- **crypto.ts**: 端到端加密。使用钱包签名（EIP-191）通过 HKDF 派生 AES-256-GCM 密钥。提供 `deriveEncryptionKey`、`encryptContent`、`decryptContent`、`isContentEncrypted`、`getSignMessageForArticle`。
 
-- **encryptionKeyCache.ts**: 加密密钥缓存。将 arweaveId 与加密签名的映射缓存到 localStorage，避免每次查看加密文章时重复签名。
+- **encryptionKeyCache.ts**: 签名缓存。缓存 arweaveId → 钱包签名映射到 localStorage，避免重复签名。提供 `cacheEncryptionSignature`、`getCachedEncryptionSignature`、`clearEncryptionCache`。
 
-- **types.ts**: Arweave 相关类型定义。定义 Visibility 枚举（Public/Private/Encrypted）、ArticleMetadata、ArticleFolderUploadParams（含 signatureProvider 回调）、ContentImageInfo 等类型。
+- **types.ts**: 类型定义。`Visibility`（Public=0/Private=1/Encrypted=2）、`ArticleMetadata`、`ArticleFolderUploadParams`、`ContentImageInfo`、`IrysNetwork`、`IrysTag` 等。
 
-- **index.ts**: Arweave 模块导出，导出公共 API。
+- **index.ts**: 模块导出。
 
 ### GraphQL 查询 (src/lib/graphql/)
 
-- **client.ts**: GraphQL 客户端初始化。创建 urql 客户端，连接到 Subsquid GraphQL 端点。
-
-- **queries.ts**: GraphQL 查询定义。定义查询文章列表、用户信息、评论、关注等的 GraphQL 查询。
-
-- **index.ts**: GraphQL 模块导出，导出查询函数。
+- **client.ts**: urql 客户端初始化，连接 Subsquid GraphQL 端点。
+- **queries.ts**: 所有 GraphQL 查询定义。文章查询（列表、详情、按作者）、用户查询、评论查询、关注查询、收藏查询、评价查询。导出类型定义（ArticleData、UserData、CommentData 等）。
+- **index.ts**: 导出客户端和查询。
 
 ### 路由页面 (src/routes/)
 
-- **+page.svelte**: 首页，展示文章列表、热门文章、分类筛选、搜索功能。仅显示公开可见文章。
-- **+layout.svelte**: 全局布局组件，处理钱包连接初始化、主题管理、模态框、警告消息、国际化。
-- **+layout.ts**: 布局数据加载，获取初始化数据。
-- **layout.css**: 全局样式，定义布局相关的 CSS。
+- **+page.svelte**: 首页。文章列表展示、分类筛选、搜索、排序、无限滚动加载。仅显示公开文章。
+- **+layout.svelte**: 全局布局。钱包连接初始化、账户监听、主题管理、国际化加载。
+- **+layout.ts**: 布局数据加载。
+- **layout.css**: 全局布局样式。
 
-- **a/+page.svelte**: 文章详情页面，按 Arweave ID 显示完整文章内容、评论、评分。支持加密文章解密（需作者钱包签名）。
+- **a/+page.svelte**: 文章详情页。从 URL 参数读取文章 ID（`id`）和版本 ID（`version`），支持 `env` 参数切换环境。并行加载 Subsquid 数据和 Irys 内容，优先展示 Irys 数据。支持加密文章解密（签名派生密钥）。显示文章内容、评分、评论、收藏、打赏、关注等交互。支持 Session Key 无感交互。处理图片相对路径替换。轮询查询新发布文章。
 
-- **edit/+page.svelte**: 文章编辑页面，修改已发布文章的元数据（标题、摘要、分类）。
+- **edit/+page.svelte**: 文章编辑页。修改已发布文章元数据（标题、摘要、分类、真实作者、收藏价格等）。调用 BlogHub.editArticle。
 
-- **publish/+page.svelte**: 文章发布页面，编辑文章内容、上传封面、设置元数据、可见性（公开/不公开/加密）、发布到链。
+- **publish/+page.svelte**: 文章发布页。Markdown 编辑器、封面上传、内容图片管理、元数据设置（标题、摘要、分类、原创性、可见性）、收藏定价。调用 `publishArticle` 完成 Arweave 上传和链上发布。支持草稿保存（localStorage）。
 
-- **library/+page.svelte**: 用户文库页面，展示用户发布的所有文章、收藏的文章。
+- **library/+page.svelte**: 用户文库。展示当前用户发布的文章和收藏的文章（两个标签页）。
 
-- **profile/+page.svelte**: 用户资料页面，展示用户信息、发布的文章列表。
+- **profile/+page.svelte**: 个人中心。展示用户信息（昵称、简介、头像）、统计（文章数、粉丝数、关注数）、Session Key 管理（状态、创建、撤销）、发布的文章列表。
 
-- **settings/+page.svelte**: 用户设置页面，修改用户资料、管理 Session Key、设置偏好。
+- **settings/+page.svelte**: 系统设置。配置管理界面，允许用户修改 RPC URL、chainId、Subsquid 端点、Arweave 网关、USD 定价等。从 config.svelte.ts 读取和保存配置。
 
-- **u/+page.svelte**: 用户主页，展示用户信息、发布的文章、粉丝关注。
+- **u/+page.svelte**: 用户主页。从 URL 参数读取用户地址（`address`），展示用户资料、发布的文章、统计信息。
 
 ### 配置文件
 
-- **package.json**: 项目依赖和脚本，定义构建、开发、测试命令。
-- **svelte.config.js**: SvelteKit 配置，定义适配器、预处理、路由等。
-- **vite.config.ts**: Vite 构建配置，定义插件、优化、服务器设置。
-- **tsconfig.json**: TypeScript 配置，定义编译选项、路径别名。
-- **eslint.config.js**: ESLint 配置，定义代码检查规则。
-- **.env.dev**: 开发环境变量，包含开发网络配置。
-- **.env.prod**: 生产环境变量，包含生产网络配置。
-- **.env.example**: 环境变量示例，展示所需的环境变量。
-- **.prettierrc**: Prettier 配置，定义代码格式化规则。
-- **.prettierignore**: Prettier 忽略文件列表。
-- **.npmrc**: npm 配置，定义包管理器设置。
+- **package.json**: 项目依赖和脚本。
+- **svelte.config.js**: SvelteKit 配置(适配器、预处理、路由)。
+- **vite.config.ts**: Vite 构建配置(插件、优化、服务器)。
+- **tsconfig.json**: TypeScript 配置(编译选项、路径别名)。
+- **eslint.config.js**: ESLint 代码检查规则。
+- **playwright.config.ts**: Playwright E2E 测试配置。
+- **.prettierrc**: Prettier 格式化规则。
+- **.prettierignore**: Prettier 忽略文件。
+- **.npmrc**: npm 包管理器设置。
 
 ---
 
@@ -222,37 +225,35 @@ AmberInk 是一个完全去中心化的永久内容发布平台，无后端参�
 
 ### 数据模型 (src/model/generated/)
 
-- **article.model.ts**: Article 实体模型，包含 arweaveId（主键）、articleId、作者、标题、摘要、分类、原创性、可见性、收藏价格、收藏数、点赞/踩数、打赏总额、创建/编辑时间、区块号、交易哈希等字段。
-- **user.model.ts**: User 实体模型，包含钱包地址、昵称、头像、简介、文章总数、粉丝数、关注数、当前 Session Key、资料更新时间、创建时间等字段。
-- **evaluation.model.ts**: Evaluation 实体模型，记录用户对文章的评价（点赞/踩/打赏）、评价者、被评价文章、评价分数、打赏金额、评论内容、推荐人、创建时间、交易哈希。
-- **comment.model.ts**: Comment 实体模型，记录用户评论、评论 ID、评论者、所属文章、评论内容、父评论 ID（回复时）、点赞数、创建时间、交易哈希。
-- **follow.model.ts**: Follow 实体模型，记录关注关系、关注者、被关注者、是否活跃、创建/更新时间。
-- **collection.model.ts**: Collection 实体模型，记录用户收藏、收藏者、被收藏文章、TokenID、收藏数量、创建时间、交易哈希。
-- **transaction.model.ts**: Transaction 实体模型，记录 Session Key 交易、主账户、Session Key、目标合约、函数选择器、交易数据、交易值、创建时间、交易哈希。
-- **index.ts**: 模型导出文件，导出所有实体模型。
-- **marshal.ts**: 数据序列化工具，处理模型与数据库之间的转换。
+- **article.model.ts**: Article 实体。arweaveId（主键）、articleId、author、title、summary、category、originality、visibility、collectPrice、collectCount、likes/dislikes、tipsTotal、createdAt、editedAt、blockHeight、txHash 等。
+- **user.model.ts**: User 实体。地址（主键）、nickname、avatar、bio、totalArticles、followersCount、followingCount、currentSessionKey、profileUpdatedAt、createdAt。
+- **evaluation.model.ts**: Evaluation 实体。id、evaluator、article、score、tipAmount、comment、referrer、createdAt、txHash。
+- **comment.model.ts**: Comment 实体。commentId、commenter、article、content、parentCommentId、likes、createdAt、txHash。
+- **follow.model.ts**: Follow 实体。id、follower、followee、active、createdAt、updatedAt。
+- **collection.model.ts**: Collection 实体。id、collector、article、tokenId、amount、createdAt、txHash。
+- **transaction.model.ts**: Transaction 实体。id、owner、sessionKey、target、selector、data、value、createdAt、txHash。Session Key 交易记录。
+- **index.ts**: 模型导出。
+- **marshal.ts**: 数据序列化工具。
 
 ### ABI 和类型生成 (src/abi/)
 
-- **BlogHub.ts**: 由 squid-evm-typegen 生成的 BlogHub 合约类型。包含事件解析、函数编码、类型定义。
-- **BlogHub.json**: BlogHub 合约 ABI JSON 文件，包含所有函数和事件的定义。
-- **SessionKeyManager.ts**: 由 squid-evm-typegen 生成的 SessionKeyManager 合约类型。
-- **SessionKeyManager.json**: SessionKeyManager 合约 ABI JSON 文件。
+- **BlogHub.ts**: squid-evm-typegen 生成的 BlogHub ABI TypeScript 类型。事件解析、函数编码。
+- **SessionKeyManager.ts**: squid-evm-typegen 生成的 SessionKeyManager ABI TypeScript 类型。
 
 ### 服务器扩展 (src/server-extension/)
 
-- 自定义 GraphQL 服务器扩展（如需要）。
+- 自定义 GraphQL 服务器扩展（如需）。
 
 ### 数据库 (db/)
 
-- **schema.graphql**: GraphQL schema 定义，定义所有实体（User、Article、Evaluation、Comment、Follow、Collection、Transaction）、字段、关系、查询。
-- **migrations/**: 数据库迁移文件目录，包含所有数据库结构变更。
+- **schema.graphql**: GraphQL schema 定义。定义所有实体（User、Article、Evaluation、Comment、Follow、Collection、Transaction）、字段、关系、查询。
+- **migrations/**: 数据库迁移文件，记录所有结构变更。
 
 ### 配置文件
 
-- **package.json**: 项目依赖和脚本，定义构建、开发、测试命令。
-- **.env**: 环境变量，包含 RPC_ETH_HTTP、BLOG_HUB_ADDRESS、SESSION_KEY_MANAGER_ADDRESS 等配置。
-- **squid.yaml**: Squid 配置文件，定义处理器、数据库、服务器设置。
+- **package.json**: 项目依赖和脚本。
+- **.env**: 环境变量，RPC_ETH_HTTP、BLOG_HUB_ADDRESS、SESSION_KEY_MANAGER_ADDRESS、GATEWAY_URL、RPC_RATE_LIMIT、FINALITY_CONFIRMATION 等。
+- **squid.yaml**: Squid 配置，处理器、数据库、GraphQL 服务器设置。
 
 ---
 
@@ -275,6 +276,12 @@ AmberInk 是一个完全去中心化的永久内容发布平台，无后端参�
 12. **响应式设计**: 支持移动端和桌面端适配
 13. **文章可见性**: 支持公开、不公开（仅作者可见）、加密三种可见性模式
 14. **文章加密**: 使用钱包签名派生 AES-256-GCM 密钥加密文章内容，仅作者可解密
+15. **可变文件夹**: 使用 Irys Mutable Folders 实现文章版本管理和在线更新
+16. **多链支持**: 支持 Optimism、Base、Arbitrum、Polygon 等多条链，配置集中管理
+17. **环境隔离**: dev/test/prod 三环境配置硬编码，支持用户覆盖和临时切换
+18. **价格服务**: 通过 Pyth Network Hermes API 实时获取原生代币价格，支持 USD 定价
+19. **Session Key 优化**: 自动余额管理、Irys Balance Approval、本地签名，最小化弹窗
+20. **按需加载**: 文章详情页并行加载 Subsquid 和 Irys 数据，优先展示 Irys 内容
 
 ---
 
@@ -287,41 +294,49 @@ AmberInk 是一个完全去中心化的永久内容发布平台，无后端参�
 - 重要操作需要权限检查和事件发出
 
 ### 前端开发
-- 新增页面时在 src/routes/ 中创建对应目录
-- 组件开发遵循单一职责原则，放在 src/lib/components/ 中
-- 所有链上交互通过 src/lib/contracts.ts 进行
-- Session Key 管理通过 src/lib/sessionKey.ts 进行
-- 文章发布通过 src/lib/publish.ts 进行编排
-- 使用 TailwindCSS 原子类进行样式设计
+- 新增页面在 src/routes/ 创建目录
+- 组件放在 src/lib/components/,遵循单一职责
+- 链上交互统一通过 src/lib/contracts.ts
+- Session Key 管理通过 src/lib/sessionKey.ts,使用 `ensureSessionKeyReady`
+- 文章发布通过 src/lib/publish.ts 编排
+- 配置管理使用 src/lib/stores/config.svelte.ts,支持环境切换
+- 工具函数放在 src/lib/utils/ 或对应模块
+- 使用 TailwindCSS 进行样式设计
 
 ### 链上索引开发
-- 新增事件监听时在 src/processor.ts 中添加事件 topic
-- 事件处理逻辑在 src/main.ts 中实现
-- 数据模型在 src/model/ 中定义
-- 修改 schema.graphql 后需要运行 `sqd codegen` 生成 TypeORM 类
-- 修改数据库结构后需要运行 `sqd migration:generate` 生成迁移文件
+- 新增事件在 src/processor.ts 添加 topic
+- 事件处理在 src/main.ts 实现
+- 数据模型在 src/model/ 定义
+- 修改 schema.graphql 后运行 `sqd codegen`
+- 修改数据库结构后运行 `sqd migration:generate`
 
 ### Arweave 存储
-- 文章内容通过 Irys 上传到 Arweave
-- 前端通过 src/lib/arweave/ 工具进行上传
-- 上传返回 arweaveId，用于链上记录和查询
+- 使用 Irys Mutable Folders 存储文章(index.md、coverImage、内容图片)
+- 前端通过 src/lib/arweave/ 上传
+- 支持 MetaMask 和 Session Key 两种模式
+- 加密文章使用两阶段上传(先占位符,后加密更新)
 
 ### 部署流程
-1. 部署智能合约到 Optimism（使用 Foundry）
-2. 更新 src/lib/config.ts 中的合约地址
-3. 部署 Subsquid 索引（到 Subsquid Cloud 或自托管）
-4. 部署前端（到 Vercel、Netlify 等）
+1. 部署智能合约到目标链(Foundry)
+2. 更新 src/lib/chains.ts 中的合约地址
+3. 部署 Subsquid 索引(Subsquid Cloud 或自托管)
+4. 配置 src/lib/stores/config.svelte.ts 环境默认值
+5. 部署前端(Vercel、Netlify 等)
 
 ---
 
 ## 关键概念
 
 ### Session Keys 工作流
-1. 用户登录时，前端生成临时密钥对（Ephemeral Key Pair）
-2. 用户使用主钱包签名授权该临时公钥（唯一一次弹窗）
-3. 临时私钥保存在浏览器 LocalStorage
-4. 后续点赞、评论等操作由临时私钥签名，无需唤起钱包
-5. 链上验证：SessionKeyManager 验证授权有效性
+1. 前端生成临时密钥对(Ephemeral Key Pair)
+2. 主钱包签名授权临时公钥(唯一弹窗,注册到链)
+3. 临时私钥保存在 LocalStorage
+4. 自动检查和充值 Session Key ETH 余额(按需弹窗)
+5. 创建 Irys Balance Approval(按需弹窗)
+6. 后续操作由临时私钥本地签名,无需唤起钱包
+7. 链上 SessionKeyManager 验证授权有效性
+8. 支持权限限制(指定合约和函数)、时间限制(最长 7 天)、消费限额
+9. 使用 `ensureSessionKeyReady` 统一准备流程,最小化弹窗次数
 
 ### Gas 代付机制
 - **Sponsor 模式**: 项目方存款到 BlogPaymaster，授权用户使用其余额
