@@ -62,15 +62,17 @@
 		statusMessage = '';
 	}
 
-	// Convert ContentImage to ContentImageInfo for upload
+	// Convert ContentImage to ContentImageInfo for upload (only images with File)
 	function convertContentImages(images: ContentImage[]) {
-		return images.map(img => ({
-			id: img.id,
-			file: img.file,
-			extension: img.extension,
-			width: img.width,
-			height: img.height
-		}));
+		return images
+			.filter(img => img.file) // Only include images with actual files
+			.map(img => ({
+				id: img.id,
+				file: img.file!,
+				extension: img.extension,
+				width: img.width,
+				height: img.height
+			}));
 	}
 
 	// Handle form submission

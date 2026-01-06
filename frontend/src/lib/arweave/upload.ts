@@ -795,6 +795,7 @@ export interface ArticleFolderUpdateParams {
 	summary: string;
 	content: string;         // Markdown 内容
 	coverImage?: File;       // 新封面图片（可选，不提供则保留原有）
+	contentImages?: ContentImageInfo[]; // 新增的内容图片列表
 	tags: string[];
 	keepExistingCover?: boolean; // 是否保留现有封面（默认 true）
 	authorAddress: string;   // 作者钱包地址
@@ -824,7 +825,7 @@ export async function updateArticleFolderWithUploader(
 	params: ArticleFolderUpdateParams,
 	paidBy?: string
 ): Promise<ArticleFolderUpdateResult> {
-	const { title, summary, content, coverImage, tags: articleTags, keepExistingCover = true, authorAddress, visibility = 0, originality = 0 } = params;
+	const { title, summary, content, coverImage, contentImages, tags: articleTags, keepExistingCover = true, authorAddress, visibility = 0, originality = 0 } = params;
 
 	// Debug: log cover image params
 	console.log('Update article params:', {
@@ -838,26 +839,55 @@ export async function updateArticleFolderWithUploader(
 	console.log('Uploading updated article content (index.md)...');
 	const indexTxId = await uploadMarkdownContent(uploader, content, title, articleTags, authorAddress, visibility, originality, paidBy);
 
-	// Step 2: 处理封面图片
+	// Step 2: 处理封面图片和保留现有内容图片
 	let coverImageTxId: string | undefined;
-	if (coverImage) {
-		// 上传新封面
-		console.log('Uploading new cover image...');
-		coverImageTxId = await uploadCoverImageFile(uploader, coverImage, paidBy);
-	} else if (keepExistingCover) {
-		// 保留现有封面 - 从原始 manifest 获取
-		try {
-			const { downloadManifest, ARTICLE_COVER_IMAGE_FILE } = await import('./folder');
-			console.log('Fetching original manifest to get existing cover...');
-			const originalManifest = await downloadManifest(originalManifestId);
-			console.log('Original manifest paths:', Object.keys(originalManifest.paths));
+	const existingContentImages: Record<string, string> = {};
+
+	// 始终获取原始 manifest 以保留内容图片
+	try {
+		const { downloadManifest, ARTICLE_COVER_IMAGE_FILE } = await import('./folder');
+		console.log('Fetching original manifest to preserve existing files...');
+		const originalManifest = await downloadManifest(originalManifestId);
+		console.log('Original manifest paths:', Object.keys(originalManifest.paths));
+
+		// 处理封面图片
+		if (coverImage) {
+			console.log('Uploading new cover image...');
+			coverImageTxId = await uploadCoverImageFile(uploader, coverImage, paidBy);
+		} else if (keepExistingCover) {
 			coverImageTxId = originalManifest.paths[ARTICLE_COVER_IMAGE_FILE]?.id;
 			console.log('Existing cover TX ID:', coverImageTxId || '(none found)');
-		} catch (e) {
-			console.warn('Failed to get existing cover image, will skip:', e);
+		} else {
+			console.log('keepExistingCover is false and no new cover provided, cover will be removed');
 		}
-	} else {
-		console.log('keepExistingCover is false and no new cover provided, cover will be removed');
+
+		// 保留现有内容图片（index.md 和 coverImage 以外的所有文件）
+		for (const [fileName, { id }] of Object.entries(originalManifest.paths)) {
+			if (fileName !== ARTICLE_INDEX_FILE && fileName !== ARTICLE_COVER_IMAGE_FILE) {
+				existingContentImages[fileName] = id;
+			}
+		}
+		if (Object.keys(existingContentImages).length > 0) {
+			console.log('Preserving existing content images:', Object.keys(existingContentImages));
+		}
+	} catch (e) {
+		console.warn('Failed to fetch original manifest:', e);
+		// 如果获取原始 manifest 失败，仍然尝试上传新封面
+		if (coverImage) {
+			console.log('Uploading new cover image...');
+			coverImageTxId = await uploadCoverImageFile(uploader, coverImage, paidBy);
+		}
+	}
+
+	// Step 2b: 上传新增的内容图片
+	const newContentImageTxIds: Record<string, string> = {};
+	if (contentImages && contentImages.length > 0) {
+		console.log(`Uploading ${contentImages.length} new content image(s)...`);
+		for (const imageInfo of contentImages) {
+			const { filename, txId } = await uploadContentImageFile(uploader, imageInfo, paidBy);
+			newContentImageTxIds[filename] = txId;
+			console.log(`  - ${filename} uploaded`);
+		}
 	}
 
 	// Step 3: 生成新的 manifest
@@ -867,12 +897,17 @@ export async function updateArticleFolderWithUploader(
 	if (coverImageTxId) {
 		files.set(ARTICLE_COVER_IMAGE_FILE, coverImageTxId);
 	}
+	// 添加保留的内容图片
+	for (const [fileName, txId] of Object.entries(existingContentImages)) {
+		files.set(fileName, txId);
+	}
+	// 添加新上传的内容图片
+	for (const [fileName, txId] of Object.entries(newContentImageTxIds)) {
+		files.set(fileName, txId);
+	}
 
 	// Debug: 显示 manifest 将包含的文件
-	console.log('Manifest files:', {
-		[ARTICLE_INDEX_FILE]: indexTxId,
-		[ARTICLE_COVER_IMAGE_FILE]: coverImageTxId || '(none)'
-	});
+	console.log('Manifest files:', Object.fromEntries(files));
 
 	// 使用 SDK 的 generateFolder 生成 manifest
 	const manifest = await generateArticleFolderManifest(uploader, files, ARTICLE_INDEX_FILE);

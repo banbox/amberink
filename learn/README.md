@@ -1688,3 +1688,13 @@ Claude：修正了owner错误，标题和作者地址都正常了。
 @help.md 当前详情页显示有问题，对于irys获取数据成功，但squid获取失败的，应该正常显示irys的数据。
 但目前squid测试出现cors错误时，虽然irys加载了数据，但是一直处于骨架屏loading状态，帮我修复解决  
 Claude：已解决
+
+### 2026-01-06 20:10  编辑后正文图片无效
+@help.md @console.log frontend/src/routes/edit/+page.svelte console.log是3次发布文章并编辑的浏览器控制台日志，目前编辑文章后，之前的正文图片和新增的正文图片都无法显示。请分析日志，查阅相关的代码逻辑，帮我定位分析原因并解决  
+Claude：编辑保存时，没有保留之前的正文图片引用导致，已修复。  
+开发者：@help.md @console.log frontend/src/routes/edit/+page.svelte console.log是几次发布文章并编辑的浏览器控制台日志，请重点关注 doc/console.log 中303-375行；
+现在原有图片在编辑后可以正常显示了，不过编辑时新增的图片保存后无法显示，请帮我排查相关代码，分析定位问题并解决。  
+Claude: 并未执行新图片保存逻辑导致，已修复  
+开发者：@help.md 目前编辑文章时，并未恢复包含的图片，这导致插入图片时又从01开始计数；请帮我在文章编辑页面，从manifest恢复所有图片，到formData.contentImages中，方便预览和插入，上传新图片时从已有索引增加命名  
+Claude：修复完成
+

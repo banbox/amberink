@@ -5,6 +5,7 @@
 	import ArticleEditor, { type ArticleFormData, type ContentImage } from '$lib/components/ArticleEditor.svelte';
 	import EditorSkeleton from '$lib/components/EditorSkeleton.svelte';
 	import { updateArticleFolderWithSessionKey, type ArticleFolderUpdateParams, fetchArticleMarkdown, fetchArticleSummaryFromTags } from '$lib/arweave';
+import { downloadManifest, getMutableFolderUrl, ARTICLE_INDEX_FILE, ARTICLE_COVER_IMAGE_FILE } from '$lib/arweave/folder';
 	import { editArticleWithSessionKey, FUNCTION_SELECTORS } from '$lib/contracts';
 	import { getCoverImageUrl } from '$lib/arweave/folder';
 	import { getIrysNetwork } from '$lib/config';
@@ -118,6 +119,39 @@
 			]);
 			formData.content = content || '';
 			formData.summary = summary || '';
+			
+			// Load existing content images from manifest
+			try {
+				const manifest = await downloadManifest(article.id);
+				const existingImages: ContentImage[] = [];
+				
+				for (const [fileName, { id: txId }] of Object.entries(manifest.paths)) {
+					// Skip index.md and coverImage
+					if (fileName === ARTICLE_INDEX_FILE || fileName === ARTICLE_COVER_IMAGE_FILE) {
+						continue;
+					}
+					
+					// Parse image filename (e.g., "01.jpg" -> id="01", extension="jpg")
+					const match = fileName.match(/^(\d+)\.([a-zA-Z]+)$/);
+					if (match) {
+						const [, imageId, extension] = match;
+						existingImages.push({
+							id: imageId,
+							extension,
+							previewUrl: getMutableFolderUrl(article.id, fileName),
+							isExisting: true
+						});
+					}
+				}
+				
+				// Sort by id for consistent ordering
+				existingImages.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+				formData.contentImages = existingImages;
+				console.log(`Restored ${existingImages.length} existing image(s) from manifest`);
+			} catch (e) {
+				console.warn('Failed to load existing images from manifest:', e);
+			}
+			
 			isLoadingContent = false;
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : 'Failed to load article';
@@ -146,15 +180,17 @@
 		}
 	}
 
-	// Convert ContentImage to ContentImageInfo for upload
+	// Convert ContentImage to ContentImageInfo for upload (only new images with File)
 	function convertContentImages(images: ContentImage[]) {
-		return images.map(img => ({
-			id: img.id,
-			file: img.file,
-			extension: img.extension,
-			width: img.width,
-			height: img.height
-		}));
+		return images
+			.filter(img => img.file && !img.isExisting) // Only include new images with actual files
+			.map(img => ({
+				id: img.id,
+				file: img.file!,
+				extension: img.extension,
+				width: img.width,
+				height: img.height
+			}));
 	}
 
 	// Handle form submission
@@ -211,6 +247,7 @@
 				summary: formData.summary.trim(),
 				content: formData.content.trim(),
 				coverImage: formData.coverImageFile || undefined,
+				contentImages: convertContentImages(formData.contentImages),
 				tags,
 				keepExistingCover: keepExistingCover && !formData.coverImageFile,
 				authorAddress: walletAddress || ''

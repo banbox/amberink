@@ -20,11 +20,12 @@
 
 	export interface ContentImage {
 		id: string;
-		file: File;
+		file?: File;            // Optional for existing images
 		previewUrl: string;
 		extension: string;
 		width?: number;
 		height?: number;
+		isExisting?: boolean;   // True if this is an existing image from manifest
 	}
 
 	export interface ArticleFormData {

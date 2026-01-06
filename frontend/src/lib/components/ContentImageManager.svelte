@@ -17,11 +17,12 @@
 
 	interface ContentImage {
 		id: string;           // Unique identifier (01, 02, etc.)
-		file: File;           // The image file
+		file?: File;          // The image file (optional for existing images)
 		previewUrl: string;   // Object URL for preview
 		extension: string;    // File extension (jpg, png, etc.)
 		width?: number;       // Optional width setting
 		height?: number;      // Optional height setting
+		isExisting?: boolean; // True if this is an existing image from manifest
 	}
 
 	interface Props {
@@ -273,9 +274,13 @@
 						<span class="font-mono text-sm font-medium text-gray-700">
 							{image.id}.{image.extension}
 						</span>
-						<span class="text-xs text-gray-400">
-							{formatFileSize(image.file.size)}
-						</span>
+						{#if image.file}
+							<span class="text-xs text-gray-400">
+								{formatFileSize(image.file.size)}
+							</span>
+						{:else if image.isExisting}
+							<span class="text-xs text-green-600"> ✓ Saved </span>
+						{/if}
 						{#if image.width || image.height}
 							<span class="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
 								{image.width || 'auto'}×{image.height || 'auto'}
