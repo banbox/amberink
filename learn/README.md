@@ -1719,3 +1719,17 @@ Claude：修改完成，效果不错
 开发者：@help.md 当前侧边栏组件，当被收起时，primary颜色的【Write】按钮，变成了竖立的上下圆角的类似胶囊，比较难看。帮我改为被收起时，显示一个icon  
 Claude：正确显示icon了  
 
+### 2026-01-07 13:30  viewblock 404
+@help.md  frontend/src/routes/a/+page.svelte 是文章详情页，其中1252行部分是通过Viewblock显示Arweave的交易详情。目前是通过  frontend/src/lib/arweave/folder.ts queryLatestIrysTxId 方法得到的，但是通过https://viewblock.io/arweave/tx/[rxid] 查看却发生404错误。
+请你阅读 @IRYS.md  doc/irys 下的相关文档，了解irys的交易中到底如何才能获取到对应Arweave的交易ID；如果无法获取，尝试Viewblock能否查看irys交易，或者这里直接改为使用irys的区块浏览器查看irys交易。
+优先探索如何通过irys获取对应Arweave的交易ID，确实无法实现才考虑其他方案  
+Claude: 无法通过irys交易ID获取Arweave交易ID，已改为使用irys浏览器查看
+
+### 2026-01-07 13:45  irys explorer 404
+@help.md    文章详情页底部通过irys explorer显示irys的交易详情。目前交易id是通过  frontend/src/lib/arweave/folder.ts queryLatestIrysTxId 方法得到的，但是通过https://explorer.irys.xyz/tx/[rxid] 查看却发生404错误。
+当前使用的是irys的可变链上文件夹。
+请你阅读 @IRYS.md    doc/irys 下的相关文档，了解irys中如何根据manifestID获取最新的txn交易哈希，以便能正常在explorer中查看
+注意 getIrysGraphQLEndpoint 返回的是uploader.irys.xyz的代理网关，也就是irys.banbot.site，这是正确行为，并且也测试了接口能正常工作。
+重点放在如何从irys根据manifest id获取txn hash上。  
+Claude: 未解决，暂时留置
+

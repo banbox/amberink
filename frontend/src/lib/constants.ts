@@ -7,8 +7,8 @@
 // Irys 相关常量
 // ============================================
 
-/** Viewblock Arweave 基础 URL */
-export const VIEWBLOCK_ARWEAVE_URL = 'https://viewblock.io/arweave';
+/** Irys Explorer 基础 URL - 用于查看 Irys 交易详情 */
+export const IRYS_EXPLORER_URL = 'https://explorer.irys.xyz';
 
 // ============================================
 // Session Key 相关常量

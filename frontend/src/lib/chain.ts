@@ -3,9 +3,9 @@
  * Dynamically selects chain based on environment variables
  */
 
-import { getChainId, getRpcUrl, getIrysGateway } from '$lib/config';
+import { getChainId, getRpcUrl } from '$lib/config';
 import { BLOCK_EXPLORER_URLS, getViemChain } from './chains';
-import { VIEWBLOCK_ARWEAVE_URL } from './constants';
+import { IRYS_EXPLORER_URL } from './constants';
 
 /**
  * Get block explorer URL for a transaction hash
@@ -27,11 +27,13 @@ export function getBlockExplorerAddressUrl(address: string): string {
 	return `${baseUrl}/address/${address}`;
 }
 
-export function getViewblockArweaveUrl(arweaveId: string, network: 'mainnet' | 'devnet'): string {
-	if (!arweaveId) return '';
-	// Viewblock only supports Arweave mainnet
-	if (network !== 'mainnet') return `${getIrysGateway()}/tx/${arweaveId}`;
-	return `${VIEWBLOCK_ARWEAVE_URL}/tx/${arweaveId}`;
+export function getIrysExplorerUrl(irysTxId: string, network: 'mainnet' | 'devnet'): string {
+	if (!irysTxId) return '';
+	// Use testnet explorer for devnet, mainnet explorer for mainnet
+	const explorerBase = network === 'devnet' 
+		? 'https://testnet-explorer.irys.xyz'
+		: IRYS_EXPLORER_URL;
+	return `${explorerBase}/tx/${irysTxId}`;
 }
 
 /**

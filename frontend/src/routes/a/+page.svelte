@@ -17,7 +17,7 @@
 	import { page } from '$app/stores';
 	import { usdToWei, getNativeTokenPriceUsd, getNativeTokenSymbol } from '$lib/priceService';
 	import { getDefaultTipAmountUsd, getDefaultDislikeAmountUsd, getMinActionValueUsd, getArweaveGateways, getIrysNetwork, setEphemeralEnvName } from '$lib/config';
-	import { getBlockExplorerTxUrl, getViewblockArweaveUrl, getBlockExplorerAddressUrl } from '$lib/chain';
+	import { getBlockExplorerTxUrl, getIrysExplorerUrl, getBlockExplorerAddressUrl } from '$lib/chain';
 	import {
 		EvaluationScore,
 		collectArticle,
@@ -1244,7 +1244,7 @@
 				<div class="flex items-center gap-1">
 					<span class="font-medium text-gray-700">{m.storage_tx()}:</span>
 					<a
-						href={getViewblockArweaveUrl(currentIrysTxId || article.id, getIrysNetwork())}
+						href={getIrysExplorerUrl(currentIrysTxId || article.id, getIrysNetwork())}
 						target="_blank"
 						rel="noopener noreferrer"
 						class="text-blue-600 hover:underline"
