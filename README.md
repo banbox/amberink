@@ -5,6 +5,8 @@
 
 **核心特性**：文章即 NFT（ERC-1155）、无感交互（Session Keys）、Gas 代付（ERC-4337）、内容加密
 
+立即体验：[https://amberink.eth.limo/](https://amberink.eth.limo/)
+
 ## 如何学习？
 [最细节的手把手开发日志](learn/README.md)
 
@@ -66,4 +68,9 @@ amberink/
 - 多标签索引（类别、话题、地区）
 - Markdown 编辑器 [cherry-markdown](https://github.com/Tencent/cherry-markdown)
 - 去中心化身份 DID 接入
-- 更新help.md，优化其他页面代码
+
+## 加入社群
+Telegram: https://t.me/hi_web3_dapp
+
+## License
+Apache 2.0

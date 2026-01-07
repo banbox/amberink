@@ -215,7 +215,6 @@ cd squid
 cp .env.example .env.test  # or prod
 vim .env.test
 cp .env.test .env
-npx tsc
 npx squid-typeorm-migration apply
 npm run build
 pm2 start ecosystem.config.js
