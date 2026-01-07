@@ -1733,3 +1733,11 @@ Claude: 无法通过irys交易ID获取Arweave交易ID，已改为使用irys浏�
 重点放在如何从irys根据manifest id获取txn hash上。  
 Claude: 未解决，暂时留置
 
+### 2026-01-07 15:30  swarm前端加速
+我在eth swarm上部署了静态网站，并通过ens域名进行了解析，在中国大陆访问比较慢，一些js文件需要十秒左右加载，整个页面需要30s左右加载完成。
+我买了个域名，改为了Cloudflare的DNS服务器，希望利用Cloudflare进行加速。
+请帮我生成worker代码，将所有的请求直接代理amberink.eth.limo这个域名。
+Gemini：[11_Cloudflare_worker.js](./11_Cloudflare_worker.js)  
+开发者：目前可以通过https://amberink.top 访问前端了，但是访问subsquid的服务：https://amberink.banbot.site 时会出现cors 跨域错误，上面是nginx配置，请帮我查看amberink.banbot.site为什么没有正确使用conf.d/proxy_cors.conf  
+Gemini：建议了很多Cloudflare、nginx等配置，均未解决。  
+开发者：最终发现是Cloudflare中配置的解决跨域的worker中未放行导致。  
