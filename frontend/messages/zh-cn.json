@@ -414,5 +414,7 @@
 	"env_prod": "生产环境",
 	"fixed_configuration": "固定配置(只读)",
 	"charge_usd_min_error_2": "充值金额最小为 ${min}",
-	"reset_default": "重置为默认值"
+	"reset_default": "重置为默认值",
+	"collapse": "收起侧边栏",
+	"expand": "展开侧边栏"
 }

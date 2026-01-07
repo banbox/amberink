@@ -35,3 +35,6 @@ export { default as BackIcon } from './BackIcon.svelte';
 export { default as DocumentIcon } from './DocumentIcon.svelte';
 export { default as ClipboardIcon } from './ClipboardIcon.svelte';
 export { default as ResizeIcon } from './ResizeIcon.svelte';
+export { default as MenuIcon } from './MenuIcon.svelte';
+export { default as ChevronLeftIcon } from './ChevronLeftIcon.svelte';
+export { default as ChevronRightIcon } from './ChevronRightIcon.svelte';

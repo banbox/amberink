@@ -9,7 +9,7 @@
 	import { page } from '$app/state';
 	import { locales, getLocale, localizeHref } from '$lib/paraglide/runtime';
 	import { getWalletAddress } from '$lib/stores/wallet.svelte';
-	import { SettingsIcon } from '$lib/components/icons';
+	import { SettingsIcon, MenuIcon } from '$lib/components/icons';
 
 	let { children } = $props();
 
@@ -17,6 +17,22 @@
 
 	// Search modal state (for header button)
 	let searchOpen = $state(false);
+
+	// Sidebar state
+	let sidebarCollapsed = $state(false);
+	let mobileMenuOpen = $state(false);
+
+	function toggleSidebarCollapse() {
+		sidebarCollapsed = !sidebarCollapsed;
+	}
+
+	function openMobileMenu() {
+		mobileMenuOpen = true;
+	}
+
+	function closeMobileMenu() {
+		mobileMenuOpen = false;
+	}
 </script>
 
 <svelte:head>
@@ -25,13 +41,32 @@
 
 <div class="flex min-h-screen">
 	<!-- Fixed Sidebar -->
-	<Sidebar {walletAddress} />
+	<Sidebar
+		{walletAddress}
+		collapsed={sidebarCollapsed}
+		mobileOpen={mobileMenuOpen}
+		onToggleCollapse={toggleSidebarCollapse}
+		onCloseMobile={closeMobileMenu}
+	/>
 
 	<!-- Main Content Area (with left margin for sidebar) -->
-	<div class="ml-64 flex min-h-screen flex-1 flex-col">
+	<div
+		class="main-content flex min-h-screen flex-1 flex-col transition-all duration-300"
+		style:--sidebar-width={sidebarCollapsed ? '4rem' : '16rem'}
+	>
 		<!-- Header -->
 		<header class="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
-			<div class="flex h-16 items-center justify-end px-6">
+			<div class="flex h-16 items-center justify-between px-4 md:justify-end md:px-6">
+				<!-- Mobile Menu Button (visible on mobile only) -->
+				<button
+					type="button"
+					class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 md:hidden"
+					onclick={openMobileMenu}
+					aria-label="Open menu"
+				>
+					<MenuIcon size={24} />
+				</button>
+
 				<!-- Right side: Search + Language switcher + Settings + Wallet -->
 				<div class="flex items-center gap-4">
 					<!-- Search Button (icon only in header) -->

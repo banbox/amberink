@@ -414,5 +414,7 @@
 	"env_prod": "Production",
 	"fixed_configuration": "Fixed Configuration (Read-Only)",
 	"charge_usd_min_error_2": "Charge amount must be at least ${min}",
-	"reset_default": "Reset to Default"
+	"reset_default": "Reset to Default",
+	"collapse": "Collapse Sidebar",
+	"expand": "Expand Sidebar"
 }

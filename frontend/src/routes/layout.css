@@ -58,3 +58,15 @@
 	margin-top: 0.75rem;
 	margin-bottom: 0.75rem;
 }
+
+/* Responsive sidebar margin */
+.main-content {
+	margin-left: 0;
+}
+
+@media (min-width: 768px) {
+	.main-content {
+		margin-left: var(--sidebar-width, 16rem);
+	}
+}
+
