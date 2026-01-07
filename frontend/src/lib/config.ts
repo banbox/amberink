@@ -91,6 +91,15 @@ export function getSubsquidEndpoint(): string {
 	return getConfig().subsquidEndpoint;
 }
 
+export function getIrysGateway(): string {
+	return getConfig().irysGateways;
+}
+
+export function getIrysGraphQLEndpoint(): string {
+	const gateway = getIrysGateway();
+	return `${gateway}/graphql`;
+}
+
 export function getMinGasFeeMultiplier(): number {
 	return getConfig().minGasFeeMultiplier;
 }

@@ -7,18 +7,6 @@
 // Irys 相关常量
 // ============================================
 
-/** Irys Devnet GraphQL 端点 */
-export const IRYS_DEVNET_GRAPHQL = 'https://devnet.irys.xyz/graphql';
-
-/** Irys Mainnet GraphQL 端点 */
-export const IRYS_MAINNET_GRAPHQL = 'https://uploader.irys.xyz/graphql';
-
-/** Irys Gateway 基础 URL */
-export const IRYS_GATEWAY_URL = 'https://gateway.irys.xyz';
-
-/** Irys Devnet 基础 URL */
-export const IRYS_DEVNET_URL = 'https://devnet.irys.xyz';
-
 /** Viewblock Arweave 基础 URL */
 export const VIEWBLOCK_ARWEAVE_URL = 'https://viewblock.io/arweave';
 

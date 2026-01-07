@@ -36,9 +36,10 @@ export const defaults = {
 	// Network settings
 	rpcUrl: 'http://localhost:8545',
 	chainId: 31337,
-	arweaveGateways: ['https://gateway.irys.xyz', 'https://arweave.net', 'https://arweave.dev'],
+	arweaveGateways: ['https://ar.banbot.site', 'https://gateway.irys.xyz', 'https://arweave.net', 'https://arweave.dev'],
 	subsquidEndpoint: 'http://localhost:4350/graphql',
 	irysNetwork: 'devnet' as 'mainnet' | 'devnet',
+	irysGateways: 'https://devnet.irys.xyz',
 	// Gas settings
 	minGasFeeMultiplier: 10,
 	defaultChargeAmtUsd: '1.00',
@@ -71,13 +72,15 @@ export const ENVIRONMENT_DEFAULTS: Record<'dev' | 'test' | 'prod', Partial<Defau
 	test: {
 		rpcUrl: 'https://sepolia.optimism.io',
 		chainId: 11155420,
-		subsquidEndpoint: 'https://amberinktest.banbot.site/graphql'
+		subsquidEndpoint: 'https://amberinktest.banbot.site/graphql',
+		irysGateways: 'https://devnet.irys.xyz'
 	},
 	prod: {
 		rpcUrl: 'https://mainnet.optimism.io',
 		chainId: 10,
 		subsquidEndpoint: 'https://amberink.banbot.site/graphql',
-		irysNetwork: 'mainnet'
+		irysNetwork: 'mainnet',
+		irysGateways: 'https://irys.banbot.site'
 	}
 };
 
@@ -153,6 +156,7 @@ export type UserConfigKey =
 	| 'defaultDislikeAmountUsd'
 	| 'defaultCollectPriceUsd'
 	| 'minActionValueUsd'
+	| 'irysGateways'
 	| 'envName';
 
 export interface UserConfig {
@@ -165,6 +169,7 @@ export interface UserConfig {
 	defaultDislikeAmountUsd?: string;
 	defaultCollectPriceUsd?: string;
 	minActionValueUsd?: string;
+	irysGateways?: string;
 	envName?: 'dev' | 'test' | 'prod';
 }
 
@@ -245,7 +250,13 @@ export const configFields: ConfigFieldMeta[] = [
 		key: 'arweaveGateways',
 		labelKey: 'arweave_gateways',
 		type: 'array',
-		placeholder: 'https://gateway.irys.xyz'
+		placeholder: 'https://ar.banbot.site(https://gateway.irys.xyz)'
+	},
+	{
+		key: 'irysGateways',
+		labelKey: 'irys_gateways',
+		type: 'text',
+		placeholder: 'https://irys.banbot.site'
 	},
 	{
 		key: 'defaultChargeAmtUsd',
@@ -375,6 +386,7 @@ export function getConfig() {
 		arweaveGateways: userConfig.arweaveGateways || envDefaults.arweaveGateways,
 		subsquidEndpoint: userConfig.subsquidEndpoint || envDefaults.subsquidEndpoint,
 		defaultChargeAmtUsd: userConfig.defaultChargeAmtUsd || envDefaults.defaultChargeAmtUsd,
+		irysGateways: userConfig.irysGateways || envDefaults.irysGateways,
 		// USD pricing (user-overridable, uses fixed defaults)
 		defaultTipAmountUsd: userConfig.defaultTipAmountUsd || envDefaults.defaultTipAmountUsd,
 		defaultDislikeAmountUsd: userConfig.defaultDislikeAmountUsd || envDefaults.defaultDislikeAmountUsd,

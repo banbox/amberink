@@ -12,12 +12,7 @@
 import type { IrysUploader, SessionKeyIrysUploader } from './irys';
 import { isWithinIrysFreeLimit } from './irys';
 import type { IrysTag, ArticleFolderManifest } from './types';
-import { getConfig, getArweaveGateways, getIrysNetwork } from '$lib/config';
-import {
-	IRYS_GATEWAY_URL,
-	IRYS_DEVNET_GRAPHQL,
-	IRYS_MAINNET_GRAPHQL
-} from '$lib/constants';
+import { getConfig, getArweaveGateways, getIrysNetwork, getIrysGraphQLEndpoint } from '$lib/config';
 
 // 文章文件夹中的固定文件名
 export const ARTICLE_INDEX_FILE = 'index.md';
@@ -265,7 +260,8 @@ export async function uploadUpdatedManifest(
 export function getMutableFolderUrl(manifestId: string, fileName?: string): string {
 	// 始终使用 gateway.irys.xyz/mutable/ 路径，这对 devnet 和 mainnet 都有效
 	// devnet.irys.xyz 不支持 /mutable/ 路径，会返回 404
-	const baseUrl = `${IRYS_GATEWAY_URL}/mutable/${manifestId}`;
+	const gateways = getArweaveGateways();
+	const baseUrl = `${gateways[0]}/mutable/${manifestId}`;
 	return fileName ? `${baseUrl}/${fileName}` : baseUrl;
 }
 
@@ -358,13 +354,9 @@ export interface ArticleVersion {
  * @param originalManifestId - 原始 manifest ID
  */
 export async function queryArticleVersions(originalManifestId: string): Promise<ArticleVersion[]> {
-	// 根据 Irys 网络选择正确的 GraphQL 端点
-	// devnet 和 mainnet 使用不同的数据库
-	const network = getIrysNetwork();
-	const graphqlEndpoint = network === 'devnet'
-		? IRYS_DEVNET_GRAPHQL
-		: IRYS_MAINNET_GRAPHQL;
-	console.log('[queryArticleVersions] Using network:', network, 'endpoint:', graphqlEndpoint);
+	// Use the configured Irys GraphQL endpoint based on current environment
+	const graphqlEndpoint = getIrysGraphQLEndpoint();
+	console.log('[queryArticleVersions] Using network:', getIrysNetwork(), 'endpoint:', graphqlEndpoint);
 	console.log('[queryArticleVersions] Querying versions for manifest:', originalManifestId);
 
 	// 查询所有带有 Root-TX = originalManifestId 标签的交易，以及原始交易本身
@@ -533,11 +525,8 @@ export async function fetchArticleVersionContent(versionTxId: string): Promise<s
  * @returns 最新版本的交易ID，如果没有更新则返回原始ID
  */
 export async function queryLatestIrysTxId(originalManifestId: string): Promise<string> {
-	// 根据 Irys 网络选择正确的 GraphQL 端点
-	const network = getIrysNetwork();
-	const graphqlEndpoint = network === 'devnet'
-		? IRYS_DEVNET_GRAPHQL
-		: IRYS_MAINNET_GRAPHQL;
+	// Use the configured Irys GraphQL endpoint
+	const graphqlEndpoint = getIrysGraphQLEndpoint();
 
 	// 查询带有 Root-TX = originalManifestId 标签的最新交易
 	const query = `

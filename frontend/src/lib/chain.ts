@@ -3,9 +3,9 @@
  * Dynamically selects chain based on environment variables
  */
 
-import { getChainId, getRpcUrl } from '$lib/config';
+import { getChainId, getRpcUrl, getIrysGateway } from '$lib/config';
 import { BLOCK_EXPLORER_URLS, getViemChain } from './chains';
-import { VIEWBLOCK_ARWEAVE_URL, IRYS_DEVNET_URL } from './constants';
+import { VIEWBLOCK_ARWEAVE_URL } from './constants';
 
 /**
  * Get block explorer URL for a transaction hash
@@ -30,7 +30,7 @@ export function getBlockExplorerAddressUrl(address: string): string {
 export function getViewblockArweaveUrl(arweaveId: string, network: 'mainnet' | 'devnet'): string {
 	if (!arweaveId) return '';
 	// Viewblock only supports Arweave mainnet
-	if (network !== 'mainnet') return `${IRYS_DEVNET_URL}/tx/${arweaveId}`;
+	if (network !== 'mainnet') return `${getIrysGateway()}/tx/${arweaveId}`;
 	return `${VIEWBLOCK_ARWEAVE_URL}/tx/${arweaveId}`;
 }
 

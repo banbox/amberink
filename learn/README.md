@@ -1698,3 +1698,15 @@ Claude: 并未执行新图片保存逻辑导致，已修复
 开发者：@help.md 目前编辑文章时，并未恢复包含的图片，这导致插入图片时又从01开始计数；请帮我在文章编辑页面，从manifest恢复所有图片，到formData.contentImages中，方便预览和插入，上传新图片时从已有索引增加命名  
 Claude：修复完成
 
+### 2026-01-07 10:30  irys网关国内无法访问
+我开发了一个dapp去中心化应用，依赖irys+Arweave；但是irys的网关中国大陆无法访问。请你从技术层面帮我分析，可以使用哪些手段解决？  
+Gemini: 1. 使用Cloudflare Workers反向代理；2. 接入多网关冗余(ar-io, arweave)；3. 自有服务器中转  
+开发者：选用Cloudflare Workers方案，成本低，稳定，需准备自有域名，详细流程可问Gemini。在Cloudflare的Workers & Pages中创建了Workers（选hello world），命名ar  
+开发者：[worker的JavaScript代码]我打算使用Cloudfare Workers代理，上面是默认的，然后如何更新Worker代码？  
+Gemini：输出完整代码，含options跨域预检处理、代理转发；  
+开发者：点击 Edit Code 更新代码，然后进入Domains -> 域名 -> Worker Routes，点 Add Route，配置ar.banbot.site使用刚才的ar worker；在SSL/TLS选Custom Hostnames，点Add Custom Hostname，配置ar.banbot.site并完成域名解析验证；最后更新前端代码默认使用ar.banbot.site网关  
+开发者：同样流程将uploader.irys.xyz代理为irys.banbot.site
+
+### 2026-01-07 12:15  irys代理
+@help.md 帮我在 frontend/src/lib/stores/config.svelte.ts 249行后面新增一个配置：irysGateways，env=prod默认https://irys.banbot.site；env=test默认https://devnet.irys.xyz；编辑此项保存时，保存的key要增加env作为特征；  
+当使用 frontend/src/lib/constants.ts 中的 IRYS_DEVNET_GRAPHQL, IRYS_MAINNET_GRAPHQL, IRYS_DEVNET_URL 这几个的地方，都应该改为调用getIrysGateway  

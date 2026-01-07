@@ -2,10 +2,9 @@
  * 从 Arweave 获取内容
  */
 import type { ArticleMetadata } from './types';
-import { getArweaveGateways } from '$lib/config';
+import { getArweaveGateways, getIrysGraphQLEndpoint } from '$lib/config';
 import { getMutableFolderUrl, getStaticFolderUrl, ARTICLE_INDEX_FILE } from './folder';
 import { decryptContent, isEncryptedContent } from './crypto';
-import { IRYS_DEVNET_GRAPHQL, IRYS_MAINNET_GRAPHQL } from '$lib/constants';
 
 /**
  * 通用网关请求函数，遍历所有网关直到成功
@@ -156,11 +155,8 @@ async function fetchManifestTags(manifestId: string): Promise<{
 	timestamp?: number;
 	address?: string;
 }> {
-	// 根据环境选择 GraphQL 端点
-	const graphqlEndpoints = [
-		IRYS_DEVNET_GRAPHQL,
-		IRYS_MAINNET_GRAPHQL
-	];
+	// Use the configured Irys GraphQL endpoint
+	const endpoint = getIrysGraphQLEndpoint();
 
 	// 先查询带有 Root-TX = manifestId 的最新 manifest（更新版本）
 	const latestVersionQuery = `
@@ -206,58 +202,56 @@ async function fetchManifestTags(manifestId: string): Promise<{
 		}
 	`;
 
-	for (const endpoint of graphqlEndpoints) {
-		try {
-			// 1. 先尝试获取最新版本的 manifest 标签
-			const latestResponse = await fetch(endpoint, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					query: latestVersionQuery,
-					variables: { rootTx: manifestId }
-				})
-			});
+	try {
+		// 1. 先尝试获取最新版本的 manifest 标签
+		const latestResponse = await fetch(endpoint, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				query: latestVersionQuery,
+				variables: { rootTx: manifestId }
+			})
+		});
 
-			if (latestResponse.ok) {
-				const latestResult = await latestResponse.json();
-				const latestEdges = latestResult?.data?.transactions?.edges || [];
-				if (latestEdges.length > 0) {
-					console.log(`Found latest manifest version: ${latestEdges[0].node.id}`);
-					const node = latestEdges[0].node;
-					return {
-						tags: node.tags || [],
-						timestamp: node.timestamp,
-						address: node.address
-					};
-				}
+		if (latestResponse.ok) {
+			const latestResult = await latestResponse.json();
+			const latestEdges = latestResult?.data?.transactions?.edges || [];
+			if (latestEdges.length > 0) {
+				console.log(`Found latest manifest version: ${latestEdges[0].node.id}`);
+				const node = latestEdges[0].node;
+				return {
+					tags: node.tags || [],
+					timestamp: node.timestamp,
+					address: node.address
+				};
 			}
-
-			// 2. 如果没有更新版本，查询原始 manifest
-			const response = await fetch(endpoint, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					query: originalQuery,
-					variables: { ids: [manifestId] }
-				})
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-				const edges = result?.data?.transactions?.edges || [];
-				if (edges.length > 0) {
-					console.log(`Using original manifest tags: ${manifestId}`);
-					const node = edges[0].node;
-					return {
-						tags: node.tags || [],
-						timestamp: node.timestamp,
-						address: node.address
-					};
-				}
-			}
-		} catch (error) {
-			console.warn(`GraphQL endpoint ${endpoint} failed:`, error);
 		}
+
+		// 2. 如果没有更新版本，查询原始 manifest
+		const response = await fetch(endpoint, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				query: originalQuery,
+				variables: { ids: [manifestId] }
+			})
+		});
+
+		if (response.ok) {
+			const result = await response.json();
+			const edges = result?.data?.transactions?.edges || [];
+			if (edges.length > 0) {
+				console.log(`Using original manifest tags: ${manifestId}`);
+				const node = edges[0].node;
+				return {
+					tags: node.tags || [],
+					timestamp: node.timestamp,
+					address: node.address
+				};
+			}
+		}
+	} catch (error) {
+		console.warn(`GraphQL endpoint ${endpoint} failed:`, error);
 	}
 
 	return { tags: [] };
@@ -307,7 +301,7 @@ export interface IrysArticleMetadata {
 export async function fetchArticleMetadataFromIrys(manifestId: string): Promise<IrysArticleMetadata | null> {
 	try {
 		const { tags, timestamp, address } = await fetchManifestTags(manifestId);
-		
+
 		if (tags.length === 0 && !address) {
 			console.log(`No metadata found for manifest: ${manifestId}`);
 			return null;
