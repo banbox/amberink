@@ -223,6 +223,7 @@
 	"chain_id": "链 ID",
 	"subsquid_endpoint": "Subsquid URL",
 	"arweave_gateways": "Arweave 网关",
+	"irys_gateways": "IRYS 网关",
 	"contract_address": "合约地址",
 	"endpoint": "端点",
 	"network": "网络",

@@ -196,7 +196,9 @@ function createSessionKeyViemClients(sessionKey: StoredSessionKey) {
 
 	const publicClient = createPublicClient({
 		chain,
-		transport: http(rpcUrl)
+		transport: http(rpcUrl, {
+			methods: { exclude: ['eth_fillTransaction'] }
+		})
 	});
 
 	return { walletClient, publicClient, account };

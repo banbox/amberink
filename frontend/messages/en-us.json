@@ -223,6 +223,7 @@
 	"chain_id": "Chain ID",
 	"subsquid_endpoint": "Subsquid URL",
 	"arweave_gateways": "Arweave Gateways",
+	"irys_gateways": "IRYS Gateway",
 	"contract_address": "Contract Address",
 	"endpoint": "Endpoint",
 	"network": "Network",

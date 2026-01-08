@@ -1747,3 +1747,10 @@ Gemini：建议了很多Cloudflare、nginx等配置，均未解决。
 上面是编辑文章时的报错。可以看到请求的是错误的 https://uploader.irys.xyz
 请帮我分析问题原因，并改为使用getIrysGateway
 Claude: 已解决
+
+### 2026-01-08 20:00  节点方法错误
+"eth_fillTransaction"  method is not available
+为什么一些节点会出现上面的错误？optimism链  
+Gemini：让升级viem；或者手动填充交易字段。均未解决。  
+开发者：在github发现[相关issue](https://github.com/wevm/viem/issues/4117)，设置methods.exclude解决
+

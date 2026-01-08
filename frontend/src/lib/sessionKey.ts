@@ -812,7 +812,9 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 	const walletClient = createWalletClient({
 		account: sessionKeyAccount,
 		chain: getChainConfig(),
-		transport: http(getRpcUrl())
+		transport: http(getRpcUrl(), {
+			methods: { exclude: ['eth_fillTransaction'] }
+		})
 	});
 
 	const txHash = await walletClient.sendTransaction({

@@ -1236,7 +1236,9 @@ function createSessionKeyWalletClient(sessionKey: StoredSessionKey) {
 	return createWalletClient({
 		account: sessionKeyAccount,
 		chain: getChainConfig(),
-		transport: http(getRpcUrl())
+		transport: http(getRpcUrl(), {
+			methods: { exclude: ['eth_fillTransaction'] }
+		})
 	});
 }
 

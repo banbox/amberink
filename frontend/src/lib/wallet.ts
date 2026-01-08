@@ -115,7 +115,9 @@ export function getPublicClient() {
 	const chain = getChainConfig();
 	return createPublicClient({
 		chain,
-		transport: http(getRpcUrl())
+		transport: http(getRpcUrl(), {
+			methods: { exclude: ['eth_fillTransaction'] }
+		})
 	});
 }
 

@@ -938,46 +938,6 @@ export async function updateArticleFolderWithUploader(
 	console.log(`  - New Index TX: ${indexTxId}`);
 	console.log(`  - Mutable URL: https://gateway.irys.xyz/mutable/${originalManifestId}`);
 
-	// 验证步骤：对比直接获取和 mutable URL 获取的 manifest
-	try {
-		const { getArweaveGateways } = await import('$lib/config');
-		const gateways = getArweaveGateways();
-		const gateway = gateways[0];
-
-		// 1. 直接获取新上传的 manifest
-		const directUrl = `${gateway}/${newManifestTxId}`;
-		console.log(`Verifying: fetching new manifest directly from ${directUrl}`);
-		const directResponse = await fetch(directUrl, {
-			headers: { 'Accept': 'application/x.irys-manifest+json' }
-		});
-		if (directResponse.ok) {
-			const directManifest = await directResponse.json();
-			console.log(`Direct manifest index.md TX:`, directManifest.paths?.['index.md']?.id);
-		}
-
-		// 2. 通过 mutable URL 获取 manifest
-		const mutableUrl = `${gateway}/mutable/${originalManifestId}?_t=${Date.now()}`;
-		console.log(`Verifying: fetching via mutable URL ${mutableUrl}`);
-		const mutableResponse = await fetch(mutableUrl, {
-			headers: { 'Accept': 'application/x.irys-manifest+json' },
-			cache: 'no-store'
-		});
-		if (mutableResponse.ok) {
-			const mutableManifest = await mutableResponse.json();
-			console.log(`Mutable manifest index.md TX:`, mutableManifest.paths?.['index.md']?.id);
-
-			// 对比是否相同
-			const directIndexId = (await (await fetch(directUrl, { headers: { 'Accept': 'application/x.irys-manifest+json' } })).json()).paths?.['index.md']?.id;
-			if (directIndexId === mutableManifest.paths?.['index.md']?.id) {
-				console.log('✓ Mutable URL returns the latest manifest');
-			} else {
-				console.warn('⚠ Mutable URL returns OLD manifest! Expected:', directIndexId, 'Got:', mutableManifest.paths?.['index.md']?.id);
-			}
-		}
-	} catch (e) {
-		console.warn('Verification failed:', e);
-	}
-
 	return {
 		newManifestTxId,
 		indexTxId,
