@@ -50,6 +50,9 @@ export class ContractError extends Error {
 	}
 }
 
+/** Convert unknown to Error or undefined */
+const toError = (e: unknown): Error | undefined => (e instanceof Error ? e : undefined);
+
 /**
  * Parse error and return a ContractError with appropriate code
  */
@@ -62,7 +65,7 @@ function parseContractError(error: unknown): ContractError {
 
 	// Session key specific errors
 	if (lowerMessage.includes('not authorized for this operation')) {
-		return new ContractError('contract_reverted', errorMessage, error instanceof Error ? error : undefined);
+		return new ContractError('contract_reverted', errorMessage, toError(error));
 	}
 	if (
 		lowerMessage.includes('sessionkeynotactive') ||
@@ -75,35 +78,35 @@ function parseContractError(error: unknown): ContractError {
 		return new ContractError(
 			'session_key_expired',
 			'Session key is not active, expired, or limit exceeded. Please create a new session key.',
-			error instanceof Error ? error : undefined
+			toError(error)
 		);
 	}
 	if (lowerMessage.includes('invalidsignature') || lowerMessage.includes('0x8baa579f')) {
 		return new ContractError(
 			'session_key_unauthorized',
 			'Invalid signature. Session verification failed.',
-			error instanceof Error ? error : undefined
+			toError(error)
 		);
 	}
 	if (lowerMessage.includes('signatureexpired') || lowerMessage.includes('0x0819bdcd')) {
-		return new ContractError('session_key_expired', 'Signature has expired. Please try again.', error instanceof Error ? error : undefined);
+		return new ContractError('session_key_expired', 'Signature has expired. Please try again.', toError(error));
 	}
 	if (lowerMessage.includes('sessionkeyvalidationfailed')) {
 		return new ContractError(
 			'session_key_unauthorized',
 			'Session key validation failed.',
-			error instanceof Error ? error : undefined
+			toError(error)
 		);
 	}
 
 	// Security/Logic errors
-	if (lowerMessage.includes('cannotselfevaluate')) return new ContractError('cannot_self_evaluate', 'You cannot like or dislike your own article.', error instanceof Error ? error : undefined);
-	if (lowerMessage.includes('cannotselffollow')) return new ContractError('cannot_self_follow', 'You cannot follow yourself.', error instanceof Error ? error : undefined);
-	if (lowerMessage.includes('cannotselfcollect')) return new ContractError('cannot_self_collect', 'You cannot collect your own article.', error instanceof Error ? error : undefined);
-	if (lowerMessage.includes('cannotlikeowncomment')) return new ContractError('cannot_like_own_comment', 'You cannot like your own comment.', error instanceof Error ? error : undefined);
-	if (lowerMessage.includes('articlenotfound')) return new ContractError('article_not_found', 'Article not found', error instanceof Error ? error : undefined);
-	if (lowerMessage.includes('spamprotection')) return new ContractError('contract_reverted', 'Transaction value too low (anti-spam protection)', error instanceof Error ? error : undefined);
-	if (lowerMessage.includes('invalidnonce')) return new ContractError('contract_reverted', 'Invalid nonce (possible race condition)', error instanceof Error ? error : undefined);
+	if (lowerMessage.includes('cannotselfevaluate')) return new ContractError('cannot_self_evaluate', 'You cannot like or dislike your own article.', toError(error));
+	if (lowerMessage.includes('cannotselffollow')) return new ContractError('cannot_self_follow', 'You cannot follow yourself.', toError(error));
+	if (lowerMessage.includes('cannotselfcollect')) return new ContractError('cannot_self_collect', 'You cannot collect your own article.', toError(error));
+	if (lowerMessage.includes('cannotlikeowncomment')) return new ContractError('cannot_like_own_comment', 'You cannot like your own comment.', toError(error));
+	if (lowerMessage.includes('articlenotfound')) return new ContractError('article_not_found', 'Article not found', toError(error));
+	if (lowerMessage.includes('spamprotection')) return new ContractError('contract_reverted', 'Transaction value too low (anti-spam protection)', toError(error));
+	if (lowerMessage.includes('invalidnonce')) return new ContractError('contract_reverted', 'Invalid nonce (possible race condition)', toError(error));
 
 	// User/Network errors
 	if (
@@ -113,7 +116,7 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('user cancelled') ||
 		lowerMessage.includes('user canceled')
 	) {
-		return new ContractError('user_rejected', 'User rejected the transaction.', error instanceof Error ? error : undefined);
+		return new ContractError('user_rejected', 'User rejected the transaction.', toError(error));
 	}
 
 	if (
@@ -121,7 +124,7 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('insufficient balance') ||
 		lowerMessage.includes('not enough balance')
 	) {
-		return new ContractError('insufficient_funds', 'Insufficient funds to complete the transaction.', error instanceof Error ? error : undefined);
+		return new ContractError('insufficient_funds', 'Insufficient funds to complete the transaction.', toError(error));
 	}
 
 	if (
@@ -130,7 +133,7 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('out of gas') ||
 		lowerMessage.includes('intrinsic gas too low')
 	) {
-		return new ContractError('gas_estimation_failed', 'Failed to estimate gas for the transaction.', error instanceof Error ? error : undefined);
+		return new ContractError('gas_estimation_failed', 'Failed to estimate gas for the transaction.', toError(error));
 	}
 
 	if (
@@ -141,18 +144,18 @@ function parseContractError(error: unknown): ContractError {
 		// Try to extract reason
 		const match = errorMessage.match(/reason="?([^"]+)"?/i) || errorMessage.match(/error=([^,]+)/i);
 		const reason = match ? match[1] : 'The contract reverted the transaction.';
-		return new ContractError('contract_reverted', reason, error instanceof Error ? error : undefined);
+		return new ContractError('contract_reverted', reason, toError(error));
 	}
 
 	if (lowerMessage.includes('nonce too low') || lowerMessage.includes('nonce has already been used')) {
-		return new ContractError('nonce_too_low', 'Nonce is too low or has already been used.', error instanceof Error ? error : undefined);
+		return new ContractError('nonce_too_low', 'Nonce is too low or has already been used.', toError(error));
 	}
 
 	if (
 		lowerMessage.includes('replacement transaction underpriced') ||
 		lowerMessage.includes('transaction underpriced')
 	) {
-		return new ContractError('replacement_underpriced', 'Replacement transaction is underpriced.', error instanceof Error ? error : undefined);
+		return new ContractError('replacement_underpriced', 'Replacement transaction is underpriced.', toError(error));
 	}
 
 	if (
@@ -162,7 +165,7 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('timeout') ||
 		lowerMessage.includes('econnrefused')
 	) {
-		return new ContractError('network_error', 'Network error occurred.', error instanceof Error ? error : undefined);
+		return new ContractError('network_error', 'Network error occurred.', toError(error));
 	}
 
 	if (
@@ -170,7 +173,7 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('wallet not connected') ||
 		lowerMessage.includes('not connected')
 	) {
-		return new ContractError('wallet_not_connected', 'Wallet is not connected.', error instanceof Error ? error : undefined);
+		return new ContractError('wallet_not_connected', 'Wallet is not connected.', toError(error));
 	}
 
 	if (
@@ -178,10 +181,10 @@ function parseContractError(error: unknown): ContractError {
 		lowerMessage.includes('chain mismatch') ||
 		(lowerMessage.includes('switch') && lowerMessage.includes('chain'))
 	) {
-		return new ContractError('wrong_network', 'Wrong network selected.', error instanceof Error ? error : undefined);
+		return new ContractError('wrong_network', 'Wrong network selected.', toError(error));
 	}
 
-	return new ContractError('unknown_error', 'An unknown error occurred.', error instanceof Error ? error : undefined);
+	return new ContractError('unknown_error', 'An unknown error occurred.', toError(error));
 }
 
 // ============================================================
@@ -214,6 +217,34 @@ function assertValidAddress(
 	if (!allowZero && address === ZERO_ADDRESS) {
 		throw new Error(`Invalid ${fieldName}`);
 	}
+}
+
+/** Assert that amount is positive */
+function assertPositiveAmount(value: bigint, fieldName: string): void {
+	if (value <= 0n) {
+		throw new Error(`${fieldName} must be greater than 0`);
+	}
+}
+
+/** Assert that score is valid (0-2) */
+function assertValidScore(score: number): void {
+	if (score < 0 || score > 2) {
+		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
+	}
+}
+
+/** Validate likeComment parameters */
+function validateLikeCommentParams(articleId: bigint, commentId: bigint, commenter: string, amount: bigint): void {
+	assertNonNegative(articleId, 'Article ID');
+	assertNonNegative(commentId, 'Comment ID');
+	assertValidAddress(commenter, 'commenter address');
+	assertPositiveAmount(amount, 'Like amount');
+}
+
+/** Validate evaluate parameters */
+function validateEvaluateParams(articleId: bigint, score: number): void {
+	assertNonNegative(articleId, 'Article ID');
+	assertValidScore(score);
 }
 
 /** Validate publish parameters common to both wallet and session key modes */
@@ -782,12 +813,7 @@ export async function likeComment(
 	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
-	assertNonNegative(articleId, 'Article ID');
-	assertNonNegative(commentId, 'Comment ID');
-	assertValidAddress(commenter, 'commenter address');
-	if (amount <= 0n) {
-		throw new Error('Like amount must be greater than 0');
-	}
+	validateLikeCommentParams(articleId, commentId, commenter, amount);
 
 	return executeContractAction({
 		actionName: 'likeComment',
@@ -826,11 +852,7 @@ export async function evaluateArticle(
 	parentCommentId: bigint = 0n,
 	tipAmount: bigint = 0n
 ): Promise<string> {
-	assertNonNegative(articleId, 'Article ID');
-
-	if (score < 0 || score > 2) {
-		throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
-	}
+	validateEvaluateParams(articleId, score);
 
 	return executeContractAction({
 		actionName: 'evaluate',
@@ -849,9 +871,7 @@ export async function evaluateArticle(
  * @returns Transaction hash
  */
 export async function followUser(targetAddress: `0x${string}`, isFollow: boolean): Promise<string> {
-	if (!targetAddress || targetAddress === ZERO_ADDRESS) {
-		throw new Error('Invalid target address');
-	}
+	assertValidAddress(targetAddress, 'target address');
 
 	return executeContractAction({
 		actionName: 'follow',
@@ -881,9 +901,7 @@ export interface ArticleData {
  * @returns Article data
  */
 export async function getArticle(articleId: bigint): Promise<ArticleData> {
-	if (articleId < 0n) {
-		throw new Error('Article ID must be non-negative');
-	}
+	assertNonNegative(articleId, 'Article ID');
 
 	try {
 		const publicClient = getPublicClient();
@@ -1261,8 +1279,7 @@ export async function evaluateArticleWithSessionKey(
 	parentCommentId: bigint = 0n,
 	tipAmount: bigint = 0n
 ): Promise<string> {
-	if (articleId < 0n) throw new Error('Article ID must be non-negative');
-	if (score < 0 || score > 2) throw new Error('Score must be 0 (neutral), 1 (like), or 2 (dislike)');
+	validateEvaluateParams(articleId, score);
 
 	return executeSessionKeyAction(sessionKey, {
 		actionName: 'evaluate',
@@ -1279,9 +1296,7 @@ export async function followUserWithSessionKey(
 	targetAddress: `0x${string}`,
 	isFollow: boolean
 ): Promise<string> {
-	if (!targetAddress || targetAddress === ZERO_ADDRESS) {
-		throw new Error('Invalid target address');
-	}
+	assertValidAddress(targetAddress, 'target address');
 
 	return executeSessionKeyAction(sessionKey, {
 		actionName: 'follow',
@@ -1298,7 +1313,7 @@ export async function collectArticleWithSessionKey(
 	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
-	if (articleId < 0n) throw new Error('Article ID must be non-negative');
+	assertNonNegative(articleId, 'Article ID');
 
 	return executeSessionKeyAction(sessionKey, {
 		actionName: 'collect',
@@ -1318,10 +1333,7 @@ export async function likeCommentWithSessionKey(
 	referrer: `0x${string}` = ZERO_ADDRESS,
 	amount: bigint
 ): Promise<string> {
-	if (articleId < 0n) throw new Error('Article ID must be non-negative');
-	if (commentId < 0n) throw new Error('Comment ID must be non-negative');
-	if (!commenter || commenter === ZERO_ADDRESS) throw new Error('Invalid commenter address');
-	if (amount <= 0n) throw new Error('Like amount must be greater than 0');
+	validateLikeCommentParams(articleId, commentId, commenter, amount);
 
 	return executeSessionKeyAction(sessionKey, {
 		actionName: 'likeComment',

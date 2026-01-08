@@ -1754,3 +1754,9 @@ Claude: 已解决
 Gemini：让升级viem；或者手动填充交易字段。均未解决。  
 开发者：在github发现[相关issue](https://github.com/wevm/viem/issues/4117)，设置methods.exclude解决
 
+### 2026-01-08 21:30  正文重复加载
+@help.md 上面是文章详情页，我发现它两次请求了Arweave的正文，请根据日志中涉及的相关代码逻辑，帮我分析原因，如果是逻辑错误或冗余，帮我修复  
+Claude: loadArticle有竟态条件，已修复
+
+### 2026-01-08 22:00  代码优化
+对 frontend/src/lib/contracts.ts 使用`2026-01-03 14:20  代码优化`提示词优化

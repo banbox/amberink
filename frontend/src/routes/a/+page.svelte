@@ -636,6 +636,9 @@
 				currentUserData = await fetchUserData(walletAddress);
 			}
 			
+			// Wait for parallel Irys loading to complete before checking if content needs loading
+			await irysLoadPromise;
+			
 			// If content wasn't loaded by Irys loading (e.g. encrypted article), load it now
 			if (!articleContent && !contentError) {
 				await loadArticleContent(loadedArticle.id, versionId, irysMetadata);
