@@ -36,7 +36,7 @@ export const defaults = {
 	// Network settings
 	rpcUrl: 'http://localhost:8545',
 	chainId: 31337,
-	arweaveGateways: ['https://ar.banbot.site', 'https://gateway.irys.xyz', 'https://arweave.net', 'https://arweave.dev'],
+	arweaveGateways: ['https://ar.banbot.site', 'https://gateway.irys.xyz', 'https://gateway.irysnetwork.com'],
 	subsquidEndpoint: 'http://localhost:4350/graphql',
 	irysNetwork: 'devnet' as 'mainnet' | 'devnet',
 	irysGateways: 'https://devnet.irys.xyz',
@@ -76,7 +76,7 @@ export const ENVIRONMENT_DEFAULTS: Record<'dev' | 'test' | 'prod', Partial<Defau
 		irysGateways: 'https://devnet.irys.xyz'
 	},
 	prod: {
-		rpcUrl: 'https://mainnet.optimism.io',
+		rpcUrl: 'https://optimism.drpc.org',
 		chainId: 10,
 		subsquidEndpoint: 'https://amberink.banbot.site/graphql',
 		irysNetwork: 'mainnet',

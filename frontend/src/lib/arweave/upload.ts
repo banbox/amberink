@@ -2,16 +2,12 @@
  * Arweave 上传功能
  */
 import {
-	getIrysUploader,
-	getIrysUploaderDevnet,
+	createIrysUploader,
+	createSessionKeyIrysUploader,
 	ensureIrysBalance,
-	getSessionKeyIrysUploader,
-	getSessionKeyIrysUploaderDevnet,
-	isSessionKeyValid,
-	getSessionKeyOwner,
-	isWithinIrysFreeLimit,
 	type IrysUploader
 } from './irys';
+import { getIrysFreeUploadLimit } from '$lib/config';
 import type { ArticleMetadata, IrysTag, IrysNetwork, ArticleFolderUploadParams, ArticleFolderUploadResult, ContentImageInfo } from './types';
 import { getConfig, envName } from '$lib/config';
 import type { StoredSessionKey } from '$lib/sessionKey';
@@ -34,7 +30,7 @@ export async function uploadArticle(
 	metadata: Omit<ArticleMetadata, 'createdAt' | 'version'>,
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
-	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
+	const uploader = await createIrysUploader({ network });
 
 	return uploadArticleWithUploader(uploader, metadata);
 }
@@ -93,7 +89,7 @@ export async function uploadArticleWithUploader(
  * @param network - 网络类型（默认 devnet）
  */
 export async function uploadImage(file: File, network: IrysNetwork = 'devnet'): Promise<string> {
-	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
+	const uploader = await createIrysUploader({ network });
 
 	return uploadImageWithUploader(uploader, file);
 }
@@ -141,7 +137,7 @@ export async function uploadData(
 	customTags: IrysTag[] = [],
 	network: IrysNetwork = 'devnet'
 ): Promise<string> {
-	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
+	const uploader = await createIrysUploader({ network });
 	const appName = getConfig().appName;
 
 	// 计算数据大小并确保余额充足
@@ -197,7 +193,7 @@ export async function uploadArticleWithUploaderAndPayer(
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
-	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const isFreeUpload = dataSize <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	// 构建标签（用于 Arweave GraphQL 查询）
@@ -238,7 +234,7 @@ export async function uploadImageWithUploaderAndPayer(
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
-	const isFreeUpload = isWithinIrysFreeLimit(file.size);
+	const isFreeUpload = file.size <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	const tags: IrysTag[] = [
@@ -266,11 +262,11 @@ export async function uploadImageWithUploaderAndPayer(
 
 /** 获取 Session Key Uploader 和 owner 地址 */
 async function getSessionKeyUploaderAndOwner(sessionKey: StoredSessionKey, network: IrysNetwork) {
-	if (!isSessionKeyValid(sessionKey)) throw new Error('Session key is invalid or expired');
-	const uploader = network === 'mainnet'
-		? await getSessionKeyIrysUploader(sessionKey)
-		: await getSessionKeyIrysUploaderDevnet(sessionKey);
-	return { uploader, ownerAddress: getSessionKeyOwner(sessionKey) };
+	if (!sessionKey || Date.now() / 1000 >= sessionKey.validUntil) {
+		throw new Error('Session key is invalid or expired');
+	}
+	const uploader = await createSessionKeyIrysUploader(sessionKey, { network });
+	return { uploader, ownerAddress: sessionKey.owner };
 }
 
 export async function uploadArticleWithSessionKey(
@@ -301,7 +297,7 @@ export async function uploadDataWithSessionKey(
 	const { uploader, ownerAddress } = await getSessionKeyUploaderAndOwner(sessionKey, network);
 	const appName = getConfig().appName;
 	const dataSize = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
-	const effectivePaidBy = isWithinIrysFreeLimit(dataSize) ? undefined : ownerAddress;
+	const effectivePaidBy = dataSize <= getIrysFreeUploadLimit() ? undefined : ownerAddress;
 
 	const tags: IrysTag[] = [
 		{ name: 'Content-Type', value: contentType },
@@ -363,7 +359,7 @@ async function uploadMarkdownContent(
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
-	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const isFreeUpload = dataSize <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	// 如果没有 paidBy 或者是免费上传，需要确保 Irys 余额充足
@@ -415,7 +411,7 @@ async function uploadCoverImageFile(
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
-	const isFreeUpload = isWithinIrysFreeLimit(file.size);
+	const isFreeUpload = file.size <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	// 如果没有 paidBy 或者是免费上传，需要确保 Irys 余额充足
@@ -461,7 +457,7 @@ async function uploadContentImageFile(
 	const filename = `${imageInfo.id}.${imageInfo.extension}`;
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
-	const isFreeUpload = isWithinIrysFreeLimit(imageInfo.file.size);
+	const isFreeUpload = imageInfo.file.size <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	// 如果没有 paidBy 或者是免费上传，需要确保 Irys 余额充足
@@ -755,7 +751,7 @@ export async function uploadArticleFolder(
 	params: ArticleFolderUploadParams,
 	network: IrysNetwork = 'devnet'
 ): Promise<ArticleFolderUploadResult> {
-	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
+	const uploader = await createIrysUploader({ network });
 	return uploadArticleFolderWithUploader(uploader, params);
 }
 
@@ -771,18 +767,14 @@ export async function uploadArticleFolderWithSessionKey(
 	params: ArticleFolderUploadParams,
 	network: IrysNetwork = 'devnet'
 ): Promise<ArticleFolderUploadResult> {
-	if (!isSessionKeyValid(sessionKey)) {
+	if (!sessionKey || Date.now() / 1000 >= sessionKey.validUntil) {
 		throw new Error('Session key is invalid or expired');
 	}
 
-	const uploader =
-		network === 'mainnet'
-			? await getSessionKeyIrysUploader(sessionKey)
-			: await getSessionKeyIrysUploaderDevnet(sessionKey);
+	const uploader = await createSessionKeyIrysUploader(sessionKey, { network });
 
 	// 使用 paidBy 参数指定主账户付费（Balance Approvals 机制）
-	const ownerAddress = getSessionKeyOwner(sessionKey);
-	return uploadArticleFolderWithUploader(uploader as unknown as IrysUploader, params, ownerAddress);
+	return uploadArticleFolderWithUploader(uploader as unknown as IrysUploader, params, sessionKey.owner);
 }
 
 // ============================================================
@@ -1010,7 +1002,7 @@ async function uploadUpdatedManifestWithPayer(
 	const dataSize = new TextEncoder().encode(manifestData).length;
 
 	// Check if within Irys free limit
-	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const isFreeUpload = dataSize <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	const tags: IrysTag[] = [
@@ -1050,7 +1042,7 @@ export async function updateArticleFolder(
 	params: ArticleFolderUpdateParams,
 	network: IrysNetwork = 'devnet'
 ): Promise<ArticleFolderUpdateResult> {
-	const uploader = network === 'mainnet' ? await getIrysUploader() : await getIrysUploaderDevnet();
+	const uploader = await createIrysUploader({ network });
 	return updateArticleFolderWithUploader(uploader, originalManifestId, params);
 }
 
@@ -1067,15 +1059,11 @@ export async function updateArticleFolderWithSessionKey(
 	params: ArticleFolderUpdateParams,
 	network: IrysNetwork = 'devnet'
 ): Promise<ArticleFolderUpdateResult> {
-	if (!isSessionKeyValid(sessionKey)) {
+	if (!sessionKey || Date.now() / 1000 >= sessionKey.validUntil) {
 		throw new Error('Session key is invalid or expired');
 	}
 
-	const uploader =
-		network === 'mainnet'
-			? await getSessionKeyIrysUploader(sessionKey)
-			: await getSessionKeyIrysUploaderDevnet(sessionKey);
+	const uploader = await createSessionKeyIrysUploader(sessionKey, { network });
 
-	const ownerAddress = getSessionKeyOwner(sessionKey);
-	return updateArticleFolderWithUploader(uploader as unknown as IrysUploader, originalManifestId, params, ownerAddress);
+	return updateArticleFolderWithUploader(uploader as unknown as IrysUploader, originalManifestId, params, sessionKey.owner);
 }

@@ -41,18 +41,10 @@ export { Visibility } from './types';
 export {
 	// MetaMask 模式
 	createIrysUploader,
-	getIrysUploader,
-	getIrysUploaderDevnet,
 	// Session Key 模式（无需 MetaMask 签名）
 	createSessionKeyIrysUploader,
-	getSessionKeyIrysUploader,
-	getSessionKeyIrysUploaderDevnet,
-	isSessionKeyValid,
-	getSessionKeyOwner,
 	// 通用功能
-	getIrysBalance,
 	fundIrys,
-	getUploadPrice,
 	hasIrysSufficientBalance,
 	ensureIrysBalance,
 	type IrysUploader,

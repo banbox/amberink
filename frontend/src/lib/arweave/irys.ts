@@ -24,7 +24,7 @@ import { ViemV2Adapter } from '@irys/web-upload-ethereum-viem-v2';
 import { createWalletClient, createPublicClient, custom, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { IrysConfig } from './types';
-import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultChargeAmtUsd, getIrysFreeUploadLimit } from '$lib/config';
+import { getRpcUrl, getIrysNetwork, getMinGasFeeMultiplier, getDefaultChargeAmtUsd, getIrysFreeUploadLimit, getIrysGateway } from '$lib/config';
 import { usdToWei, formatUsd } from '$lib/priceService';
 import { getChainConfig } from '$lib/chain';
 import { getEthereumAccount } from '$lib/wallet';
@@ -56,6 +56,29 @@ async function createViemClients() {
 }
 
 /**
+ * 配置 Irys Builder
+ * @param builder - Irys builder 实例
+ * @param config - Irys 配置
+ */
+function configureIrysBuilder(
+	builder: ReturnType<typeof WebUploader>,
+	config?: Partial<IrysConfig>
+) {
+	const network = config?.network || getIrysNetwork();
+	const rpcUrl = config?.rpcUrl || getRpcUrl();
+	const irysGateway = getIrysGateway();
+
+	// Configure Irys node URL and blockchain RPC
+	builder = builder.bundlerUrl(irysGateway).withRpc(rpcUrl);
+
+	if (network === 'devnet') {
+		builder = builder.devnet();
+	}
+
+	return builder;
+}
+
+/**
  * 创建 Irys Uploader
  * @param config - Irys 配置
  */
@@ -68,29 +91,11 @@ export async function createIrysUploader(config?: Partial<IrysConfig>) {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let builder = WebUploader(WebEthereum).withAdapter(viemAdapter);
 
-	const network = config?.network || getIrysNetwork();
-	const rpcUrl = config?.rpcUrl || getRpcUrl();
-
-	if (network === 'devnet') {
-		builder = builder.withRpc(rpcUrl).devnet();
-	}
+	builder = configureIrysBuilder(builder, config);
 
 	return await builder;
 }
 
-/**
- * 获取 Irys Mainnet Uploader（永久存储）
- */
-export async function getIrysUploader(): Promise<IrysUploader> {
-	return createIrysUploader({ network: 'mainnet' });
-}
-
-/**
- * 获取 Irys Devnet Uploader（测试用，约60天后删除）
- */
-export async function getIrysUploaderDevnet(): Promise<IrysUploader> {
-	return createIrysUploader({ network: 'devnet' });
-}
 
 // ============================================================
 //                  Session Key Irys 客户端
@@ -215,62 +220,12 @@ export async function createSessionKeyIrysUploader(
 	const viemAdapter = ViemV2Adapter(walletClient as any, { publicClient: publicClient as any });
 	let builder = WebUploader(WebEthereum).withAdapter(viemAdapter);
 
-	const network = config?.network || getIrysNetwork();
-	const rpcUrl = config?.rpcUrl || getRpcUrl();
-
-	if (network === 'devnet') {
-		builder = builder.withRpc(rpcUrl).devnet();
-	}
+	builder = configureIrysBuilder(builder, config);
 
 	return await builder;
 }
 
-/**
- * 获取 Session Key 的 Irys Mainnet Uploader
- * @param sessionKey - 存储的 Session Key 数据
- */
-export async function getSessionKeyIrysUploader(
-	sessionKey: StoredSessionKey
-): Promise<IrysUploader> {
-	return createSessionKeyIrysUploader(sessionKey, { network: 'mainnet' });
-}
 
-/**
- * 获取 Session Key 的 Irys Devnet Uploader
- * @param sessionKey - 存储的 Session Key 数据
- */
-export async function getSessionKeyIrysUploaderDevnet(
-	sessionKey: StoredSessionKey
-): Promise<IrysUploader> {
-	return createSessionKeyIrysUploader(sessionKey, { network: 'devnet' });
-}
-
-/**
- * 检查 Session Key 是否有效
- * @param sessionKey - 存储的 Session Key 数据
- */
-export function isSessionKeyValid(sessionKey: StoredSessionKey | null): boolean {
-	if (!sessionKey) return false;
-	// 检查是否过期
-	return Date.now() / 1000 < sessionKey.validUntil;
-}
-
-/**
- * 获取 Session Key 的 owner 地址（用于 paidBy 参数）
- * @param sessionKey - 存储的 Session Key 数据
- */
-export function getSessionKeyOwner(sessionKey: StoredSessionKey): string {
-	return sessionKey.owner;
-}
-
-/**
- * 检查 Irys 余额
- * @param uploader - Irys uploader 实例
- */
-export async function getIrysBalance(uploader: IrysUploader): Promise<string> {
-	const balance = await uploader.getLoadedBalance();
-	return uploader.utils.fromAtomic(balance).toString();
-}
 
 /**
  * 充值到 Irys（Mainnet 需要）
@@ -283,53 +238,32 @@ export async function fundIrys(uploader: IrysUploader, amount: string): Promise<
 	return fundTx.id;
 }
 
-/**
- * 获取上传价格估算
- * @param uploader - Irys uploader 实例
- * @param bytes - 数据大小（字节）
- */
-export async function getUploadPrice(uploader: IrysUploader, bytes: number): Promise<string> {
-	const price = await uploader.getPrice(bytes);
-	return uploader.utils.fromAtomic(price).toString();
-}
 
 /**
- * Calculate minimum required Irys balance based on upload price and gas multiplier
+ * Calculate Irys balance requirements (minimum and fund amount)
  * @param uploader - Irys uploader instance
  * @param dataSize - Size of data to upload in bytes
- * @returns Minimum balance required (price * minMultiplier)
+ * @returns Object with price, minBalance, and fundAmount
  */
-async function calculateMinIrysBalance(uploader: IrysUploader, dataSize: number) {
+async function calculateIrysBalanceRequirements(uploader: IrysUploader, dataSize: number) {
 	const price = await uploader.getPrice(dataSize);
 	const minMultiplier = getMinGasFeeMultiplier();
-	// Multiply price by minMultiplier to ensure enough buffer
-	return price.multipliedBy(minMultiplier);
-}
+	const minBalance = price.multipliedBy(minMultiplier);
 
-/**
- * Calculate default Irys fund amount based on upload price and gas multiplier
- * @param uploader - Irys uploader instance
- * @param dataSize - Size of data to upload in bytes
- * @returns Fund amount (price * defaultMultiplier)
- */
-async function calculateIrysFundAmount(uploader: IrysUploader, dataSize: number) {
-	const price = await uploader.getPrice(dataSize);
-
-	// Get default charge amount in USD and convert to wei
+	// Calculate fund amount based on USD or fallback to price-based
+	let fundAmount;
 	try {
 		const chargeAmtUsd = parseFloat(getDefaultChargeAmtUsd());
 		const chargeAmtWei = await usdToWei(chargeAmtUsd);
-		// Convert wei (bigint) to atomic (BigNumber) - Irys uses same 18 decimals as ETH
 		const { formatEther } = await import('viem');
 		const chargeAmtEth = formatEther(chargeAmtWei);
 		const chargeAmtAtomic = uploader.utils.toAtomic(chargeAmtEth);
-
-		// Return max of price and charge amount
-		return price.gt(chargeAmtAtomic) ? price : chargeAmtAtomic;
+		fundAmount = price.gt(chargeAmtAtomic) ? price : chargeAmtAtomic;
 	} catch {
-		// Fallback to price-based calculation if USD conversion fails
-		return price.multipliedBy(10);
+		fundAmount = price.multipliedBy(10);
 	}
+
+	return { price, minBalance, fundAmount };
 }
 
 /**
@@ -343,17 +277,8 @@ export async function hasIrysSufficientBalance(
 	dataSize: number
 ): Promise<boolean> {
 	const balance = await uploader.getLoadedBalance();
-	const minBalance = await calculateMinIrysBalance(uploader, dataSize);
+	const { minBalance } = await calculateIrysBalanceRequirements(uploader, dataSize);
 	return balance.gte(minBalance);
-}
-
-/**
- * Check if data size is within Irys free upload limit
- * @param dataSize - Size of data to upload in bytes
- * @returns true if data is free to upload (under 100KB)
- */
-export function isWithinIrysFreeLimit(dataSize: number): boolean {
-	return dataSize <= getIrysFreeUploadLimit();
 }
 
 /**
@@ -375,9 +300,7 @@ export async function ensureIrysBalance(
 	}
 
 	const balance = await uploader.getLoadedBalance();
-	const price = await uploader.getPrice(dataSize);
-	const minBalance = await calculateMinIrysBalance(uploader, dataSize);
-	const fundAmount = await calculateIrysFundAmount(uploader, dataSize);
+	const { price, minBalance, fundAmount } = await calculateIrysBalanceRequirements(uploader, dataSize);
 
 	const balanceReadable = uploader.utils.fromAtomic(balance).toString();
 	const priceReadable = uploader.utils.fromAtomic(price).toString();

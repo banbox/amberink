@@ -10,9 +10,8 @@
  */
 
 import type { IrysUploader, SessionKeyIrysUploader } from './irys';
-import { isWithinIrysFreeLimit } from './irys';
 import type { IrysTag, ArticleFolderManifest } from './types';
-import { getConfig, getArweaveGateways, getIrysNetwork, getIrysGraphQLEndpoint } from '$lib/config';
+import { getConfig, getArweaveGateways, getIrysNetwork, getIrysGraphQLEndpoint, getIrysFreeUploadLimit } from '$lib/config';
 
 // 文章文件夹中的固定文件名
 export const ARTICLE_INDEX_FILE = 'index.md';
@@ -200,7 +199,7 @@ export async function uploadManifestWithPayer(
 
 	// Check if within Irys free limit (100KB) - if so, don't use paidBy
 	// Irys devnet free uploads don't work with paidBy parameter
-	const isFreeUpload = isWithinIrysFreeLimit(dataSize);
+	const isFreeUpload = dataSize <= getIrysFreeUploadLimit();
 	const effectivePaidBy = isFreeUpload ? undefined : paidBy;
 
 	const tags: IrysTag[] = [

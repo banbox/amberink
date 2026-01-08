@@ -9,7 +9,7 @@ import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMul
 import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
 import { getChainConfig } from '$lib/chain';
 import { browser } from '$app/environment';
-import { getIrysUploaderDevnet, getIrysUploader, type IrysUploader } from '$lib/arweave/irys';
+import { createIrysUploader, type IrysUploader } from '$lib/arweave/irys';
 import { getIrysNetwork } from '$lib/config';
 import { usdToWei } from '$lib/priceService';
 import { client, USER_BY_ID_QUERY, type UserData } from '$lib/graphql';
@@ -746,7 +746,7 @@ export async function ensureSessionKeyReady(options?: {
  */
 export async function ensureIrysApproval(sessionKey: StoredSessionKey): Promise<void> {
 	try {
-		const uploader = await (getIrysNetwork() === 'mainnet' ? getIrysUploader() : getIrysUploaderDevnet());
+		const uploader = await createIrysUploader({ network: getIrysNetwork() });
 		await createIrysBalanceApproval(uploader, sessionKey.address, SESSION_KEY_DURATION_SECONDS);
 	} catch (error) {
 		console.warn('Failed to create Irys Balance Approval:', error);

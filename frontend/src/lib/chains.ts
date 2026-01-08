@@ -323,14 +323,16 @@ export const VIEM_CHAINS: Record<number, Chain> = {
  * @returns viem Chain object
  */
 export function getViemChain(chainId: number, rpcUrl: string): Chain {
-    // Check if we have a predefined viem chain
-    const viemChain = VIEM_CHAINS[chainId];
-    if (viemChain) {
-        return viemChain;
-    }
-
     // Get chain info from our config, or use defaults
     const chainInfo = SUPPORTED_CHAINS[chainId];
+    if (!chainInfo) {
+        // Check if we have a predefined viem chain
+        const viemChain = VIEM_CHAINS[chainId];
+        if (viemChain) {
+            return viemChain;
+        }
+        throw new Error(`Unsupported chain ID: ${chainId}`);
+    }
 
     // Create custom chain definition
     return defineChain({
