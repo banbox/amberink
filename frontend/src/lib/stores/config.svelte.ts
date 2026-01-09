@@ -42,7 +42,7 @@ export const defaults = {
 	irysGateways: 'https://devnet.irys.xyz',
 	// Gas settings
 	minGasFeeMultiplier: 10,
-	defaultChargeAmtUsd: '1.00',
+	defaultChargeAmtUsd: '0.60',
 	// Irys settings
 	irysFreeUploadLimit: 102400,
 	minActionValue: '20000000000000', // Store as string for JSON serialization
