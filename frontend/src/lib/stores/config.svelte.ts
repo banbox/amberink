@@ -76,7 +76,7 @@ export const ENVIRONMENT_DEFAULTS: Record<'dev' | 'test' | 'prod', Partial<Defau
 		irysGateways: 'https://devnet.irys.xyz'
 	},
 	prod: {
-		rpcUrl: 'https://optimism.drpc.org',
+		rpcUrl: 'https://optimism-public.nodies.app',
 		chainId: 10,
 		subsquidEndpoint: 'https://amberink.banbot.site/graphql',
 		irysNetwork: 'mainnet',
