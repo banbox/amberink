@@ -1760,3 +1760,9 @@ Claude: loadArticle有竟态条件，已修复
 
 ### 2026-01-08 22:00  代码优化
 对 frontend/src/lib/contracts.ts 使用`2026-01-03 14:20  代码优化`提示词优化
+
+### 2026-01-09 22:00  提现错误
+The total cost (gas * gas fee + value) of executing this transaction exceeds the balance of the account.  
+在从session key进行全部提现时，出现上面错误，应该是手续费估算错误，导致提现失败。请你查找相关错误代码，根据最佳实践，审阅相关代码，修复问题并解决；似乎推荐的做法是使用viem 的 estimateTotalFee，一起估算L1+L2费用  
+Claude：修复成功
+

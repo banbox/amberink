@@ -3,7 +3,8 @@
  * Allows users to perform frequent operations without signing each time
  */
 
-import { formatEther, parseEther, createWalletClient, http } from 'viem';
+import { formatEther, createWalletClient, createPublicClient, http } from 'viem';
+import { publicActionsL2 } from 'viem/op-stack';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { getBlogHubContractAddress, getSessionKeyManagerAddress, getMinGasFeeMultiplier, getDefaultChargeAmtUsd, getRpcUrl, envName } from '$lib/config';
 import { getEthereumAccount, getWalletClient, getPublicClient } from '$lib/wallet';
@@ -773,45 +774,58 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 	const publicClient = getPublicClient();
 	const sessionKeyAccount = privateKeyToAccount(sessionKey.privateKey as `0x${string}`);
 	const mainWallet = await getEthereumAccount();
+	const chain = getChainConfig();
 
-	// Estimate gas for the transfer dynamically
-	const gasPrice = await publicClient.getGasPrice();
-	// First estimate with a rough amount to get gas limit
-	const roughGasCost = gasPrice * 21000n; // Standard ETH transfer base
-	if (balance <= roughGasCost) {
-		throw new Error('Balance too low to cover gas fees');
+	// Define the transaction parameters
+	const txParams = {
+		account: sessionKeyAccount,
+		to: mainWallet as `0x${string}`,
+		value: 1n, // dummy value for estimation
+	};
+
+	let totalFee: bigint;
+	try {
+		// Estimate total fee including L1 data cost (critical for L2 chains like Optimism)
+		// estimateTotalFee returns: L1 data fee + L2 execution fee + operator fee
+		const l2PublicClient = createPublicClient({
+			chain,
+			transport: http(getRpcUrl(), {
+				methods: { exclude: ['eth_fillTransaction'] }
+			})
+		}).extend(publicActionsL2());
+		totalFee = await l2PublicClient.estimateTotalFee(txParams);
+		// Add 20% buffer for gas price fluctuations
+		totalFee = (totalFee * 120n) / 100n;
+	} catch (e) {
+		// Fallback for non-OP Stack chains: use standard gas estimation
+		console.warn('estimateTotalFee not available, using standard gas estimation', e);
+		const gasPrice = await publicClient.getGasPrice();
+		const estimatedGas = await publicClient.estimateGas({
+			account: sessionKeyAccount.address,
+			to: mainWallet,
+			value: balance / 2n, // Use half balance for estimation
+		});
+		// Add 20% buffer
+		totalFee = (gasPrice * estimatedGas * 120n) / 100n;
 	}
 
-	// Estimate actual gas with the amount we plan to send
-	const estimatedGas = await publicClient.estimateGas({
-		account: sessionKeyAccount.address,
-		to: mainWallet,
-		value: balance - roughGasCost,
-	});
-	// Add 20% buffer for safety (standard practice)
-	const gasLimit = (estimatedGas * 120n) / 100n;
-	const gasCost = gasPrice * gasLimit;
-
-	if (balance <= gasCost) {
-		throw new Error('Balance too low to cover gas fees');
+	if (balance <= totalFee) {
+		throw new Error(`Balance too low to cover gas fees. Balance: ${formatEther(balance)} ETH, Estimated fee: ${formatEther(totalFee)} ETH`);
 	}
 
-	// Calculate amount to send (balance - gas cost)
-	// Leave a tiny "dust" amount (10000 wei) to cover L1 Data Fees on L2 chains (Optimism, Base, etc.)
-	// This ensures cross-chain compatibility without requiring chain-specific fee oracle logic.
-	const SAFETY_DUST = 10000n;
-	const amountToSend = balance - gasCost - SAFETY_DUST;
+	// Calculate amount to send (balance - total fee estimate)
+	const amountToSend = balance - totalFee;
 
 	if (amountToSend <= 0n) {
-		throw new Error('Balance too low to cover gas fees and L1 safety buffer');
+		throw new Error('Balance too low to cover gas fees');
 	}
 
-	console.log(`Withdrawing ${formatEther(amountToSend)} ETH from Session Key to main wallet...`);
+	console.log(`Withdrawing ${formatEther(amountToSend)} ETH from Session Key to main wallet (fee: ${formatEther(totalFee)} ETH)...`);
 
 	// Create wallet client with session key
 	const walletClient = createWalletClient({
 		account: sessionKeyAccount,
-		chain: getChainConfig(),
+		chain,
 		transport: http(getRpcUrl(), {
 			methods: { exclude: ['eth_fillTransaction'] }
 		})
@@ -820,8 +834,6 @@ export async function withdrawAllFromSessionKey(sessionKeyAddress: string): Prom
 	const txHash = await walletClient.sendTransaction({
 		to: mainWallet,
 		value: amountToSend,
-		gas: gasLimit,
-		gasPrice
 	});
 
 	// Wait for confirmation
