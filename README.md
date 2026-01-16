@@ -7,11 +7,6 @@
 
 立即体验：[https://amberink.eth.limo/](https://amberink.eth.limo/)
 
-## 如何学习？
-[最细节的手把手开发日志](learn/README.md)
-
-此项目基本都是AI开发完成的，上面包含了最细的完整项目开发细节，逐步尝试即可复现你的dapp
-
 ## 技术架构
 
 ```perl
