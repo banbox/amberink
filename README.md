@@ -7,6 +7,8 @@
 
 立即体验：[https://amberink.eth.limo/](https://amberink.eth.limo/)
 
+技术文档：[AmberInk 解析：构建全栈去中心化内容协议](https://amberink.top/a/?id=ELy2zeJukgNRtAfUUKu1cVgLvvKdQagXbSSVtbXyioWP)
+
 ## 技术架构
 
 ```perl
