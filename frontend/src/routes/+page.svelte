@@ -11,6 +11,7 @@
 	import { getConfig } from '$lib/config';
 	import { infiniteScroll } from '$lib/utils';
 	import { ArticleIcon } from '$lib/components/icons';
+	import { shortAddress } from '$lib/utils';
 
 	const PAGE_SIZE = 20;
 
@@ -21,12 +22,50 @@
 	let offset = $state(0);
 	let error = $state<string | null>(null);
 	let selectedCategory = $state<number | null>(null);
+	let searchAuthor = $state(''); // Author address for filtering
+	let isSearchingAuthor = $state(false);
 
 	// Initialize category from URL in browser only
 	onMount(() => {
 		const cat = page.url.searchParams.get('category');
 		selectedCategory = cat ? parseInt(cat) : null;
+		const author = page.url.searchParams.get('author');
+		searchAuthor = author || '';
 	});
+
+	// Handle author search
+	async function handleAuthorSearch() {
+		if (!searchAuthor.trim()) {
+			// Clear author filter
+			const url = new URL(page.url);
+			url.searchParams.delete('author');
+			goto(url.toString(), { replaceState: true, keepFocus: true });
+			fetchArticles(true);
+			return;
+		}
+
+		// Validate address format (basic check)
+		const trimmedAuthor = searchAuthor.trim().toLowerCase();
+		if (!/^0x[a-f0-9]{40}$/.test(trimmedAuthor) && !/^0x[a-f0-9]{64}$/.test(trimmedAuthor)) {
+			// Allow any input but log warning
+			console.warn('Invalid address format for author search');
+		}
+
+		// Update URL
+		const url = new URL(page.url);
+		url.searchParams.set('author', trimmedAuthor);
+		goto(url.toString(), { replaceState: true, keepFocus: true });
+		fetchArticles(true);
+	}
+
+	// Clear author search
+	function clearAuthorSearch() {
+		searchAuthor = '';
+		const url = new URL(page.url);
+		url.searchParams.delete('author');
+		goto(url.toString(), { replaceState: true, keepFocus: true });
+		fetchArticles(true);
+	}
 
 	// Fetch articles from SubSquid
 	async function fetchArticles(reset = false) {
@@ -36,13 +75,23 @@
 		error = null;
 
 		const currentOffset = reset ? 0 : offset;
+		const authorFilter = searchAuthor.trim().toLowerCase() || undefined;
 
 		try {
-			const query = selectedCategory !== null ? ARTICLES_QUERY : ALL_ARTICLES_QUERY;
-			const variables =
-				selectedCategory !== null
-					? { limit: PAGE_SIZE, offset: currentOffset, categoryId: selectedCategory.toString() }
-					: { limit: PAGE_SIZE, offset: currentOffset };
+			// Build query based on filters
+			let query, variables;
+			
+			if (authorFilter) {
+				// Redirect to author page if valid address
+				goto(`/u?id=${authorFilter}`, { replaceState: true });
+				return;
+			} else if (selectedCategory !== null) {
+				query = ARTICLES_QUERY;
+				variables = { limit: PAGE_SIZE, offset: currentOffset, categoryId: selectedCategory.toString() };
+			} else {
+				query = ALL_ARTICLES_QUERY;
+				variables = { limit: PAGE_SIZE, offset: currentOffset };
+			}
 
 			// Use 'network-only' on reset to ensure fresh data, 'cache-first' for pagination
 			const result = await client.query(query, variables, { 
@@ -114,6 +163,41 @@
 	<div class="mb-8">
 		<h1 class="text-2xl font-bold text-gray-900">{m.home()}</h1>
 		<p class="mt-1 text-gray-600">{m.tagline()}</p>
+	</div>
+
+	<!-- Author Search -->
+	<div class="mb-6">
+		<label for="authorSearch" class="mb-2 block text-sm font-medium text-gray-700">
+			{m.search_articles()} ({m.by} {m.author()})
+		</label>
+		<div class="flex gap-2">
+			<input
+				id="authorSearch"
+				type="text"
+				bind:value={searchAuthor}
+				placeholder="0x..."
+				class="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+				onkeydown={(e) => {
+					if (e.key === 'Enter') handleAuthorSearch();
+				}}
+			/>
+			{#if searchAuthor}
+				<button
+					type="button"
+					onclick={clearAuthorSearch}
+					class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+				>
+					{m.clear()}
+				</button>
+			{/if}
+			<button
+				type="button"
+				onclick={handleAuthorSearch}
+				class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+			>
+				{m.search()}
+			</button>
+		</div>
 	</div>
 
 	<!-- Category Filter -->

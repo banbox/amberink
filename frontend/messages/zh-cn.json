@@ -426,5 +426,11 @@
 	"current_length": "当前：{count} 字符",
 	"remaining_chars": "剩余 {count} 字符",
 	"compression_hint": "内容超出限制，正在自动压缩...",
-	"compression_success": "内容压缩成功"
+	"compression_success": "内容压缩成功",
+	"search_by_author": "按作者搜索",
+	"author_address_placeholder": "输入作者地址 (0x...)",
+	"search_author": "搜索作者",
+	"clear_author_search": "清除作者筛选",
+	"no_author_results": "该作者暂无文章",
+	"author_results_title": "{author} 的文章"
 }

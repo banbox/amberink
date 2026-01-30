@@ -426,5 +426,11 @@
 	"current_length": "Current: {count} characters",
 	"remaining_chars": "{count} characters remaining",
 	"compression_hint": "Content exceeds limit. Auto-compressing...",
-	"compression_success": "Content compressed successfully"
+	"compression_success": "Content compressed successfully",
+	"search_by_author": "Search by Author",
+	"author_address_placeholder": "Enter author address (0x...)",
+	"search_author": "Search Author",
+	"clear_author_search": "Clear Author Filter",
+	"no_author_results": "No articles found for this author",
+	"author_results_title": "Articles by {author}"
 }

@@ -4,7 +4,7 @@
 import { gql } from '@urql/svelte';
 
 /**
- * Get articles with pagination and optional category filter
+ * Get articles with pagination and optional filters
  * Note: coverImage is no longer stored on-chain, use arweaveId/coverImage path to access cover
  */
 export const ARTICLES_QUERY = gql`
@@ -75,29 +75,41 @@ export const ALL_ARTICLES_QUERY = gql`
 `;
 
 /**
- * Get article count for a category
+ * Get articles by author with pagination
  */
-export const ARTICLE_COUNT_QUERY = gql`
-	query ArticleCount($categoryId: BigInt) {
-		articlesConnection(where: { categoryId_eq: $categoryId }) {
-			totalCount
+export const ARTICLES_BY_AUTHOR_QUERY = gql`
+	query ArticlesByAuthor($authorId: String!, $limit: Int!, $offset: Int!) {
+		articles(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { author: { id_eq: $authorId }, visibility_eq: 0 }
+		) {
+			id
+			articleId
+			author {
+				id
+				nickname
+				avatar
+			}
+			originalAuthor
+			title
+			summary
+			categoryId
+			collectPrice
+			maxCollectSupply
+			collectCount
+			originality
+			visibility
+			likeAmount
+			dislikeAmount
+			totalTips
+			createdAt
+			blockNumber
+			txHash
 		}
 	}
 `;
-
-/**
- * Get total article count
- */
-export const TOTAL_ARTICLE_COUNT_QUERY = gql`
-	query TotalArticleCount {
-		articlesConnection {
-			totalCount
-		}
-	}
-`;
-
-/**
- * Article data from GraphQL
  * Note: id is now arweaveId (Irys mutable folder manifest ID)
  * Cover image is accessed via id/coverImage path in Irys mutable folder
  */
