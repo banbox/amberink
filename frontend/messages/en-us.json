@@ -432,5 +432,17 @@
 	"search_author": "Search Author",
 	"clear_author_search": "Clear Author Filter",
 	"no_author_results": "No articles found for this author",
-	"author_results_title": "Articles by {author}"
+	"author_results_title": "Articles by {author}",
+	"trash": "Trash",
+	"trash_empty": "Trash is empty",
+	"trash_description": "Deleted articles are moved here. You can restore them or permanently delete.",
+	"restore": "Restore",
+	"permanently_delete": "Delete Permanently",
+	"confirm_permanent_delete": "Are you sure? This action cannot be undone.",
+	"article_restored": "Article restored successfully",
+	"article_deleted": "Article permanently deleted",
+	"confirm_delete": "Delete Article",
+	"confirm_delete_message": "Move this article to trash? You can restore it later.",
+	"empty_trash": "Empty Trash",
+	"confirm_empty_trash": "Permanently delete all items in trash? This action cannot be undone."
 }

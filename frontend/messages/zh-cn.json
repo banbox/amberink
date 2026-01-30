@@ -432,5 +432,17 @@
 	"search_author": "搜索作者",
 	"clear_author_search": "清除作者筛选",
 	"no_author_results": "该作者暂无文章",
-	"author_results_title": "{author} 的文章"
+	"author_results_title": "{author} 的文章",
+	"trash": "垃圾箱",
+	"trash_empty": "垃圾箱为空",
+	"trash_description": "删除的文章会移到这里，您可以恢复或永久删除。",
+	"restore": "恢复",
+	"permanently_delete": "永久删除",
+	"confirm_permanent_delete": "确定要永久删除吗？此操作无法撤销。",
+	"article_restored": "文章已恢复",
+	"article_deleted": "文章已永久删除",
+	"confirm_delete": "删除文章",
+	"confirm_delete_message": "将文章移至垃圾箱？您可以稍后恢复。",
+	"empty_trash": "清空垃圾箱",
+	"confirm_empty_trash": "确定要永久删除垃圾箱中的所有内容吗？此操作无法撤销。"
 }
