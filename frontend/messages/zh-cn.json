@@ -417,5 +417,14 @@
 	"charge_usd_min_error_2": "充值金额最小为 ${min}",
 	"reset_default": "重置为默认值",
 	"collapse": "收起侧边栏",
-	"expand": "展开侧边栏"
+	"expand": "展开侧边栏",
+	"content_limit": "内容限制",
+	"content_limit_info": "免费最大支持：约 3.6 万中文字符或等效内容",
+	"content_compressed": "正文超过字数将自动压缩",
+	"content_fee_info": "手续费与字数无关",
+	"content_length": "内容长度",
+	"current_length": "当前：{count} 字符",
+	"remaining_chars": "剩余 {count} 字符",
+	"compression_hint": "内容超出限制，正在自动压缩...",
+	"compression_success": "内容压缩成功"
 }

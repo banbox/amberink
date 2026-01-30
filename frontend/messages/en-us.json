@@ -417,5 +417,14 @@
 	"charge_usd_min_error_2": "Charge amount must be at least ${min}",
 	"reset_default": "Reset to Default",
 	"collapse": "Collapse Sidebar",
-	"expand": "Expand Sidebar"
+	"expand": "Expand Sidebar",
+	"content_limit": "Content Limit",
+	"content_limit_info": "Maximum free content: ~36,000 Chinese characters or equivalent",
+	"content_compressed": "Content compressed automatically when exceeding limit",
+	"content_fee_info": "Storage fee is unrelated to content length",
+	"content_length": "Content Length",
+	"current_length": "Current: {count} characters",
+	"remaining_chars": "{count} characters remaining",
+	"compression_hint": "Content exceeds limit. Auto-compressing...",
+	"compression_success": "Content compressed successfully"
 }

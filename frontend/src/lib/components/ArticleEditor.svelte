@@ -10,6 +10,7 @@
 	import { getNativeTokenPriceUsd, getNativeTokenSymbol } from '$lib/priceService';
 	import { getDefaultCollectPriceUsd } from '$lib/config';
 	import { CloseIcon } from '$lib/components/icons';
+	import { countContentCharacters, getContentLengthStatus, MAX_FREE_CONTENT_LENGTH } from '$lib/utils/contentLength';
 
 	/**
 	 * Article Editor Component
@@ -357,6 +358,27 @@
 			class="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-mono text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
 			{disabled}
 		></textarea>
+		
+		<!-- Content Length Indicator -->
+		{@const lengthStatus = getContentLengthStatus(formData.content)}
+		<div class="mt-2 flex items-center justify-between text-xs">
+			<span class="text-gray-500">
+				{m.content_length()}: {lengthStatus.count} / {MAX_FREE_CONTENT_LENGTH.toLocaleString()}
+			</span>
+			{#if lengthStatus.isOverLimit}
+				<span class="text-amber-600">{m.content_compressed()}</span>
+			{:else}
+				<span class="text-green-600">{m.content_fee_info()}</span>
+			{/if}
+		</div>
+		
+		<!-- Progress bar -->
+		<div class="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+			<div
+				class="h-full transition-all duration-300 {lengthStatus.isOverLimit ? 'bg-amber-500' : 'bg-green-500'}"
+				style="width: {Math.min(lengthStatus.percentage, 100)}%"
+			></div>
+		</div>
 	</div>
 
 	<!-- Content Images -->
