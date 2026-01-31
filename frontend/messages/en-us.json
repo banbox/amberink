@@ -444,5 +444,19 @@
 	"confirm_delete": "Delete Article",
 	"confirm_delete_message": "Move this article to trash? You can restore it later.",
 	"empty_trash": "Empty Trash",
-	"confirm_empty_trash": "Permanently delete all items in trash? This action cannot be undone."
+	"confirm_empty_trash": "Permanently delete all items in trash? This action cannot be undone.",
+	"knowledge_base": "Knowledge Base",
+	"workspace": "Workspace",
+	"new_workspace": "New Workspace",
+	"workspace_name": "Workspace Name",
+	"create_workspace": "Create Workspace",
+	"delete_workspace": "Delete Workspace",
+	"add_sub_article": "Add Sub-Article",
+	"move_article": "Move Article",
+	"article_moved": "Article moved successfully",
+	"root_article": "Root Article",
+	"tree_view": "Tree View",
+	"expand_all": "Expand All",
+	"collapse_all": "Collapse All",
+	"drag_to_reorder": "Drag to reorder"
 }

@@ -2,6 +2,7 @@
  * 从 Arweave 获取内容
  */
 import type { ArticleMetadata } from './types';
+import type { ArticleManifest } from './manifest';
 import { getArweaveGateways, getIrysGraphQLEndpoint } from '$lib/config';
 import { getMutableFolderUrl, getStaticFolderUrl, ARTICLE_INDEX_FILE } from './folder';
 import { decryptContent, isEncryptedContent } from './crypto';
@@ -24,6 +25,81 @@ async function fetchWithGatewayFallback<T>(
 		}
 	}
 	throw new Error(`Failed to fetch ${path} from all gateways`);
+}
+
+/**
+ * 从 Arweave 获取文章 manifest
+ */
+export async function fetchManifest(manifestId: string): Promise<ArticleManifest | null> {
+	try {
+		// 尝试从 Irys GraphQL 获取最新版本的 manifest
+		const endpoint = getIrysGraphQLEndpoint();
+		
+		const query = `
+			query getManifest($rootTx: String!) {
+				transactions(
+					tags: [
+						{ name: "Root-TX", values: [$rootTx] },
+						{ name: "Type", values: ["Article-Manifest"] }
+					]
+					order: DESC
+					limit: 1
+				) {
+					edges {
+						node {
+							id
+							tags {
+								name
+								value
+							}
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await fetch(endpoint, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ query, variables: { rootTx: manifestId } })
+		});
+
+		if (!response.ok) {
+			throw new Error('Failed to query Irys');
+		}
+
+		const result = await response.json();
+		const edges = result?.data?.transactions?.edges || [];
+		
+		if (edges.length === 0) {
+			return null;
+		}
+
+		// 解析 manifest
+		const tags = edges[0].node.tags;
+		const manifestContent = tags.find((t: any) => t.name === 'Manifest-Content')?.value;
+		
+		if (manifestContent) {
+			try {
+				return JSON.parse(decodeURIComponent(manifestContent));
+			} catch (e) {
+				console.error('Failed to parse manifest content:', e);
+			}
+		}
+
+		// 如果没有 Manifest-Content 标签，尝试直接获取文件
+		const latestId = edges[0].node.id;
+		const url = getMutableFolderUrl(latestId, 'manifest.json');
+		const manifestResponse = await fetch(url);
+		if (manifestResponse.ok) {
+			return await manifestResponse.json();
+		}
+
+		return null;
+	} catch (error) {
+		console.error('Failed to fetch manifest:', error);
+		return null;
+	}
 }
 
 /**

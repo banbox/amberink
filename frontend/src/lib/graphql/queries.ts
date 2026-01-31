@@ -663,3 +663,84 @@ export interface TransactionData {
 	createdAt: string;
 	txHash: string;
 }
+
+// ============================================================
+//                  Knowledge Base / Tree Queries
+// ============================================================
+
+/**
+ * Get articles with tree structure information
+ */
+export const ARTICLES_WITH_TREE_QUERY = gql`
+	query ArticlesWithTree($limit: Int!, $offset: Int!, $authorId: String) {
+		articles(
+			orderBy: createdAt_DESC
+			limit: $limit
+			offset: $offset
+			where: { author: { id_eq: $authorId }, visibility_eq: 0 }
+		) {
+			id
+			articleId
+			title
+			parentArticleId
+			workspaceId
+			createdAt
+		}
+	}
+`;
+
+/**
+ * Get workspace/knowledge base structure
+ */
+export const WORKSPACE_QUERY = gql`
+	query Workspace($workspaceId: BigInt!) {
+		workspace(id: $workspaceId) {
+			id
+			name
+			rootArticles {
+				id
+				title
+				parentArticleId
+				children {
+					id
+					title
+					parentArticleId
+				}
+			}
+			createdAt
+		}
+	}
+`;
+
+/**
+ * Get article tree structure
+ */
+export const ARTICLE_TREE_QUERY = gql`
+	query ArticleTree($articleId: BigInt!) {
+		article(id: $articleId) {
+			id
+			title
+			parentArticleId
+			children {
+				id
+				title
+				parentArticleId
+			}
+		}
+	}
+`;
+
+export interface TreeArticleData {
+	id: string;
+	title: string;
+	parentArticleId: string | null;
+	children?: TreeArticleData[];
+	createdAt?: string;
+}
+
+export interface WorkspaceData {
+	id: string;
+	name: string;
+	rootArticles: TreeArticleData[];
+	createdAt: string;
+}

@@ -444,5 +444,19 @@
 	"confirm_delete": "删除文章",
 	"confirm_delete_message": "将文章移至垃圾箱？您可以稍后恢复。",
 	"empty_trash": "清空垃圾箱",
-	"confirm_empty_trash": "确定要永久删除垃圾箱中的所有内容吗？此操作无法撤销。"
+	"confirm_empty_trash": "确定要永久删除垃圾箱中的所有内容吗？此操作无法撤销。",
+	"knowledge_base": "知识库",
+	"workspace": "工作区",
+	"new_workspace": "新建工作区",
+	"workspace_name": "工作区名称",
+	"create_workspace": "创建工作区",
+	"delete_workspace": "删除工作区",
+	"add_sub_article": "添加子文章",
+	"move_article": "移动文章",
+	"article_moved": "文章移动成功",
+	"root_article": "根文章",
+	"tree_view": "树形视图",
+	"expand_all": "全部展开",
+	"collapse_all": "全部折叠",
+	"drag_to_reorder": "拖拽排序"
 }
